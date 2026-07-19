@@ -4,6 +4,7 @@
 #include "mayara_pi.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 
 #include <wx/bmpbndl.h>
@@ -205,9 +206,17 @@ bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
   glEnable(GL_TEXTURE_2D);
   glColor4f(m_radar_intensity, m_radar_intensity, m_radar_intensity, 1.0f);
 
+  // Each radar is drawn as an annulus from the next-shorter shown radar's range
+  // out to its own range; the shortest is a full disc. So the shorter radar
+  // occludes the longer one within its radius.
   bool drew = false;
-  for (const auto& it : items)
-    if (DrawRadarOverlay(it.idx, vp)) drew = true;
+  for (size_t k = 0; k < items.size(); ++k) {
+    const double inner =
+        (k + 1 < items.size())
+            ? static_cast<double>(items[k + 1].range) / items[k].range
+            : 0.0;
+    if (DrawRadarOverlay(items[k].idx, vp, inner)) drew = true;
+  }
 
   glBindTexture(GL_TEXTURE_2D, 0);
   glDisable(GL_TEXTURE_2D);
@@ -215,7 +224,8 @@ bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
   return drew;
 }
 
-bool mayara_pi::DrawRadarOverlay(int index, PlugIn_ViewPort* vp) {
+bool mayara_pi::DrawRadarOverlay(int index, PlugIn_ViewPort* vp,
+                                 double inner_frac) {
   RadarState* state = m_client->StateAt(index);
   if (!state) return false;
   const uint32_t range_m = state->RangeMeters();
@@ -260,12 +270,31 @@ bool mayara_pi::DrawRadarOverlay(int index, PlugIn_ViewPort* vp) {
   glTranslatef(center.x, center.y, 0.0f);
   glRotatef(rot_deg, 0.0f, 0.0f, 1.0f);
   glScalef(radius_px, radius_px, 1.0f);
-  glBegin(GL_QUADS);
-  glTexCoord2f(0.0f, 0.0f); glVertex2f(-1.0f, -1.0f);
-  glTexCoord2f(1.0f, 0.0f); glVertex2f(1.0f, -1.0f);
-  glTexCoord2f(1.0f, 1.0f); glVertex2f(1.0f, 1.0f);
-  glTexCoord2f(0.0f, 1.0f); glVertex2f(-1.0f, 1.0f);
-  glEnd();
+
+  if (inner_frac <= 0.0) {
+    // Full disc. Texcoord = (0.5 + 0.5*vertex).
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.0f, 0.0f); glVertex2f(-1.0f, -1.0f);
+    glTexCoord2f(1.0f, 0.0f); glVertex2f(1.0f, -1.0f);
+    glTexCoord2f(1.0f, 1.0f); glVertex2f(1.0f, 1.0f);
+    glTexCoord2f(0.0f, 1.0f); glVertex2f(-1.0f, 1.0f);
+    glEnd();
+  } else {
+    // Annulus from inner_frac to 1.0 -- the inner circle is not drawn, so a
+    // shorter-range radar occludes this one there.
+    const int kSeg = 96;
+    const double ri = std::min(0.999, inner_frac);
+    glBegin(GL_TRIANGLE_STRIP);
+    for (int i = 0; i <= kSeg; ++i) {
+      const double a = 2.0 * M_PI * i / kSeg;
+      const double c = std::cos(a), s = std::sin(a);
+      const float ix = static_cast<float>(ri * c), iy = static_cast<float>(ri * s);
+      const float ox = static_cast<float>(c), oy = static_cast<float>(s);
+      glTexCoord2f(0.5f + 0.5f * ix, 0.5f + 0.5f * iy); glVertex2f(ix, iy);
+      glTexCoord2f(0.5f + 0.5f * ox, 0.5f + 0.5f * oy); glVertex2f(ox, oy);
+    }
+    glEnd();
+  }
   glPopMatrix();
   return true;
 }

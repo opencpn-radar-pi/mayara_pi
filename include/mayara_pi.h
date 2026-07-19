@@ -74,7 +74,10 @@ class mayara_pi : public opencpn_plugin_121 {
   std::vector<OverlayTex> m_overlay_tex;  // per radar index
   std::vector<uint8_t> m_overlay_disc;    // scratch reused per radar
 
-  bool DrawRadarOverlay(int index, PlugIn_ViewPort* vp);
+  // Draw one radar's disc. inner_frac > 0 draws only the annulus from that
+  // fraction of the radius outward, so a shorter-range radar occludes this one
+  // within its radius.
+  bool DrawRadarOverlay(int index, PlugIn_ViewPort* vp, double inner_frac);
 
   // Latest own-ship fix, for the overlay/PPI to place the radar.
   double m_ownship_lat = 0.0;
