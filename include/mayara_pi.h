@@ -43,6 +43,10 @@ class mayara_pi : public opencpn_plugin_121 {
   int GetToolbarToolCount() override;
   void OnToolbarToolCallback(int id) override;
 
+  // --- Canvas context menu -------------------------------------------------
+  void OnContextMenuItemCallback(int id) override;
+  void PrepareContextMenu(int canvasIndex) override;
+
   // --- Chart overlay (filled in Phase 1) -----------------------------------
   bool RenderGLOverlayMultiCanvas(wxGLContext* pcontext, PlugIn_ViewPort* vp,
                                   int canvasIndex, int priority) override;
@@ -64,6 +68,10 @@ class mayara_pi : public opencpn_plugin_121 {
   wxBitmap m_panel_bitmap;   // shown in the plugin manager
   wxBitmap m_tool_bitmap;    // toolbar icon (must outlive InsertPlugInTool)
   int m_tool_id = -1;
+  int m_mi_overlay = -1;  // canvas context-menu item ids
+  int m_mi_ppi = -1;
+  wxMenuItem* m_mi_overlay_item = nullptr;  // owned by OpenCPN after adding
+  wxMenuItem* m_mi_ppi_item = nullptr;
   MayaraPpiWindow* m_ppi_window = nullptr;
   std::unique_ptr<MayaraClient> m_client;
   PI_ColorScheme m_color_scheme = PI_GLOBAL_COLOR_SCHEME_DAY;

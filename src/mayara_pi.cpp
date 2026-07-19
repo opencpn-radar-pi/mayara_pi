@@ -109,6 +109,17 @@ int mayara_pi::Init() {
       _("Mayara Radar"), _("Show or hide the Mayara radar PPI window"),
       nullptr, -1, 0, this);
 
+  // Canvas right-click context-menu items (checkable), mirroring radar_pi.
+  {
+    m_mi_overlay_item = new wxMenuItem(
+        nullptr, wxID_ANY, _("Mayara radar overlay"), wxEmptyString,
+        wxITEM_CHECK);
+    m_mi_overlay = AddCanvasContextMenuItem(m_mi_overlay_item, this);
+    m_mi_ppi_item = new wxMenuItem(nullptr, wxID_ANY, _("Mayara PPI window"),
+                                   wxEmptyString, wxITEM_CHECK);
+    m_mi_ppi = AddCanvasContextMenuItem(m_mi_ppi_item, this);
+  }
+
   m_client = std::make_unique<MayaraClient>(MayaraExplicitUrl(),
                                             kMayaraServerFallback);
   m_client->Start();
@@ -131,6 +142,9 @@ bool mayara_pi::DeInit() {
     RemovePlugInTool(m_tool_id);
     m_tool_id = -1;
   }
+  if (m_mi_overlay != -1) RemoveCanvasContextMenuItem(m_mi_overlay);
+  if (m_mi_ppi != -1) RemoveCanvasContextMenuItem(m_mi_ppi);
+  m_mi_overlay = m_mi_ppi = -1;
   if (m_client) {
     m_client->Stop();
     m_client.reset();
@@ -245,6 +259,24 @@ void mayara_pi::OnToolbarToolCallback(int id) {
   if (id == m_tool_id) TogglePpiWindow();
 }
 
+void mayara_pi::OnContextMenuItemCallback(int id) {
+  if (id == m_mi_overlay) {
+    m_overlay_enabled = !m_overlay_enabled;
+    SaveConfig();
+    GetOCPNCanvasWindow()->Refresh(false);
+  } else if (id == m_mi_ppi) {
+    TogglePpiWindow();
+  }
+}
+
+// Called just before the canvas context menu is shown; sync the check marks
+// to the live state.
+void mayara_pi::PrepareContextMenu(int /*canvasIndex*/) {
+  if (m_mi_overlay_item) m_mi_overlay_item->Check(m_overlay_enabled);
+  if (m_mi_ppi_item)
+    m_mi_ppi_item->Check(m_ppi_window && m_ppi_window->IsShown());
+}
+
 void mayara_pi::TogglePpiWindow() {
   if (!m_ppi_window) {
     m_ppi_window = new MayaraPpiWindow(m_parent_window, m_client.get());
@@ -267,6 +299,10 @@ bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
                                            PlugIn_ViewPort* vp, int canvasIndex,
                                            int priority) {
   if (!m_overlay_enabled || !m_client || !vp || !vp->bValid) return false;
+  // OpenCPN calls this once per priority level per frame. Draw only at the
+  // legacy chart-overlay layer; the higher passes (OVER_EMBOSS/OVER_UI) render
+  // on top of the toolbar and chart bar, so drawing there paints over them.
+  if (priority != OVERLAY_LEGACY) return false;
   const int n = m_client->RadarCount();
   if (n == 0) return false;
   if (static_cast<int>(m_overlay_tex.size()) != n)
