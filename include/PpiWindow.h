@@ -36,6 +36,9 @@ class MayaraPpiWindow : public wxDialog {
 
  private:
   void OnClose(wxCloseEvent& event);
+  // Widen the window by `extra` px to fit the controls, shifting it left/up if
+  // that would push it off the current display.
+  void GrowForControls(int extra);
 
   wxWindow* m_grid = nullptr;  // container of the radar pictures
   std::vector<RadarDisplayPanel*> m_radars;

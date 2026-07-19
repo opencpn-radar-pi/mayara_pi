@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include <wx/display.h>
+
 #include "ControlsPanel.h"
 #include "RadarDisplayPanel.h"
 
@@ -48,13 +50,19 @@ MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client,
     const int ri = p->RadarIndex();
     // Hamburger: toggle the controls, bound to this picture's radar.
     p->SetMenuCallback([this, controls, ri]() {
+      const int ctrl_w = std::max(320, controls->GetEffectiveMinSize().x);
       if (controls->IsShown() && controls->RadarIndex() == ri) {
         controls->Hide();
+        Layout();
+        const wxSize cs = GetClientSize();  // give the width back
+        SetClientSize(std::max(360, cs.x - ctrl_w), cs.y);
       } else {
+        const bool was_hidden = !controls->IsShown();
         controls->SetRadarIndex(ri);
         controls->Show(true);
+        if (was_hidden) GrowForControls(ctrl_w);
+        Layout();
       }
-      Layout();
     });
     // Clicking a picture focuses its radar in the (already open) controls.
     p->SetFocusCallback([controls, ri]() {
@@ -101,6 +109,22 @@ void MayaraPpiWindow::SetSettingsControl(std::function<void()> open) {
 
 void MayaraPpiWindow::SetAutoLayoutControl(std::function<void()> cb) {
   if (m_controls) m_controls->SetAutoLayoutCallback(std::move(cb));
+}
+
+void MayaraPpiWindow::GrowForControls(int extra) {
+  const wxSize cs = GetClientSize();
+  SetClientSize(cs.x + extra, cs.y);
+  // Keep the (now wider) window within the display it is on.
+  int disp = wxDisplay::GetFromWindow(this);
+  if (disp == wxNOT_FOUND) disp = 0;
+  const wxRect area = wxDisplay(static_cast<unsigned>(disp)).GetClientArea();
+  const wxRect r = GetScreenRect();
+  int x = r.x, y = r.y;
+  if (r.GetRight() > area.GetRight())
+    x = std::max(area.x, area.GetRight() - r.width);
+  if (r.GetBottom() > area.GetBottom())
+    y = std::max(area.y, area.GetBottom() - r.height);
+  if (x != r.x || y != r.y) Move(x, y);
 }
 
 void MayaraPpiWindow::OnClose(wxCloseEvent& event) {
