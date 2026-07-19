@@ -71,6 +71,8 @@ class ControlsPanel : public wxScrolledWindow {
   void AddReadonly(wxSizer* sizer, const ControlDef& def);
   void AddRange(wxSizer* sizer, const ControlDef& def,
                 const std::vector<int>& ranges);
+  void AddSector(wxSizer* sizer, const ControlDef& def);  // no-transmit sector
+  void AddZone(wxSizer* sizer, const ControlDef& def);    // guard zone
   void AddPlaceholder(wxSizer* sizer, const ControlDef& def);
 
   void Set(const std::string& id, const std::string& json_body);

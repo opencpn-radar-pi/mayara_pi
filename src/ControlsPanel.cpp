@@ -11,6 +11,8 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <tuple>
+#include <utility>
 
 #include <wx/dcclient.h>
 #include <wx/statline.h>
@@ -54,6 +56,17 @@ wxString FormatVal(double value, const std::string& units) {
 }
 
 int Clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+// Sector/zone angles travel as radians over -180..180 degrees; the slider is
+// 0..1000. Distances are metres over 0..maxDist.
+double SliderToDeg(int s) { return -180.0 + (s / 1000.0) * 360.0; }
+int DegToSlider(double deg) {
+  return Clampi(static_cast<int>(std::lround((deg + 180.0) / 360.0 * 1000.0)),
+                0, 1000);
+}
+double RadToDeg(double r) { return r * 180.0 / M_PI; }
+double DegToRad(double d) { return d * M_PI / 180.0; }
+long RoundL(double v) { return std::lround(v); }
 
 // Recursively apply the theme: panel-coloured background everywhere, themed
 // text on labels. (Native controls on macOS may ignore colour changes.)
@@ -327,8 +340,12 @@ void ControlsPanel::AddControl(wxSizer* content, const ControlDef& d) {
     AddButton(content, d);
   else if (d.dataType == "string")
     AddReadonly(content, d);
+  else if (d.dataType == "sector")
+    AddSector(content, d);
+  else if (d.dataType == "zone")
+    AddZone(content, d);
   else
-    AddPlaceholder(content, d);  // sector/zone/rect: editors later
+    AddPlaceholder(content, d);  // rect: editor later
 }
 
 void ControlsPanel::FillViewSection(wxSizer* content) {
@@ -598,6 +615,165 @@ void ControlsPanel::AddReadonly(wxSizer* outer, const ControlDef& def) {
       val->SetLabel(wxString::FromUTF8(v.str_value.c_str()));
     else if (v.has_value)
       val->SetLabel(FormatVal(v.value, units));
+  });
+}
+
+// A no-transmit sector: start/end angles (degrees) + Enabled + Save.
+void ControlsPanel::AddSector(wxSizer* outer, const ControlDef& def) {
+  const std::string id = def.id;
+  auto* box = new wxBoxSizer(wxVERTICAL);
+  box->Add(new wxStaticText(this, wxID_ANY,
+                            wxString::FromUTF8(def.name.c_str())),
+           0, wxLEFT | wxTOP, 4);
+  auto dirty = std::make_shared<bool>(false);
+
+  auto make_angle = [&](const wxString& label) {
+    auto* row = new wxBoxSizer(wxHORIZONTAL);
+    row->Add(new wxStaticText(this, wxID_ANY, label, wxDefaultPosition,
+                              wxSize(52, -1)),
+             0, wxALIGN_CENTER_VERTICAL);
+    auto* sl = new ThemedSlider(this, m_theme);
+    sl->SetMinSize(wxSize(90, 24));
+    row->Add(sl, 1, wxALIGN_CENTER_VERTICAL);
+    auto* val = new wxStaticText(this, wxID_ANY, "", wxDefaultPosition,
+                                 wxSize(52, -1),
+                                 wxALIGN_RIGHT | wxST_NO_AUTORESIZE);
+    row->Add(val, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 4);
+    box->Add(row, 0, wxEXPAND | wxLEFT, 8);
+    auto self = [sl, val]() {
+      val->SetLabel(wxString::Format("%ld°", RoundL(SliderToDeg(sl->GetValue()))));
+    };
+    sl->Bind(wxEVT_SCROLL_THUMBTRACK,
+             [dirty, self](wxScrollEvent&) { *dirty = true; self(); });
+    sl->Bind(wxEVT_SCROLL_CHANGED,
+             [dirty, self](wxScrollEvent&) { *dirty = true; self(); });
+    return std::make_pair(sl, val);
+  };
+
+  ThemedSlider *sStart, *sEnd;
+  wxStaticText *vStart, *vEnd;
+  std::tie(sStart, vStart) = make_angle(_("Start°"));
+  std::tie(sEnd, vEnd) = make_angle(_("End°"));
+
+  auto* brow = new wxBoxSizer(wxHORIZONTAL);
+  auto* en = new ThemedButton(this, _("Enabled"), m_theme, /*toggle=*/true);
+  en->Bind(wxEVT_TOGGLEBUTTON, [dirty](wxCommandEvent&) { *dirty = true; });
+  brow->Add(en, 1, wxALL, 2);
+  auto* save = new ThemedButton(this, _("Save"), m_theme, /*toggle=*/false);
+  brow->Add(save, 1, wxALL, 2);
+  box->Add(brow, 0, wxEXPAND);
+  outer->Add(box, 0, wxEXPAND | wxALL, 4);
+
+  save->Bind(wxEVT_BUTTON, [this, id, dirty, sStart, sEnd, en](wxCommandEvent&) {
+    char buf[160];
+    std::snprintf(buf, sizeof(buf),
+                  "{\"value\":%g,\"endValue\":%g,\"enabled\":%s}",
+                  DegToRad(SliderToDeg(sStart->GetValue())),
+                  DegToRad(SliderToDeg(sEnd->GetValue())),
+                  en->GetValue() ? "true" : "false");
+    Set(id, buf);
+    *dirty = false;
+  });
+
+  m_updaters.push_back(
+      [this, id, dirty, sStart, vStart, sEnd, vEnd, en]() {
+        if (*dirty) return;
+        ControlValue v = controls()->Value(id);
+        const double sd = RadToDeg(v.value), ed = RadToDeg(v.endValue);
+        sStart->SetValue(DegToSlider(sd));
+        vStart->SetLabel(wxString::Format("%ld°", RoundL(sd)));
+        sEnd->SetValue(DegToSlider(ed));
+        vEnd->SetLabel(wxString::Format("%ld°", RoundL(ed)));
+        if (v.has_enabled) en->SetValue(v.enabled);
+      });
+}
+
+// A guard zone: start/end angles (degrees), inner/outer distance (metres),
+// Enabled + Save.
+void ControlsPanel::AddZone(wxSizer* outer, const ControlDef& def) {
+  const std::string id = def.id;
+  const double maxDist = def.maxDistance > 0 ? def.maxDistance : 4000.0;
+  auto* box = new wxBoxSizer(wxVERTICAL);
+  box->Add(new wxStaticText(this, wxID_ANY,
+                            wxString::FromUTF8(def.name.c_str())),
+           0, wxLEFT | wxTOP, 4);
+  auto dirty = std::make_shared<bool>(false);
+
+  auto make_row = [&](const wxString& label, bool is_dist) {
+    auto* row = new wxBoxSizer(wxHORIZONTAL);
+    row->Add(new wxStaticText(this, wxID_ANY, label, wxDefaultPosition,
+                              wxSize(52, -1)),
+             0, wxALIGN_CENTER_VERTICAL);
+    auto* sl = new ThemedSlider(this, m_theme);
+    sl->SetMinSize(wxSize(90, 24));
+    row->Add(sl, 1, wxALIGN_CENTER_VERTICAL);
+    auto* val = new wxStaticText(this, wxID_ANY, "", wxDefaultPosition,
+                                 wxSize(52, -1),
+                                 wxALIGN_RIGHT | wxST_NO_AUTORESIZE);
+    row->Add(val, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 4);
+    box->Add(row, 0, wxEXPAND | wxLEFT, 8);
+    auto self = [sl, val, is_dist, maxDist]() {
+      if (is_dist)
+        val->SetLabel(
+            wxString::Format("%ld m", RoundL(sl->GetValue() / 1000.0 * maxDist)));
+      else
+        val->SetLabel(
+            wxString::Format("%ld°", RoundL(SliderToDeg(sl->GetValue()))));
+    };
+    sl->Bind(wxEVT_SCROLL_THUMBTRACK,
+             [dirty, self](wxScrollEvent&) { *dirty = true; self(); });
+    sl->Bind(wxEVT_SCROLL_CHANGED,
+             [dirty, self](wxScrollEvent&) { *dirty = true; self(); });
+    return std::make_pair(sl, val);
+  };
+
+  ThemedSlider *sStart, *sEnd, *sIn, *sOut;
+  wxStaticText *vStart, *vEnd, *vIn, *vOut;
+  std::tie(sStart, vStart) = make_row(_("Start°"), false);
+  std::tie(sEnd, vEnd) = make_row(_("End°"), false);
+  std::tie(sIn, vIn) = make_row(_("Inner"), true);
+  std::tie(sOut, vOut) = make_row(_("Outer"), true);
+
+  auto* brow = new wxBoxSizer(wxHORIZONTAL);
+  auto* en = new ThemedButton(this, _("Enabled"), m_theme, /*toggle=*/true);
+  en->Bind(wxEVT_TOGGLEBUTTON, [dirty](wxCommandEvent&) { *dirty = true; });
+  brow->Add(en, 1, wxALL, 2);
+  auto* save = new ThemedButton(this, _("Save"), m_theme, /*toggle=*/false);
+  brow->Add(save, 1, wxALL, 2);
+  box->Add(brow, 0, wxEXPAND);
+  outer->Add(box, 0, wxEXPAND | wxALL, 4);
+
+  save->Bind(wxEVT_BUTTON, [this, id, dirty, sStart, sEnd, sIn, sOut, en,
+                            maxDist](wxCommandEvent&) {
+    char buf[256];
+    std::snprintf(
+        buf, sizeof(buf),
+        "{\"value\":%g,\"endValue\":%g,\"startDistance\":%g,"
+        "\"endDistance\":%g,\"enabled\":%s}",
+        DegToRad(SliderToDeg(sStart->GetValue())),
+        DegToRad(SliderToDeg(sEnd->GetValue())),
+        sIn->GetValue() / 1000.0 * maxDist, sOut->GetValue() / 1000.0 * maxDist,
+        en->GetValue() ? "true" : "false");
+    Set(id, buf);
+    *dirty = false;
+  });
+
+  m_updaters.push_back([this, id, dirty, sStart, vStart, sEnd, vEnd, sIn, vIn,
+                        sOut, vOut, en, maxDist]() {
+    if (*dirty) return;
+    ControlValue v = controls()->Value(id);
+    const double sd = RadToDeg(v.value), ed = RadToDeg(v.endValue);
+    sStart->SetValue(DegToSlider(sd));
+    vStart->SetLabel(wxString::Format("%ld°", RoundL(sd)));
+    sEnd->SetValue(DegToSlider(ed));
+    vEnd->SetLabel(wxString::Format("%ld°", RoundL(ed)));
+    sIn->SetValue(Clampi(
+        static_cast<int>(RoundL(v.startDistance / maxDist * 1000.0)), 0, 1000));
+    vIn->SetLabel(wxString::Format("%ld m", RoundL(v.startDistance)));
+    sOut->SetValue(Clampi(
+        static_cast<int>(RoundL(v.endDistance / maxDist * 1000.0)), 0, 1000));
+    vOut->SetLabel(wxString::Format("%ld m", RoundL(v.endDistance)));
+    if (v.has_enabled) en->SetValue(v.enabled);
   });
 }
 
