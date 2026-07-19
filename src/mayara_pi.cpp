@@ -52,7 +52,7 @@ static wxBitmap RadarIcon(int px) {
   return wxBitmap(px, px, 32);  // transparent fallback
 }
 
-mayara_pi::mayara_pi(void* ppimgr) : opencpn_plugin_118(ppimgr) {
+mayara_pi::mayara_pi(void* ppimgr) : opencpn_plugin_121(ppimgr) {
   m_panel_bitmap = RadarIcon(48);
   m_tool_bitmap = RadarIcon(32);
 }

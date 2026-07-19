@@ -18,7 +18,7 @@
 class MayaraPpiWindow;
 class MayaraClient;
 
-class mayara_pi : public opencpn_plugin_118 {
+class mayara_pi : public opencpn_plugin_121 {
  public:
   explicit mayara_pi(void* ppimgr);
   ~mayara_pi() override;

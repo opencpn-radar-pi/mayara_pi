@@ -1,6 +1,10 @@
 src/mayara_pi.cpp
 src/PpiWindow.cpp
 src/MayaraClient.cpp
+src/RadarState.cpp
+src/RadarMessage.cpp
 include/mayara_pi.h
 include/PpiWindow.h
 include/MayaraClient.h
+include/RadarState.h
+include/RadarMessage.h

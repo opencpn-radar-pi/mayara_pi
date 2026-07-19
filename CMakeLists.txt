@@ -60,10 +60,10 @@ set(VERSION_MINOR "1")
 set(VERSION_PATCH "0")
 set(VERSION_TWEAK "0")
 set(VERSION_DATE "19/07/2026") # DD/MM/YYYY
-set(OCPN_MIN_VERSION "ov58")
+set(OCPN_MIN_VERSION "ov511")
 
 set(OCPN_API_VERSION_MAJOR "1")
-set(OCPN_API_VERSION_MINOR "18")
+set(OCPN_API_VERSION_MINOR "21")
 
 set(WX_VER "32")
 set(WX_VER_PATCH "8")
@@ -129,12 +129,16 @@ set(SRCS
     src/mayara_pi.cpp
     src/PpiWindow.cpp
     src/MayaraClient.cpp
+    src/RadarState.cpp
+    src/RadarMessage.cpp
 )
 
 set(HDRS
     include/mayara_pi.h
     include/PpiWindow.h
     include/MayaraClient.h
+    include/RadarState.h
+    include/RadarMessage.h
 )
 
 if(PLUGIN_USE_SVG)
