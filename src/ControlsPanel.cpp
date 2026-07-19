@@ -66,10 +66,28 @@ ControlsPanel::ControlsPanel(wxWindow* parent, MayaraClient* client)
   SetMinSize(wxSize(300, -1));
   SetScrollRate(0, 12);
   auto* sizer = new wxBoxSizer(wxVERTICAL);
+  sizer->Add(MakeCloseRow(), 0, wxEXPAND);
   sizer->Add(new wxStaticText(this, wxID_ANY, _("Waiting for radar…")), 0,
              wxALL, 8);
   SetSizer(sizer);
   m_timer.Start(400);
+}
+
+wxSizer* ControlsPanel::MakeCloseRow() {
+  auto* row = new wxBoxSizer(wxHORIZONTAL);
+  auto* title = new wxStaticText(this, wxID_ANY, _("Controls"));
+  wxFont f = title->GetFont();
+  f.MakeBold();
+  title->SetFont(f);
+  row->Add(title, 1, wxALIGN_CENTER_VERTICAL | wxLEFT, 6);
+  auto* close = new wxButton(this, wxID_ANY, wxT("✕"), wxDefaultPosition,
+                             wxSize(30, 26), wxBU_EXACTFIT);
+  close->SetToolTip(_("Hide controls"));
+  close->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+    if (m_on_close) m_on_close();
+  });
+  row->Add(close, 0, wxALL, 4);
+  return row;
 }
 
 void ControlsPanel::Set(const std::string& id, const std::string& body) {
@@ -109,6 +127,7 @@ void ControlsPanel::Rebuild() {
   for (const auto& d : defs) by_id[d.id] = &d;
 
   auto* root = new wxBoxSizer(wxVERTICAL);
+  root->Add(MakeCloseRow(), 0, wxEXPAND);
 
   // --- Quick controls: prominent, fixed placement ---
   if (by_id.count("power")) AddEnum(root, *by_id["power"], /*buttons=*/true);
@@ -161,21 +180,24 @@ void ControlsPanel::Rebuild() {
 
 void ControlsPanel::AddNumber(wxSizer* outer, const ControlDef& def) {
   auto* box = new wxBoxSizer(wxVERTICAL);
-  auto* head = new wxBoxSizer(wxHORIZONTAL);
-  head->Add(new wxStaticText(this, wxID_ANY, wxString::FromUTF8(def.name.c_str())),
-            1, wxALIGN_CENTER_VERTICAL);
-  auto* valtext = new wxStaticText(this, wxID_ANY, "");
-  head->Add(valtext, 0, wxALIGN_CENTER_VERTICAL);
-  box->Add(head, 0, wxEXPAND);
+  box->Add(new wxStaticText(this, wxID_ANY,
+                            wxString::FromUTF8(def.name.c_str())),
+           0, wxLEFT, 2);
 
+  // slider | value | Auto  — value has a fixed width so it never clips.
   auto* row = new wxBoxSizer(wxHORIZONTAL);
   auto* slider = new wxSlider(this, wxID_ANY, 0, 0, 1000);
+  slider->SetMinSize(wxSize(80, -1));
   row->Add(slider, 1, wxALIGN_CENTER_VERTICAL);
+  auto* valtext = new wxStaticText(this, wxID_ANY, "", wxDefaultPosition,
+                                   wxSize(46, -1),
+                                   wxALIGN_RIGHT | wxST_NO_AUTORESIZE);
+  row->Add(valtext, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 4);
   wxToggleButton* autobtn = nullptr;
   if (def.hasAuto) {
     autobtn = new wxToggleButton(this, wxID_ANY, _("Auto"), wxDefaultPosition,
                                  wxSize(52, -1));
-    row->Add(autobtn, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 4);
+    row->Add(autobtn, 0, wxALIGN_CENTER_VERTICAL);
   }
   box->Add(row, 0, wxEXPAND);
   outer->Add(box, 0, wxEXPAND | wxALL, 4);
