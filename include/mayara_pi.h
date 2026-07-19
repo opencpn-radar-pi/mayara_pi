@@ -8,12 +8,15 @@
 #ifndef MAYARA_PI_H_
 #define MAYARA_PI_H_
 
+#include <memory>
+
 #include <wx/wx.h>
 
 #include "ocpn_plugin.h"
 
-// Forward declaration keeps the wx window type out of this header.
+// Forward declarations keep implementation types out of this header.
 class MayaraPpiWindow;
+class MayaraClient;
 
 class mayara_pi : public opencpn_plugin_118 {
  public:
@@ -54,6 +57,7 @@ class mayara_pi : public opencpn_plugin_118 {
   wxBitmap m_tool_bitmap;    // toolbar icon (must outlive InsertPlugInTool)
   int m_tool_id = -1;
   MayaraPpiWindow* m_ppi_window = nullptr;
+  std::unique_ptr<MayaraClient> m_client;
 
   // Latest own-ship fix, for the overlay/PPI to place the radar.
   double m_ownship_lat = 0.0;

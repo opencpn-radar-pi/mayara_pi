@@ -128,11 +128,13 @@ include("PluginConfigure")
 set(SRCS
     src/mayara_pi.cpp
     src/PpiWindow.cpp
+    src/MayaraClient.cpp
 )
 
 set(HDRS
     include/mayara_pi.h
     include/PpiWindow.h
+    include/MayaraClient.h
 )
 
 if(PLUGIN_USE_SVG)
@@ -154,6 +156,27 @@ if(NOT OCPN_FLATPAK_CONFIG)
 
   add_subdirectory(opencpn-libs/api-${OCPN_API_VERSION_MINOR})
   target_link_libraries(${PACKAGE_NAME} ocpn::api)
+
+  # --- mayara-server client networking -------------------------------------
+  # IXWebSocket: WebSocket + HTTP client, permessage-deflate via zlib. TLS is
+  # off for now (mayara-server is typically ws:// on the LAN); enable later.
+  set(USE_TLS OFF CACHE BOOL "" FORCE)
+  set(USE_ZLIB ON CACHE BOOL "" FORCE)
+  set(IXWEBSOCKET_INSTALL OFF CACHE BOOL "" FORCE)
+  # Build IXWebSocket as a STATIC lib linked into the plugin (FE2 sets
+  # BUILD_SHARED_LIBS globally, which would otherwise emit a separate dylib the
+  # plugin can't find at load time). PIC so it links into our shared object.
+  set(_mayara_saved_shared ${BUILD_SHARED_LIBS})
+  set(BUILD_SHARED_LIBS OFF)
+  set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+  add_subdirectory(third_party/IXWebSocket)
+  set(BUILD_SHARED_LIBS ${_mayara_saved_shared})
+  target_link_libraries(${PACKAGE_NAME} ixwebsocket)
+  target_include_directories(
+    ${PACKAGE_NAME} PRIVATE
+    ${PROJECT_SOURCE_DIR}/third_party
+    ${PROJECT_SOURCE_DIR}/third_party/IXWebSocket
+  )
 endif()
 
 # ---------------------------------------------------------------------------

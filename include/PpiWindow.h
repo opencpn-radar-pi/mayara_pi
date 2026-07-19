@@ -1,21 +1,28 @@
 /******************************************************************************
  * mayara_pi - PPI (Plan Position Indicator) window.
  *
- * Phase 0: a placeholder floating window. Phase 1 replaces the paint handler
- * with the OpenGL spoke renderer ported/simplified from radar_pi.
+ * Phase 1a: shows live client/connection status. Phase 1b replaces the paint
+ * handler with the actual radar image.
  *****************************************************************************/
 #ifndef MAYARA_PPI_WINDOW_H_
 #define MAYARA_PPI_WINDOW_H_
 
 #include <wx/wx.h>
+#include <wx/timer.h>
+
+class MayaraClient;
 
 class MayaraPpiWindow : public wxDialog {
  public:
-  explicit MayaraPpiWindow(wxWindow* parent);
+  MayaraPpiWindow(wxWindow* parent, MayaraClient* client);
 
  private:
   void OnPaint(wxPaintEvent& event);
   void OnClose(wxCloseEvent& event);
+  void OnTimer(wxTimerEvent& event);
+
+  MayaraClient* m_client;  // not owned
+  wxTimer m_timer;
 
   wxDECLARE_EVENT_TABLE();
 };
