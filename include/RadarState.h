@@ -42,6 +42,17 @@ class RadarState {
   // scaling the cached disc. Returns true if radar data is present.
   bool RenderPPI(uint8_t* rgb, int w, int h);
 
+  // Radar position stamped into the spoke data (best-effort). Used to place the
+  // chart overlay when OpenCPN has no own-ship fix of its own.
+  void SetPosition(double lat, double lon);
+  bool Position(double& lat, double& lon) const;
+
+  // Heading derived from a spoke's true bearing vs. bow-relative angle
+  // (heading = bearing - angle). Used to orient the overlay when OpenCPN has no
+  // true heading of its own.
+  void SetHeadingFromBearing(uint32_t angle, uint32_t bearing);
+  bool Heading(double& degrees) const;
+
   uint32_t RangeMeters() const;
   uint64_t Generation() const;
   bool Configured() const;
@@ -59,6 +70,11 @@ class RadarState {
   uint32_t range_ = 0;
   uint64_t generation_ = 0;
   bool has_data_ = false;
+  double radar_lat_ = 0.0;
+  double radar_lon_ = 0.0;
+  bool has_pos_ = false;
+  double heading_deg_ = 0.0;
+  bool has_heading_ = false;
 
   // Cartesian render cache.
   int disc_size_ = 0;

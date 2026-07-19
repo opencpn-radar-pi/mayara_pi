@@ -64,6 +64,12 @@ void RadarState::WriteSpoke(uint32_t angle, const uint8_t* data, size_t len,
   if (static_cast<int>(angle) >= spokes_) return;
   if (len > static_cast<size_t>(maxlen_)) len = maxlen_;
 
+  // On a range change the old echoes are at the wrong distance until re-swept,
+  // so drop them and let the new sweep repopulate.
+  if (has_data_ && range_meters != range_) {
+    std::fill(spoke_len_.begin(), spoke_len_.end(), 0);
+  }
+
   uint8_t* row = &raster_[static_cast<size_t>(angle) * maxlen_];
   std::memcpy(row, data, len);
   if (len < static_cast<size_t>(maxlen_))
@@ -145,6 +151,38 @@ bool RadarState::RenderPPI(uint8_t* rgb, int w, int h) {
       }
     }
   }
+  return true;
+}
+
+void RadarState::SetPosition(double lat, double lon) {
+  std::lock_guard<std::mutex> lock(m_);
+  radar_lat_ = lat;
+  radar_lon_ = lon;
+  has_pos_ = true;
+}
+
+bool RadarState::Position(double& lat, double& lon) const {
+  std::lock_guard<std::mutex> lock(m_);
+  if (!has_pos_) return false;
+  lat = radar_lat_;
+  lon = radar_lon_;
+  return true;
+}
+
+void RadarState::SetHeadingFromBearing(uint32_t angle, uint32_t bearing) {
+  std::lock_guard<std::mutex> lock(m_);
+  if (spokes_ <= 0) return;
+  int diff = static_cast<int>(bearing) - static_cast<int>(angle);
+  diff %= spokes_;
+  if (diff < 0) diff += spokes_;
+  heading_deg_ = diff * 360.0 / spokes_;
+  has_heading_ = true;
+}
+
+bool RadarState::Heading(double& degrees) const {
+  std::lock_guard<std::mutex> lock(m_);
+  if (!has_heading_) return false;
+  degrees = heading_deg_;
   return true;
 }
 

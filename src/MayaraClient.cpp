@@ -224,8 +224,25 @@ bool MayaraClient::ConnectSpokes(const std::string& spoke_url) {
       const auto* buf = reinterpret_cast<const uint8_t*>(msg->str.data());
       std::vector<MayaraSpoke> spokes;
       if (DecodeRadarMessage(buf, msg->str.size(), spokes)) {
-        for (const auto& s : spokes)
+        double plat = 0, plon = 0;
+        bool have_pos = false;
+        uint32_t hb_angle = 0, hb_bearing = 0;
+        bool have_heading = false;
+        for (const auto& s : spokes) {
           state->WriteSpoke(s.angle, s.data, s.data_len, s.range);
+          if (s.has_lat && s.has_lon) {
+            plat = s.lat;
+            plon = s.lon;
+            have_pos = true;
+          }
+          if (s.has_bearing) {
+            hb_angle = s.angle;
+            hb_bearing = s.bearing;
+            have_heading = true;
+          }
+        }
+        if (have_pos) state->SetPosition(plat, plon);
+        if (have_heading) state->SetHeadingFromBearing(hb_angle, hb_bearing);
       }
     } else if (msg->type == ix::WebSocketMessageType::Open) {
       m_streaming = true;

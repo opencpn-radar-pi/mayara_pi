@@ -138,12 +138,20 @@ void mayara_pi::TogglePpiWindow() {
 bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
                                            PlugIn_ViewPort* vp, int canvasIndex,
                                            int priority) {
+  RadarState* state = m_client ? m_client->State() : nullptr;
+  const uint32_t range_m = state ? state->RangeMeters() : 0;
+
   if (!m_client || !vp || !vp->bValid) return false;
-  RadarState* state = m_client->State();
   if (!state) return false;
-  const uint32_t range_m = state->RangeMeters();
   if (range_m == 0) return false;  // no radar data yet
-  if (m_ownship_lat == 0.0 && m_ownship_lon == 0.0) return false;  // no fix
+
+  // Prefer OpenCPN's own-ship fix; fall back to the radar position stamped into
+  // the spoke data when OpenCPN has no fix of its own.
+  double lat = m_ownship_lat;
+  double lon = m_ownship_lon;
+  if (lat == 0.0 && lon == 0.0) {
+    if (!state->Position(lat, lon)) return false;  // nowhere to place it
+  }
 
   // Upload the cached disc as a texture, but only when it actually changed.
   const uint64_t gen = state->Generation();
@@ -166,14 +174,21 @@ bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
   if (m_overlay_size <= 0) return false;
 
   wxPoint center;
-  GetCanvasPixLL(vp, &center, m_ownship_lat, m_ownship_lon);
+  GetCanvasPixLL(vp, &center, lat, lon);
+  // GetCanvasPixLL can overflow to INT_MIN when the boat is far off this
+  // viewport (e.g. a second canvas). Skip those.
+  if (std::abs(center.x) > 1000000 || std::abs(center.y) > 1000000)
+    return false;
   const double radius_px = range_m * vp->view_scale_ppm;
   if (radius_px < 1.0) return false;
 
-  // Disc is bow-up; rotate to place the bow toward heading on the chart
-  // (chart itself may be rotated). Signs verified against the live overlay.
-  const double rot_deg =
-      m_heading_true + vp->rotation * 180.0 / M_PI;
+  // Prefer OpenCPN's true heading; fall back to the heading carried in the
+  // spoke data (bearing - angle) when OpenCPN has none. Disc is bow-up; rotate
+  // to place the bow toward heading, plus the chart's own rotation.
+  double heading = m_heading_true;
+  double spoke_heading = 0.0;
+  if (heading == 0.0 && state->Heading(spoke_heading)) heading = spoke_heading;
+  const double rot_deg = heading + vp->rotation * 180.0 / M_PI;
 
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
