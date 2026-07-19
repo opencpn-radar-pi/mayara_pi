@@ -1,9 +1,10 @@
 /******************************************************************************
- * mayara_pi - radar window (composes the radar image + control panel).
+ * mayara_pi - radar window (a grid of radar pictures + a shared control panel).
  *****************************************************************************/
 #include "PpiWindow.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include "ControlsPanel.h"
 #include "RadarDisplayPanel.h"
@@ -12,26 +13,54 @@ wxBEGIN_EVENT_TABLE(MayaraPpiWindow, wxDialog)
     EVT_CLOSE(MayaraPpiWindow::OnClose)
 wxEND_EVENT_TABLE()
 
-MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client)
+MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client,
+                                 std::vector<int> radar_indices)
     : wxDialog(parent, wxID_ANY, _("Mayara Radar"), wxDefaultPosition,
                wxSize(880, 560), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER) {
   SetMinSize(wxSize(480, 320));
+  if (radar_indices.empty()) radar_indices.push_back(0);
 
-  m_radar = new RadarDisplayPanel(this, client);
-  m_controls = new ControlsPanel(this, client);
-  m_controls->Hide();  // opened via the hamburger button
+  // The radar pictures, laid out in a near-square grid.
+  m_grid = new wxPanel(this, wxID_ANY);
+  const int n = static_cast<int>(radar_indices.size());
+  int cols = std::max(1, static_cast<int>(std::ceil(std::sqrt((double)n))));
+  int rows = (n + cols - 1) / cols;
+  auto* grid = new wxGridSizer(rows, cols, 2, 2);
+  for (int ri : radar_indices) {
+    auto* panel = new RadarDisplayPanel(m_grid, client, ri);
+    m_radars.push_back(panel);
+    grid->Add(panel, 1, wxEXPAND);
+  }
+  m_grid->SetSizer(grid);
+
+  // One control panel, bound to the focused radar (the first by default).
+  m_controls = new ControlsPanel(this, client, radar_indices.front());
+  m_controls->SetRadarList(radar_indices);
+  m_controls->Hide();  // opened via a picture's hamburger button
 
   auto* sizer = new wxBoxSizer(wxHORIZONTAL);
-  sizer->Add(m_radar, 1, wxEXPAND);
+  sizer->Add(m_grid, 1, wxEXPAND);
   sizer->Add(m_controls, 0, wxEXPAND);
   SetSizer(sizer);
 
-  RadarDisplayPanel* radar = m_radar;
   ControlsPanel* controls = m_controls;
-  radar->SetMenuCallback([this, controls]() {
-    controls->Show(!controls->IsShown());
-    Layout();
-  });
+  for (RadarDisplayPanel* p : m_radars) {
+    const int ri = p->RadarIndex();
+    // Hamburger: toggle the controls, bound to this picture's radar.
+    p->SetMenuCallback([this, controls, ri]() {
+      if (controls->IsShown() && controls->RadarIndex() == ri) {
+        controls->Hide();
+      } else {
+        controls->SetRadarIndex(ri);
+        controls->Show(true);
+      }
+      Layout();
+    });
+    // Clicking a picture focuses its radar in the (already open) controls.
+    p->SetFocusCallback([controls, ri]() {
+      if (controls->IsShown()) controls->SetRadarIndex(ri);
+    });
+  }
   controls->SetCloseCallback([this, controls]() {
     controls->Hide();
     Layout();
@@ -40,7 +69,7 @@ MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client)
 
 void MayaraPpiWindow::ApplyTheme(const MayaraTheme& theme) {
   SetBackgroundColour(theme.panel_bg);
-  if (m_radar) m_radar->ApplyTheme(theme);
+  for (RadarDisplayPanel* p : m_radars) p->ApplyTheme(theme);
   if (m_controls) m_controls->ApplyTheme(theme);
   Refresh();
 }
@@ -50,12 +79,12 @@ void MayaraPpiWindow::SetOverlayControl(std::function<bool()> get,
   if (!m_controls) return;
   m_controls->SetViewControls(
       std::move(get), std::move(set),
-      [this]() { return m_radar && m_radar->IsShown(); },
+      [this]() { return m_grid && m_grid->IsShown(); },
       [this](bool show) {
-        if (m_radar) m_radar->Show(show);
+        if (m_grid) m_grid->Show(show);
         if (!show && m_controls) m_controls->Show(true);  // keep menu visible
         Layout();
-        // Narrow to just the menu when the PPI is hidden; widen to show it.
+        // Narrow to just the menu when the pictures are hidden; widen to show.
         const int h = GetSize().y;
         if (show) {
           SetSize(wxSize(std::max(GetSize().x, 820), h));

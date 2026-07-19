@@ -224,13 +224,12 @@ std::vector<int> MayaraClient::ShownRadars() {
   for (int i : m_shown)
     if (i >= 0 && i < n) out.push_back(i);
   if (out.empty())
-    for (int i = 0; i < n && i < 2; ++i) out.push_back(i);  // default first two
+    for (int i = 0; i < n; ++i) out.push_back(i);  // default: all radars
   return out;
 }
 
 void MayaraClient::SetShown(std::vector<int> indices) {
   std::lock_guard<std::mutex> lock(m_radars_mutex);
-  if (indices.size() > 2) indices.resize(2);
   m_shown = std::move(indices);
 }
 
@@ -505,12 +504,16 @@ void MayaraClient::ConnectControlStream() {
 
 void MayaraClient::SetControl(const std::string& control_id,
                               const std::string& json_body) {
+  SetControlAt(m_active, control_id, json_body);
+}
+
+void MayaraClient::SetControlAt(int index, const std::string& control_id,
+                                const std::string& json_body) {
   std::string radar_id;
   {
     std::lock_guard<std::mutex> lock(m_radars_mutex);
-    const int i = m_active;
-    if (i < 0 || i >= static_cast<int>(m_radars.size())) return;
-    radar_id = m_radars[i]->id;
+    if (index < 0 || index >= static_cast<int>(m_radars.size())) return;
+    radar_id = m_radars[index]->id;
   }
   const std::string base = m_base_url;
   std::thread([base, radar_id, control_id, json_body] {

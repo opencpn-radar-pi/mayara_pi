@@ -5,6 +5,7 @@
 #define MAYARA_PPI_WINDOW_H_
 
 #include <functional>
+#include <vector>
 
 #include <wx/wx.h>
 
@@ -14,9 +15,12 @@ class MayaraClient;
 class RadarDisplayPanel;
 class ControlsPanel;
 
+// A radar window shows one or more radars (a grid of PPI pictures) plus a
+// shared, collapsible control panel bound to the focused radar.
 class MayaraPpiWindow : public wxDialog {
  public:
-  MayaraPpiWindow(wxWindow* parent, MayaraClient* client);
+  MayaraPpiWindow(wxWindow* parent, MayaraClient* client,
+                  std::vector<int> radar_indices);
 
   void ApplyTheme(const MayaraTheme& theme);
 
@@ -30,7 +34,8 @@ class MayaraPpiWindow : public wxDialog {
  private:
   void OnClose(wxCloseEvent& event);
 
-  RadarDisplayPanel* m_radar = nullptr;
+  wxWindow* m_grid = nullptr;  // container of the radar pictures
+  std::vector<RadarDisplayPanel*> m_radars;
   ControlsPanel* m_controls = nullptr;
 
   wxDECLARE_EVENT_TABLE();

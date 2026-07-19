@@ -60,6 +60,12 @@ class mayara_pi : public opencpn_plugin_121 {
 
  private:
   void TogglePpiWindow();
+  void RebuildWindows();            // (re)create windows from m_windows_count
+  void DestroyWindows(bool sync);  // sync=true: delete now (teardown-safe)
+  bool AnyWindowShown() const;
+  // Distribute the discovered radars across m_windows_count windows.
+  std::vector<std::vector<int>> RadarGroups() const;
+  void ApplyThemeToWindows();
   void ShowSettings(wxWindow* parent);
   void LoadConfig();
   void SaveConfig();
@@ -72,7 +78,9 @@ class mayara_pi : public opencpn_plugin_121 {
   int m_mi_ppi = -1;
   wxMenuItem* m_mi_overlay_item = nullptr;  // owned by OpenCPN after adding
   wxMenuItem* m_mi_ppi_item = nullptr;
-  MayaraPpiWindow* m_ppi_window = nullptr;
+  std::vector<MayaraPpiWindow*> m_windows;
+  bool m_windows_visible = false;  // user's show/hide intent for the windows
+  int m_windows_radar_count = -1;  // radar count the windows were built for
   std::unique_ptr<MayaraClient> m_client;
   PI_ColorScheme m_color_scheme = PI_GLOBAL_COLOR_SCHEME_DAY;
   float m_radar_intensity = 1.0f;

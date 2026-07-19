@@ -19,13 +19,14 @@ enum { kRadarTimerId = wxID_HIGHEST + 10 };
 
 namespace {
 
-wxString PowerLabel(MayaraClient* client, int value) {
-  for (const auto& d : client->Controls()->Schema())
-    if (d.id == "power") {
-      auto it = d.descriptions.find(value);
-      if (it != d.descriptions.end())
-        return wxString::FromUTF8(it->second.c_str());
-    }
+wxString PowerLabel(RadarControls* controls, int value) {
+  if (controls)
+    for (const auto& d : controls->Schema())
+      if (d.id == "power") {
+        auto it = d.descriptions.find(value);
+        if (it != d.descriptions.end())
+          return wxString::FromUTF8(it->second.c_str());
+      }
   return wxString::Format("%d", value);
 }
 
@@ -42,9 +43,8 @@ void LozengeBg(wxDC& dc, const wxRect& r, int radius, const MayaraTheme& t) {
 }
 
 // Sorted settable ranges for the "range" control.
-std::vector<int> RangeValues(MayaraClient* client) {
+std::vector<int> RangeValues(RadarControls* c) {
   std::vector<int> vals;
-  RadarControls* c = client->Controls();
   if (!c) return vals;
   for (const auto& d : c->Schema())
     if (d.id == "range") {
@@ -64,10 +64,12 @@ wxBEGIN_EVENT_TABLE(RadarDisplayPanel, wxPanel)
     EVT_LEFT_DOWN(RadarDisplayPanel::OnLeftDown)
 wxEND_EVENT_TABLE()
 
-RadarDisplayPanel::RadarDisplayPanel(wxWindow* parent, MayaraClient* client)
+RadarDisplayPanel::RadarDisplayPanel(wxWindow* parent, MayaraClient* client,
+                                     int radar_index)
     : wxPanel(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
               wxFULL_REPAINT_ON_RESIZE),
       m_client(client),
+      m_index(radar_index),
       m_timer(this, kRadarTimerId) {
   SetBackgroundStyle(wxBG_STYLE_PAINT);
   SetMinSize(wxSize(256, 256));
@@ -90,7 +92,7 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
   dc.SetBackground(*wxBLACK_BRUSH);
   dc.Clear();
 
-  RadarState* state = m_client ? m_client->State() : nullptr;
+  RadarState* state = m_client ? m_client->StateAt(m_index) : nullptr;
   const int side = std::max(16, std::min(sz.x, sz.y));
 
   bool painted = false;
@@ -140,7 +142,7 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
   }
 
   if (!m_client) return;
-  RadarControls* controls = m_client->Controls();
+  RadarControls* controls = m_client->ControlsAt(m_index);
   if (!controls) return;  // no radar connected yet
 
   // --- Power lozenge (top-left) with a clickable power icon ---
@@ -150,7 +152,7 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
     const bool tx = p >= 2;  // Transmit
     const wxColour fg = tx ? m_theme.accent : m_theme.accent_dim;
     const wxString label =
-        pw.has_value ? PowerLabel(m_client, p) : wxString(_("Power"));
+        pw.has_value ? PowerLabel(controls, p) : wxString(_("Power"));
     wxCoord tw, th;
     dc.GetTextExtent(label, &tw, &th);
     const int padx = 8, gap = 8, icon = 16;
@@ -176,7 +178,7 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
   }
 
   // --- Range lozenge (left edge, vertically centred) with - / + ---
-  RadarState* state = m_client->State();
+  RadarState* state = m_client->StateAt(m_index);
   ControlValue rv = controls->Value("range");
   const double cur =
       rv.has_value ? rv.value : (state ? state->RangeMeters() : 0.0);
@@ -219,22 +221,27 @@ void RadarDisplayPanel::OnLeftDown(wxMouseEvent& event) {
     StepRange(-1);
   else if (m_range_plus_rect.Contains(p))
     StepRange(+1);
-  else
+  else {
+    if (m_on_focus) m_on_focus();
     event.Skip();
+  }
 }
 
 void RadarDisplayPanel::TogglePower() {
-  if (!m_client || !m_client->Controls()) return;
-  ControlValue pw = m_client->Controls()->Value("power");
+  RadarControls* c = m_client ? m_client->ControlsAt(m_index) : nullptr;
+  if (!c) return;
+  ControlValue pw = c->Value("power");
   const int target = (pw.has_value && static_cast<int>(pw.value) >= 2) ? 1 : 2;
-  m_client->SetControl("power", "{\"value\":" + std::to_string(target) + "}");
+  m_client->SetControlAt(m_index, "power",
+                         "{\"value\":" + std::to_string(target) + "}");
 }
 
 void RadarDisplayPanel::StepRange(int direction) {
-  if (!m_client || !m_client->Controls()) return;
-  std::vector<int> vals = RangeValues(m_client);
+  RadarControls* c = m_client ? m_client->ControlsAt(m_index) : nullptr;
+  if (!c) return;
+  std::vector<int> vals = RangeValues(c);
   if (vals.empty()) return;
-  const double cur = m_client->Controls()->Value("range").value;
+  const double cur = c->Value("range").value;
   int idx = 0;
   double best = 1e18;
   for (int i = 0; i < static_cast<int>(vals.size()); ++i) {
@@ -245,5 +252,6 @@ void RadarDisplayPanel::StepRange(int direction) {
     }
   }
   idx = std::max(0, std::min<int>(idx + direction, vals.size() - 1));
-  m_client->SetControl("range", "{\"value\":" + std::to_string(vals[idx]) + "}");
+  m_client->SetControlAt(m_index, "range",
+                         "{\"value\":" + std::to_string(vals[idx]) + "}");
 }

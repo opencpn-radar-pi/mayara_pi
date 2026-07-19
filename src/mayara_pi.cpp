@@ -134,10 +134,7 @@ int mayara_pi::Init() {
 bool mayara_pi::DeInit() {
   // Destroy the window first (synchronously) so its panels' timers stop calling
   // into the client before we free it.
-  if (m_ppi_window) {
-    delete m_ppi_window;
-    m_ppi_window = nullptr;
-  }
+  DestroyWindows(/*sync=*/true);
   if (m_tool_id != -1) {
     RemovePlugInTool(m_tool_id);
     m_tool_id = -1;
@@ -224,11 +221,14 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   dlg.SetSizerAndFit(top);
 
   if (dlg.ShowModal() == wxID_OK) {
-    m_windows_count = spin->GetValue();
-    SaveConfig();
-    // Window-layout application (creating/retiring PPI windows and assigning
-    // radars to each) lands with the presentation-mode work; the choice is
-    // persisted now so it survives the wiring.
+    const int chosen = spin->GetValue();
+    if (chosen != m_windows_count) {
+      m_windows_count = chosen;
+      SaveConfig();
+      // Re-lay-out the radars across the new number of windows, keeping the
+      // current show/hide intent.
+      if (!m_windows.empty() || m_windows_visible) RebuildWindows();
+    }
   }
 }
 
@@ -274,25 +274,84 @@ void mayara_pi::OnContextMenuItemCallback(int id) {
 void mayara_pi::PrepareContextMenu(int /*canvasIndex*/) {
   if (m_mi_overlay_item) m_mi_overlay_item->Check(m_overlay_enabled);
   if (m_mi_ppi_item)
-    m_mi_ppi_item->Check(m_ppi_window && m_ppi_window->IsShown());
+    m_mi_ppi_item->Check(AnyWindowShown());
+}
+
+// Split the discovered radars into m_windows_count near-even groups. Window w
+// gets radars [w*base + min(w,rem) ..], distributing the remainder to the first
+// windows. Never more windows than radars.
+std::vector<std::vector<int>> mayara_pi::RadarGroups() const {
+  std::vector<std::vector<int>> groups;
+  const int n = m_client ? m_client->RadarCount() : 0;
+  if (n <= 0) return groups;
+  const int w = std::max(1, std::min(m_windows_count, n));
+  const int base = n / w, rem = n % w;
+  int idx = 0;
+  for (int g = 0; g < w; ++g) {
+    const int count = base + (g < rem ? 1 : 0);
+    std::vector<int> grp;
+    for (int k = 0; k < count; ++k) grp.push_back(idx++);
+    groups.push_back(std::move(grp));
+  }
+  return groups;
+}
+
+void mayara_pi::DestroyWindows(bool sync) {
+  for (MayaraPpiWindow* win : m_windows) {
+    if (!win) continue;
+    win->Hide();
+    // sync: delete now, so panel timers can't call into a freed client during
+    // plugin teardown. async: defer (we may be inside a window's own handler,
+    // e.g. its gear button); the client is still alive, so timers are safe.
+    if (sync)
+      delete win;
+    else
+      win->Destroy();
+  }
+  m_windows.clear();
+}
+
+bool mayara_pi::AnyWindowShown() const {
+  for (MayaraPpiWindow* win : m_windows)
+    if (win && win->IsShown()) return true;
+  return false;
+}
+
+void mayara_pi::ApplyThemeToWindows() {
+  for (MayaraPpiWindow* win : m_windows)
+    if (win) win->ApplyTheme(ThemeFor(m_color_scheme));
+}
+
+// (Re)create the radar windows from the current radar count and window count,
+// preserving the user's show/hide intent.
+void mayara_pi::RebuildWindows() {
+  DestroyWindows(/*sync=*/false);
+  m_windows_radar_count = m_client ? m_client->RadarCount() : 0;
+  std::vector<std::vector<int>> groups = RadarGroups();
+  for (const std::vector<int>& grp : groups) {
+    auto* win = new MayaraPpiWindow(m_parent_window, m_client.get(), grp);
+    win->ApplyTheme(ThemeFor(m_color_scheme));
+    win->SetOverlayControl([this]() { return m_overlay_enabled; },
+                           [this](bool on) {
+                             m_overlay_enabled = on;
+                             SaveConfig();
+                             GetOCPNCanvasWindow()->Refresh(false);
+                           });
+    win->SetSettingsControl([this, win]() { ShowSettings(win); });
+    win->Show(m_windows_visible);
+    m_windows.push_back(win);
+  }
 }
 
 void mayara_pi::TogglePpiWindow() {
-  if (!m_ppi_window) {
-    m_ppi_window = new MayaraPpiWindow(m_parent_window, m_client.get());
-    m_ppi_window->ApplyTheme(ThemeFor(m_color_scheme));
-    m_ppi_window->SetOverlayControl([this]() { return m_overlay_enabled; },
-                                    [this](bool on) {
-                                      m_overlay_enabled = on;
-                                      SaveConfig();
-                                      GetOCPNCanvasWindow()->Refresh(false);
-                                    });
-    m_ppi_window->SetSettingsControl(
-        [this]() { ShowSettings(m_ppi_window); });
-  }
-  const bool show = !m_ppi_window->IsShown();
-  m_ppi_window->Show(show);
-  SetToolbarItemState(m_tool_id, show);
+  m_windows_visible = !AnyWindowShown();
+  const int radar_count = m_client ? m_client->RadarCount() : 0;
+  if (m_windows_visible &&
+      (m_windows.empty() || m_windows_radar_count != radar_count))
+    RebuildWindows();  // build, or rebuild for a changed radar set
+  for (MayaraPpiWindow* win : m_windows)
+    if (win) win->Show(m_windows_visible);
+  SetToolbarItemState(m_tool_id, m_windows_visible);
 }
 
 bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
@@ -434,5 +493,5 @@ void mayara_pi::SetColorScheme(PI_ColorScheme cs) {
   const MayaraTheme t = ThemeFor(cs);
   m_radar_intensity = t.radar_intensity;
   if (m_client) m_client->SetAllIntensity(t.radar_intensity);
-  if (m_ppi_window) m_ppi_window->ApplyTheme(t);
+  ApplyThemeToWindows();
 }

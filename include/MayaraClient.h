@@ -59,13 +59,16 @@ class MayaraClient {
   RadarControls* ControlsAt(int index);
   std::string RadarId(int index);
 
-  // The (at most two) radars currently displayed. Defaults to the first two.
+  // Radars currently composited on the chart overlay. Defaults to all radars.
   std::vector<int> ShownRadars();
   void SetShown(std::vector<int> indices);
 
-  // Set a control value on the active radar. `json_body` is the
-  // BareControlValue JSON (e.g. {"value":75}). Sent via REST PUT.
+  // Set a control value. `json_body` is the BareControlValue JSON
+  // (e.g. {"value":75}). Sent via REST PUT. SetControl targets the active
+  // radar; SetControlAt targets a specific radar index.
   void SetControl(const std::string& control_id, const std::string& json_body);
+  void SetControlAt(int index, const std::string& control_id,
+                    const std::string& json_body);
 
  private:
   void Run();                 // background: discover + connect, retry

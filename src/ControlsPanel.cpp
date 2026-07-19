@@ -119,10 +119,12 @@ wxBEGIN_EVENT_TABLE(ControlsPanel, wxScrolledWindow)
     EVT_TIMER(kControlsTimerId, ControlsPanel::OnTimer)
 wxEND_EVENT_TABLE()
 
-ControlsPanel::ControlsPanel(wxWindow* parent, MayaraClient* client)
+ControlsPanel::ControlsPanel(wxWindow* parent, MayaraClient* client,
+                             int radar_index)
     : wxScrolledWindow(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                        wxVSCROLL),
       m_client(client),
+      m_index(radar_index),
       m_timer(this, kControlsTimerId) {
   SetMinSize(wxSize(300, -1));
   SetScrollRate(0, 12);
@@ -157,7 +159,18 @@ wxSizer* ControlsPanel::MakeCloseRow() {
 }
 
 void ControlsPanel::Set(const std::string& id, const std::string& body) {
-  if (m_client) m_client->SetControl(id, body);
+  if (m_client) m_client->SetControlAt(m_index, id, body);
+}
+
+RadarControls* ControlsPanel::controls() {
+  return m_client ? m_client->ControlsAt(m_index) : nullptr;
+}
+
+void ControlsPanel::SetRadarIndex(int index) {
+  if (index == m_index) return;
+  m_index = index;
+  m_schema_gen = ~0ull;  // force a rebuild against the new radar's schema
+  if (m_built) Rebuild();
 }
 
 void ControlsPanel::ApplyTheme(const MayaraTheme& theme) {
@@ -175,20 +188,17 @@ void ControlsPanel::ThemeChildren() {
 }
 
 void ControlsPanel::OnTimer(wxTimerEvent&) {
-  if (!m_client) return;
-  RadarControls* controls = m_client->Controls();
-  if (!controls || !controls->HasSchema()) return;
-  const int active = m_client->ActiveIndex();
-  const uint64_t sgen = controls->SchemaGeneration();
-  if (!m_built || active != m_active_radar || sgen != m_schema_gen) {
-    Rebuild();  // schema changed, or the active radar changed
+  RadarControls* c = controls();
+  if (!c || !c->HasSchema()) return;
+  const uint64_t sgen = c->SchemaGeneration();
+  if (!m_built || sgen != m_schema_gen) {
+    Rebuild();  // first build, or the bound radar's schema changed
     m_built = true;
-    m_active_radar = active;
     m_schema_gen = sgen;
-    m_last_gen = controls->Generation();
+    m_last_gen = c->Generation();
     return;
   }
-  const uint64_t gen = controls->Generation();
+  const uint64_t gen = c->Generation();
   if (gen != m_last_gen) {
     m_last_gen = gen;
     ApplyValues();
@@ -196,7 +206,7 @@ void ControlsPanel::OnTimer(wxTimerEvent&) {
 }
 
 void ControlsPanel::ApplyValues() {
-  if (!m_client || !m_client->Controls()) return;
+  if (!m_client || !controls()) return;
   for (auto& u : m_updaters) u();
 }
 
@@ -204,15 +214,15 @@ void ControlsPanel::Rebuild() {
   DestroyChildren();
   m_updaters.clear();
 
-  RadarControls* controls = m_client->Controls();
-  if (!controls) {
+  RadarControls* c = controls();
+  if (!c) {
     auto* sizer = new wxBoxSizer(wxVERTICAL);
     sizer->Add(MakeCloseRow(), 0, wxEXPAND);
     SetSizer(sizer);
     return;
   }
-  std::vector<ControlDef> defs = controls->Schema();
-  std::vector<int> ranges = controls->SupportedRanges();
+  std::vector<ControlDef> defs = c->Schema();
+  std::vector<int> ranges = c->SupportedRanges();
 
   std::map<std::string, const ControlDef*> by_id;
   for (const auto& d : defs) by_id[d.id] = &d;
@@ -220,16 +230,26 @@ void ControlsPanel::Rebuild() {
   auto* root = new wxBoxSizer(wxVERTICAL);
   root->Add(MakeCloseRow(), 0, wxEXPAND);
 
-  // Radar selector (only when more than one radar is present).
-  if (m_client->RadarCount() > 1) {
+  // Radar selector: switches which of this window's radars these controls
+  // drive. Shown only when the window hosts more than one radar.
+  if (m_radar_list.size() > 1) {
+    std::vector<std::string> names = m_client->RadarNames();
     root->Add(new wxStaticText(this, wxID_ANY, _("Radar")), 0, wxLEFT | wxTOP,
               4);
     auto* sel = new ThemedChoice(this, m_theme);
-    for (const auto& n : m_client->RadarNames())
-      sel->Append(wxString::FromUTF8(n.c_str()));
-    sel->SetSelection(m_client->ActiveIndex());
+    int selected = 0;
+    for (size_t i = 0; i < m_radar_list.size(); ++i) {
+      const int ri = m_radar_list[i];
+      const wxString nm = (ri >= 0 && ri < static_cast<int>(names.size()))
+                              ? wxString::FromUTF8(names[ri].c_str())
+                              : wxString::Format("Radar %d", ri);
+      sel->Append(nm, ri);
+      if (ri == m_index) selected = static_cast<int>(i);
+    }
+    sel->SetSelection(selected);
     sel->Bind(wxEVT_CHOICE, [this, sel](wxCommandEvent&) {
-      m_client->SetActive(sel->GetSelection());
+      int s = sel->GetSelection();
+      if (s != wxNOT_FOUND) SetRadarIndex(sel->GetItemData(s));
     });
     root->Add(sel, 0, wxEXPAND | wxALL, 4);
   }
@@ -407,7 +427,7 @@ void ControlsPanel::AddNumber(wxSizer* outer, const ControlDef& def) {
       };
 
   auto send = [this, id, mn, mx, def, slider]() {
-    ControlValue v = m_client->Controls()->Value(id);
+    ControlValue v = controls()->Value(id);
     const bool adj = def.hasAutoAdjustable && v.auto_;
     const double lo = adj ? def.autoAdjustMin : mn;
     const double hi = adj ? def.autoAdjustMax : mx;
@@ -435,7 +455,7 @@ void ControlsPanel::AddNumber(wxSizer* outer, const ControlDef& def) {
       const bool a = autobtn->GetValue();
       Set(id, BodyAuto(a));
       // Reflect the new mode immediately; the stream confirms shortly after.
-      ControlValue v = m_client->Controls()->Value(id);
+      ControlValue v = controls()->Value(id);
       v.auto_ = a;
       v.has_auto = true;
       refresh(v);
@@ -443,7 +463,7 @@ void ControlsPanel::AddNumber(wxSizer* outer, const ControlDef& def) {
   }
 
   m_updaters.push_back(
-      [this, id, refresh]() { refresh(m_client->Controls()->Value(id)); });
+      [this, id, refresh]() { refresh(controls()->Value(id)); });
 }
 
 void ControlsPanel::AddEnum(wxSizer* outer, const ControlDef& def,
@@ -474,7 +494,7 @@ void ControlsPanel::AddEnum(wxSizer* outer, const ControlDef& def,
     }
     outer->Add(row, 0, wxEXPAND | wxLEFT | wxRIGHT, 2);
     m_updaters.push_back([this, id, buttons]() {
-      ControlValue val = m_client->Controls()->Value(id);
+      ControlValue val = controls()->Value(id);
       for (auto& pb : buttons)
         pb.second->SetValue(val.has_value &&
                             static_cast<int>(val.value) == pb.first);
@@ -495,7 +515,7 @@ void ControlsPanel::AddEnum(wxSizer* outer, const ControlDef& def,
       Set(id, BodyValue(choice->GetItemData(sel)));
     });
     m_updaters.push_back([this, id, choice, values]() {
-      ControlValue val = m_client->Controls()->Value(id);
+      ControlValue val = controls()->Value(id);
       if (!val.has_value) return;
       for (unsigned i = 0; i < values.size(); ++i)
         if (values[i] == static_cast<int>(val.value)) {
@@ -530,7 +550,7 @@ void ControlsPanel::AddRange(wxSizer* outer, const ControlDef& def,
       Set(id, BodyValue(values[sel]));
   });
   m_updaters.push_back([this, id, choice, values]() {
-    ControlValue val = m_client->Controls()->Value(id);
+    ControlValue val = controls()->Value(id);
     if (!val.has_value || values.empty()) return;
     int best = 0;
     double bestd = 1e18;
@@ -565,7 +585,7 @@ void ControlsPanel::AddReadonly(wxSizer* outer, const ControlDef& def) {
   const std::string id = def.id;
   const std::string units = def.units;
   m_updaters.push_back([this, id, val, units]() {
-    ControlValue v = m_client->Controls()->Value(id);
+    ControlValue v = controls()->Value(id);
     if (!v.str_value.empty())
       val->SetLabel(wxString::FromUTF8(v.str_value.c_str()));
     else if (v.has_value)

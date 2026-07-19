@@ -18,9 +18,16 @@ class MayaraClient;
 
 class RadarDisplayPanel : public wxPanel {
  public:
-  RadarDisplayPanel(wxWindow* parent, MayaraClient* client);
+  RadarDisplayPanel(wxWindow* parent, MayaraClient* client, int radar_index = 0);
 
   void SetMenuCallback(std::function<void()> cb) { m_on_menu = std::move(cb); }
+  // Fired when the picture (not a lozenge) is clicked; the window uses it to
+  // focus this radar's controls.
+  void SetFocusCallback(std::function<void()> cb) {
+    m_on_focus = std::move(cb);
+  }
+  void SetRadarIndex(int index) { m_index = index; }
+  int RadarIndex() const { return m_index; }
   void ApplyTheme(const MayaraTheme& theme);
 
  private:
@@ -33,8 +40,10 @@ class RadarDisplayPanel : public wxPanel {
   void StepRange(int direction);  // -1 down, +1 up
 
   MayaraClient* m_client;  // not owned
+  int m_index = 0;         // which radar this panel shows
   wxTimer m_timer;
   std::function<void()> m_on_menu;
+  std::function<void()> m_on_focus;
   MayaraTheme m_theme;
 
   // Clickable overlay regions, updated each paint.

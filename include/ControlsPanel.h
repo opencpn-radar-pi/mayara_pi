@@ -25,7 +25,16 @@ class MayaraClient;
 
 class ControlsPanel : public wxScrolledWindow {
  public:
-  ControlsPanel(wxWindow* parent, MayaraClient* client);
+  ControlsPanel(wxWindow* parent, MayaraClient* client, int radar_index = 0);
+
+  // Bind these controls to a specific radar, and (when a window hosts more than
+  // one) the set of radars its selector may switch between.
+  void SetRadarIndex(int index);
+  int RadarIndex() const { return m_index; }
+  void SetRadarList(std::vector<int> indices) {
+    m_radar_list = std::move(indices);
+    if (m_built) Rebuild();
+  }
 
   void SetCloseCallback(std::function<void()> cb) { m_on_close = std::move(cb); }
   void SetSettingsCallback(std::function<void()> cb) {
@@ -61,12 +70,14 @@ class ControlsPanel : public wxScrolledWindow {
   void AddPlaceholder(wxSizer* sizer, const ControlDef& def);
 
   void Set(const std::string& id, const std::string& json_body);
+  RadarControls* controls();  // the bound radar's controls, or null
 
   MayaraClient* m_client;  // not owned
+  int m_index = 0;         // which radar these controls drive
+  std::vector<int> m_radar_list;  // radars this window hosts (for the selector)
   wxTimer m_timer;
   uint64_t m_last_gen = ~0ull;
   uint64_t m_schema_gen = ~0ull;
-  int m_active_radar = -1;
   bool m_built = false;
 
   // Value updaters: read the model and refresh the corresponding widgets.
