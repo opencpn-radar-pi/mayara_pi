@@ -19,8 +19,10 @@ struct ControlDef {
   int numeric_id = 0;
   std::string name, description, category, dataType, units;
   bool isReadOnly = false, hasEnabled = false, hasAuto = false;
+  bool hasAutoAdjustable = false;  // auto mode also takes an offset (HALO Sea)
   bool has_min = false, has_max = false, has_step = false;
   double minValue = 0, maxValue = 0, stepValue = 0, maxDistance = 0;
+  double autoAdjustMin = 0, autoAdjustMax = 0;
   std::map<int, std::string> descriptions;  // enum value -> label
   std::vector<int> validValues;             // enum: settable values
 };

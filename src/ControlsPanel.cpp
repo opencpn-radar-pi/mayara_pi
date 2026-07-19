@@ -207,32 +207,57 @@ void ControlsPanel::AddNumber(wxSizer* outer, const ControlDef& def) {
   const double mn = def.has_min ? def.minValue : 0.0;
   const double mx = def.has_max ? def.maxValue : 100.0;
 
-  slider->Bind(wxEVT_SCROLL_THUMBRELEASE, [this, id, mn, mx, def, slider](
-                                              wxScrollEvent&) {
-    const double v = mn + (mx - mn) * slider->GetValue() / 1000.0;
-    Set(id, BodyValueAuto(v, def.hasAuto, false));
+  // The slider's range/meaning depends on the live auto state:
+  //   - auto + hasAutoAdjustable -> adjusts autoValue over autoAdjust{Min,Max}
+  //   - otherwise               -> the manual value over min..max
+  auto in_adjust = [def](const ControlValue& v) {
+    return def.hasAutoAdjustable && v.auto_;
+  };
+
+  slider->Bind(wxEVT_SCROLL_THUMBRELEASE, [this, id, mn, mx, def, in_adjust,
+                                           slider](wxScrollEvent&) {
+    ControlValue v = m_client->Controls()->Value(id);
+    const bool adj = in_adjust(v);
+    const double lo = adj ? def.autoAdjustMin : mn;
+    const double hi = adj ? def.autoAdjustMax : mx;
+    const double val = lo + (hi - lo) * slider->GetValue() / 1000.0;
+    if (adj)
+      Set(id, "{\"auto\":true,\"autoValue\":" + Num(val) + "}");
+    else
+      Set(id, BodyValueAuto(val, def.hasAuto, false));  // manual -> auto off
   });
   if (autobtn) {
-    autobtn->Bind(wxEVT_TOGGLEBUTTON, [this, id, autobtn, slider](
+    autobtn->Bind(wxEVT_TOGGLEBUTTON, [this, id, def, autobtn, slider](
                                           wxCommandEvent&) {
       const bool a = autobtn->GetValue();
-      slider->Enable(!a);  // optimistic; the control stream confirms
+      // Slider stays live in auto only for auto-adjustable controls.
+      slider->Enable(!a || def.hasAutoAdjustable);
       Set(id, BodyAuto(a));
     });
   }
 
-  m_updaters.push_back([this, id, slider, valtext, autobtn, mn, mx, units]() {
+  m_updaters.push_back([this, id, slider, valtext, autobtn, mn, mx, units, def,
+                        in_adjust]() {
     ControlValue v = m_client->Controls()->Value(id);
-    if (v.has_value) {
-      if (!slider->HasFocus() && mx > mn)
+    const bool adj = in_adjust(v);
+    const double lo = adj ? def.autoAdjustMin : mn;
+    const double hi = adj ? def.autoAdjustMax : mx;
+    const double cur = adj ? v.autoValue : v.value;
+    if (v.has_value || adj) {
+      if (!slider->HasFocus() && hi > lo)
         slider->SetValue(Clampi(
-            static_cast<int>((v.value - mn) / (mx - mn) * 1000.0 + 0.5), 0,
-            1000));
-      valtext->SetLabel(FormatVal(v.value, units));
+            static_cast<int>((cur - lo) / (hi - lo) * 1000.0 + 0.5), 0, 1000));
+      if (adj) {
+        const int a = static_cast<int>(cur + (cur < 0 ? -0.5 : 0.5));
+        valtext->SetLabel(a == 0 ? wxString("A")
+                                 : wxString::Format("A%+d", a));
+      } else {
+        valtext->SetLabel(FormatVal(v.value, units));
+      }
     }
     if (autobtn) {
       autobtn->SetValue(v.auto_);
-      slider->Enable(!v.auto_);
+      slider->Enable(!v.auto_ || def.hasAutoAdjustable);
     }
   });
 }

@@ -287,6 +287,9 @@ bool MayaraClient::FetchCapabilities(const std::string& radar_id) {
         d.isReadOnly = c.value("isReadOnly", false);
         d.hasEnabled = c.value("hasEnabled", false);
         d.hasAuto = c.value("hasAuto", false) || c.contains("automatic");
+        d.hasAutoAdjustable = c.value("hasAutoAdjustable", false);
+        d.autoAdjustMin = c.value("autoAdjustMinValue", 0.0);
+        d.autoAdjustMax = c.value("autoAdjustMaxValue", 0.0);
         if (c.contains("minValue")) {
           d.has_min = true;
           d.minValue = c["minValue"].get<double>();
