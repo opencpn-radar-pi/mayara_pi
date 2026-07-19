@@ -17,6 +17,7 @@ struct MayaraTheme {
   wxColour lozenge_border{90, 90, 96};
   wxColour accent{120, 255, 120};       // active / transmit
   wxColour accent_dim{235, 200, 110};   // standby / inactive
+  float radar_intensity = 1.0f;         // echo brightness scale (dim at night)
 };
 
 #endif  // MAYARA_THEME_H_

@@ -32,6 +32,7 @@ static MayaraTheme ThemeFor(PI_ColorScheme cs) {
       t.lozenge_border = wxColour(90, 40, 40);
       t.accent = wxColour(215, 80, 80);
       t.accent_dim = wxColour(150, 70, 60);
+      t.radar_intensity = 0.5f;
       break;
     case PI_GLOBAL_COLOR_SCHEME_DUSK:
       t.panel_bg = wxColour(20, 20, 26);
@@ -41,6 +42,7 @@ static MayaraTheme ThemeFor(PI_ColorScheme cs) {
       t.lozenge_border = wxColour(70, 70, 80);
       t.accent = wxColour(110, 190, 110);
       t.accent_dim = wxColour(175, 155, 95);
+      t.radar_intensity = 0.72f;
       break;
     default:
       break;  // day/rgb use the struct defaults
@@ -225,7 +227,7 @@ bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glEnable(GL_TEXTURE_2D);
   glBindTexture(GL_TEXTURE_2D, m_overlay_tex);
-  glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+  glColor4f(m_radar_intensity, m_radar_intensity, m_radar_intensity, 1.0f);
 
   glPushMatrix();
   glTranslatef(center.x, center.y, 0.0f);
@@ -254,5 +256,8 @@ void mayara_pi::SetPositionFixEx(PlugIn_Position_Fix_Ex& pfix) {
 
 void mayara_pi::SetColorScheme(PI_ColorScheme cs) {
   m_color_scheme = cs;
-  if (m_ppi_window) m_ppi_window->ApplyTheme(ThemeFor(cs));
+  const MayaraTheme t = ThemeFor(cs);
+  m_radar_intensity = t.radar_intensity;
+  if (m_client) m_client->State()->SetIntensity(t.radar_intensity);
+  if (m_ppi_window) m_ppi_window->ApplyTheme(t);
 }

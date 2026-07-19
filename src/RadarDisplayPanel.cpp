@@ -84,6 +84,7 @@ void RadarDisplayPanel::OnTimer(wxTimerEvent&) { Refresh(false); }
 
 void RadarDisplayPanel::ApplyTheme(const MayaraTheme& theme) {
   m_theme = theme;
+  if (m_client) m_client->State()->SetIntensity(theme.radar_intensity);
   Refresh();
 }
 
@@ -181,27 +182,28 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
   if (!rlabel.IsEmpty()) {
     wxCoord tw, th;
     dc.GetTextExtent(rlabel, &tw, &th);
-    const int btn = 30, textw = std::max<int>(tw + 8, 56);
-    const int h = th + 22, w = btn + textw + btn;
+    const int w = std::max<int>(tw + 16, 56);
+    const int plus_h = 26, minus_h = 26, val_h = th + 12;
+    const int h = plus_h + val_h + minus_h;
     const int x = 10, y = (sz.y - h) / 2;
-    LozengeBg(dc, wxRect(x, y, w, h), 10, m_theme);
+    LozengeBg(dc, wxRect(x, y, w, h), 12, m_theme);
 
     const wxColour fg = m_theme.text;
-    const int cy = y + h / 2;
-    // minus
+    const int cx = x + w / 2;
     dc.SetPen(wxPen(fg, 2));
-    int mcx = x + btn / 2;
-    dc.DrawLine(mcx - 7, cy, mcx + 7, cy);
-    // plus
-    int pcx = x + w - btn / 2;
-    dc.DrawLine(pcx - 7, cy, pcx + 7, cy);
-    dc.DrawLine(pcx, cy - 7, pcx, cy + 7);
-    // value
+    // plus (top)
+    const int pcy = y + plus_h / 2;
+    dc.DrawLine(cx - 7, pcy, cx + 7, pcy);
+    dc.DrawLine(cx, pcy - 7, cx, pcy + 7);
+    // minus (bottom)
+    const int mcy = y + plus_h + val_h + minus_h / 2;
+    dc.DrawLine(cx - 7, mcy, cx + 7, mcy);
+    // value (middle)
     dc.SetTextForeground(fg);
-    dc.DrawText(rlabel, x + btn + (textw - tw) / 2, cy - th / 2);
+    dc.DrawText(rlabel, x + (w - tw) / 2, y + plus_h + (val_h - th) / 2);
 
-    m_range_minus_rect = wxRect(x, y, btn, h);
-    m_range_plus_rect = wxRect(x + w - btn, y, btn, h);
+    m_range_plus_rect = wxRect(x, y, w, plus_h);
+    m_range_minus_rect = wxRect(x, y + plus_h + val_h, w, minus_h);
   }
 }
 

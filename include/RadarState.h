@@ -53,6 +53,9 @@ class RadarState {
   void SetHeadingFromBearing(uint32_t angle, uint32_t bearing);
   bool Heading(double& degrees) const;
 
+  // Echo brightness scale (1.0 = full; lower dims the PPI at dusk/night).
+  void SetIntensity(float f);
+
   uint32_t RangeMeters() const;
   uint64_t Generation() const;
   bool Configured() const;
@@ -75,6 +78,7 @@ class RadarState {
   bool has_pos_ = false;
   double heading_deg_ = 0.0;
   bool has_heading_ = false;
+  float intensity_ = 1.0f;
 
   // Cartesian render cache.
   int disc_size_ = 0;

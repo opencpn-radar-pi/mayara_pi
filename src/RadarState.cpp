@@ -145,13 +145,19 @@ bool RadarState::RenderPPI(uint8_t* rgb, int w, int h) {
       const uint8_t* s = srow + static_cast<size_t>(x * disc_size_ / side) * 4;
       const uint8_t a = s[3];
       if (a) {
-        orow[x * 3 + 0] = static_cast<uint8_t>(s[0] * a / 255);
-        orow[x * 3 + 1] = static_cast<uint8_t>(s[1] * a / 255);
-        orow[x * 3 + 2] = static_cast<uint8_t>(s[2] * a / 255);
+        const float f = a * intensity_ / 255.0f;
+        orow[x * 3 + 0] = static_cast<uint8_t>(s[0] * f);
+        orow[x * 3 + 1] = static_cast<uint8_t>(s[1] * f);
+        orow[x * 3 + 2] = static_cast<uint8_t>(s[2] * f);
       }
     }
   }
   return true;
+}
+
+void RadarState::SetIntensity(float f) {
+  std::lock_guard<std::mutex> lock(m_);
+  intensity_ = f;
 }
 
 void RadarState::SetPosition(double lat, double lon) {
