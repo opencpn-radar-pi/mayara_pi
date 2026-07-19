@@ -13,9 +13,27 @@
 #include <ixwebsocket/IXWebSocket.h>
 #include <nlohmann/json.hpp>
 
+#include "MayaraDiscovery.h"
 #include "RadarMessage.h"
 
 using json = nlohmann::json;
+
+namespace {
+void StripTrailingSlash(std::string& s) {
+  while (!s.empty() && s.back() == '/') s.pop_back();
+}
+
+// Build the spoke WebSocket URL from an http(s) base + radar id (spec fallback
+// when spokeDataUrl is absent).
+std::string WsUrl(const std::string& base, const std::string& radar_id) {
+  std::string ws = base;
+  if (ws.rfind("https://", 0) == 0)
+    ws = "wss://" + ws.substr(8);
+  else if (ws.rfind("http://", 0) == 0)
+    ws = "ws://" + ws.substr(7);
+  return ws + "/signalk/v2/api/vessels/self/radars/" + radar_id + "/spokes";
+}
+}  // namespace
 
 namespace {
 
@@ -42,9 +60,11 @@ Rgba ParseColor(const std::string& s) {
 
 }  // namespace
 
-MayaraClient::MayaraClient(std::string base_url)
-    : m_base_url(std::move(base_url)) {
-  while (!m_base_url.empty() && m_base_url.back() == '/') m_base_url.pop_back();
+MayaraClient::MayaraClient(std::string explicit_url, std::string fallback_url)
+    : m_explicit(std::move(explicit_url)),
+      m_fallback(std::move(fallback_url)) {
+  StripTrailingSlash(m_explicit);
+  StripTrailingSlash(m_fallback);
 }
 
 MayaraClient::~MayaraClient() { Stop(); }
@@ -78,9 +98,27 @@ void MayaraClient::SetStatus(const std::string& s) {
 }
 
 void MayaraClient::Run() {
-  // Retry discovery until a radar is streaming or we are told to stop.
+  // Each round, build an ordered candidate list and keep the first that
+  // actually streams spokes. A forced address (MAYARA_SERVER) wins; otherwise
+  // try the mDNS-discovered Signal K endpoint, then the known fallback.
   while (!m_stop) {
-    if (DiscoverAndConnect()) return;
+    std::vector<std::string> candidates;
+    if (!m_explicit.empty()) {
+      candidates.push_back(m_explicit);
+    } else {
+      SetStatus("searching for mayara-server (mDNS)…");
+      std::string found = MayaraDiscovery::FindSignalK(2000);
+      if (!found.empty()) candidates.push_back(found);
+      if (!m_fallback.empty() && m_fallback != found)
+        candidates.push_back(m_fallback);
+    }
+
+    for (auto& base : candidates) {
+      if (m_stop) return;
+      m_base_url = base;
+      StripTrailingSlash(m_base_url);
+      if (DiscoverAndConnect()) return;  // streaming
+    }
     for (int i = 0; i < 30 && !m_stop; ++i)
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
@@ -106,24 +144,36 @@ bool MayaraClient::DiscoverAndConnect() {
   std::string spoke_url;
   try {
     auto j = json::parse(resp->body);
-    if (j.empty()) {
+    // Two list shapes: keyed object {id:{...}} (mayara) or array [{id,...}]
+    // (Signal K server). Pick the first radar (selection is a later phase).
+    const json* radar = nullptr;
+    if (j.is_object() && !j.empty()) {
+      auto it = j.begin();
+      m_radar_id = it.key();
+      radar = &it.value();
+    } else if (j.is_array() && !j.empty()) {
+      radar = &j[0];
+      m_radar_id = radar->value("id", std::string());
+    }
+    if (!radar || m_radar_id.empty()) {
       SetStatus("connected; no radars transmitting");
       return false;
     }
-    // Pick the first radar for now (multi-radar selection is a later phase).
-    auto it = j.begin();
-    m_radar_id = it.key();
-    spoke_url = it.value().value("spokeDataUrl", "");
+    spoke_url = radar->value("spokeDataUrl", std::string());
   } catch (const std::exception& e) {
     SetStatus(std::string("radars JSON error: ") + e.what());
     return false;
   }
 
   if (!FetchCapabilities(m_radar_id)) return false;
-  if (spoke_url.empty())
-    spoke_url = m_base_url + "/signalk/v2/api/vessels/self/radars/" +
-                m_radar_id + "/spokes";
-  ConnectSpokes(spoke_url);
+
+  // Signal K Radar API: if spokeDataUrl is absent, construct it from this host.
+  if (spoke_url.empty()) spoke_url = WsUrl(m_base_url, m_radar_id);
+
+  if (!ConnectSpokes(spoke_url)) {
+    SetStatus("no spoke stream at " + m_base_url);
+    return false;
+  }
   return true;
 }
 
@@ -159,7 +209,9 @@ bool MayaraClient::FetchCapabilities(const std::string& radar_id) {
   }
 }
 
-void MayaraClient::ConnectSpokes(const std::string& spoke_url) {
+bool MayaraClient::ConnectSpokes(const std::string& spoke_url) {
+  m_streaming = false;
+  m_ws_error = false;
   m_spoke_ws = std::make_unique<ix::WebSocket>();
   m_spoke_ws->setUrl(spoke_url);
   m_spoke_ws->disableAutomaticReconnection();
@@ -168,20 +220,33 @@ void MayaraClient::ConnectSpokes(const std::string& spoke_url) {
   m_spoke_ws->setOnMessageCallback([this, state](
                                        const ix::WebSocketMessagePtr& msg) {
     if (msg->type == ix::WebSocketMessageType::Message && msg->binary) {
-      const auto* buf =
-          reinterpret_cast<const uint8_t*>(msg->str.data());
+      m_streaming = true;
+      const auto* buf = reinterpret_cast<const uint8_t*>(msg->str.data());
       std::vector<MayaraSpoke> spokes;
       if (DecodeRadarMessage(buf, msg->str.size(), spokes)) {
         for (const auto& s : spokes)
           state->WriteSpoke(s.angle, s.data, s.data_len, s.range);
       }
     } else if (msg->type == ix::WebSocketMessageType::Open) {
+      m_streaming = true;
       SetStatus("streaming radar " + m_radar_id);
     } else if (msg->type == ix::WebSocketMessageType::Error) {
+      m_ws_error = true;
       SetStatus("spoke stream error: " + msg->errorInfo.reason);
     }
   });
 
   m_spoke_ws->start();
   SetStatus("connecting spokes for " + m_radar_id);
+
+  // Verify the stream actually opens; otherwise the caller tries the next
+  // candidate endpoint (breaking early once a connection error is reported).
+  for (int i = 0; i < 50 && !m_stop; ++i) {
+    if (m_streaming) return true;
+    if (m_ws_error) break;
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+  m_spoke_ws->stop();
+  m_spoke_ws.reset();
+  return false;
 }

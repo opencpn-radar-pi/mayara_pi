@@ -21,7 +21,9 @@ class WebSocket;
 
 class MayaraClient {
  public:
-  explicit MayaraClient(std::string base_url);
+  // explicit_url: forced address (e.g. from MAYARA_SERVER), or "" to
+  // auto-discover via mDNS. fallback_url: used if discovery finds nothing.
+  MayaraClient(std::string explicit_url, std::string fallback_url);
   ~MayaraClient();
 
   void Start();
@@ -34,15 +36,19 @@ class MayaraClient {
   void Run();                          // background: discover + connect, retry
   bool DiscoverAndConnect();           // one attempt; true once streaming
   bool FetchCapabilities(const std::string& radar_id);
-  void ConnectSpokes(const std::string& spoke_url);
+  bool ConnectSpokes(const std::string& spoke_url);  // true if it opens
   void SetStatus(const std::string& s);
 
-  std::string m_base_url;
+  std::string m_explicit;   // forced address, or empty to discover
+  std::string m_fallback;   // used when discovery finds nothing
+  std::string m_base_url;   // resolved address in use
   std::thread m_thread;
   std::atomic<bool> m_stop{false};
 
   std::mutex m_status_mutex;
   std::string m_status{"not connected"};
+  std::atomic<bool> m_streaming{false};  // spoke WS actually opened
+  std::atomic<bool> m_ws_error{false};   // spoke WS failed to connect
 
   RadarState m_state;
   std::unique_ptr<ix::WebSocket> m_spoke_ws;

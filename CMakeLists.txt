@@ -131,6 +131,7 @@ set(SRCS
     src/MayaraClient.cpp
     src/RadarState.cpp
     src/RadarMessage.cpp
+    src/MayaraDiscovery.cpp
 )
 
 set(HDRS
@@ -139,6 +140,7 @@ set(HDRS
     include/MayaraClient.h
     include/RadarState.h
     include/RadarMessage.h
+    include/MayaraDiscovery.h
 )
 
 if(PLUGIN_USE_SVG)
@@ -180,6 +182,7 @@ if(NOT OCPN_FLATPAK_CONFIG)
     ${PACKAGE_NAME} PRIVATE
     ${PROJECT_SOURCE_DIR}/third_party
     ${PROJECT_SOURCE_DIR}/third_party/IXWebSocket
+    ${PROJECT_SOURCE_DIR}/third_party/mdns
   )
 endif()
 
