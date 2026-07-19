@@ -190,6 +190,7 @@ void ControlsPanel::OnTimer(wxTimerEvent&) {
 }
 
 void ControlsPanel::ApplyValues() {
+  if (!m_client || !m_client->Controls()) return;
   for (auto& u : m_updaters) u();
 }
 

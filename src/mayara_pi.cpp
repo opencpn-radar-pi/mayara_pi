@@ -115,17 +115,19 @@ int mayara_pi::Init() {
 }
 
 bool mayara_pi::DeInit() {
-  if (m_client) {
-    m_client->Stop();
-    m_client.reset();
-  }
+  // Destroy the window first (synchronously) so its panels' timers stop calling
+  // into the client before we free it.
   if (m_ppi_window) {
-    m_ppi_window->Destroy();
+    delete m_ppi_window;
     m_ppi_window = nullptr;
   }
   if (m_tool_id != -1) {
     RemovePlugInTool(m_tool_id);
     m_tool_id = -1;
+  }
+  if (m_client) {
+    m_client->Stop();
+    m_client.reset();
   }
   return true;
 }

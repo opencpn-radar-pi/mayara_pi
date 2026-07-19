@@ -44,7 +44,9 @@ void LozengeBg(wxDC& dc, const wxRect& r, int radius, const MayaraTheme& t) {
 // Sorted settable ranges for the "range" control.
 std::vector<int> RangeValues(MayaraClient* client) {
   std::vector<int> vals;
-  for (const auto& d : client->Controls()->Schema())
+  RadarControls* c = client->Controls();
+  if (!c) return vals;
+  for (const auto& d : c->Schema())
     if (d.id == "range") {
       vals = d.validValues;
       break;
@@ -139,6 +141,7 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
 
   if (!m_client) return;
   RadarControls* controls = m_client->Controls();
+  if (!controls) return;  // no radar connected yet
 
   // --- Power lozenge (top-left) with a clickable power icon ---
   ControlValue pw = controls->Value("power");
@@ -221,14 +224,14 @@ void RadarDisplayPanel::OnLeftDown(wxMouseEvent& event) {
 }
 
 void RadarDisplayPanel::TogglePower() {
-  if (!m_client) return;
+  if (!m_client || !m_client->Controls()) return;
   ControlValue pw = m_client->Controls()->Value("power");
   const int target = (pw.has_value && static_cast<int>(pw.value) >= 2) ? 1 : 2;
   m_client->SetControl("power", "{\"value\":" + std::to_string(target) + "}");
 }
 
 void RadarDisplayPanel::StepRange(int direction) {
-  if (!m_client) return;
+  if (!m_client || !m_client->Controls()) return;
   std::vector<int> vals = RangeValues(m_client);
   if (vals.empty()) return;
   const double cur = m_client->Controls()->Value("range").value;
