@@ -8,7 +8,9 @@
 #ifndef MAYARA_PI_H_
 #define MAYARA_PI_H_
 
+#include <cstdint>
 #include <memory>
+#include <vector>
 
 #include <wx/wx.h>
 
@@ -58,6 +60,13 @@ class mayara_pi : public opencpn_plugin_121 {
   int m_tool_id = -1;
   MayaraPpiWindow* m_ppi_window = nullptr;
   std::unique_ptr<MayaraClient> m_client;
+
+  // GL chart-overlay: the cached radar disc uploaded as a texture and drawn as
+  // a rotated/scaled quad. Re-uploaded only when the disc changes.
+  unsigned int m_overlay_tex = 0;
+  uint64_t m_overlay_gen = ~0ull;
+  int m_overlay_size = 0;
+  std::vector<uint8_t> m_overlay_disc;
 
   // Latest own-ship fix, for the overlay/PPI to place the radar.
   double m_ownship_lat = 0.0;
