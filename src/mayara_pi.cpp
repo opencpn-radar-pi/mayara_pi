@@ -328,6 +328,9 @@ void mayara_pi::RebuildWindows() {
   DestroyWindows(/*sync=*/false);
   m_windows_radar_count = m_client ? m_client->RadarCount() : 0;
   std::vector<std::vector<int>> groups = RadarGroups();
+  // No radars yet: still open one window bound to index 0 so the user sees the
+  // "waiting for radar" UI; it starts showing radar 0 as soon as it connects.
+  if (groups.empty()) groups.push_back({0});
   for (const std::vector<int>& grp : groups) {
     auto* win = new MayaraPpiWindow(m_parent_window, m_client.get(), grp);
     win->ApplyTheme(ThemeFor(m_color_scheme));
