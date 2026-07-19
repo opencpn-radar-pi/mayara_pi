@@ -7,6 +7,7 @@
 #include <cstdint>
 
 #include <wx/log.h>
+#include <wx/thread.h>
 
 #include <ixwebsocket/IXHttpClient.h>
 #include <ixwebsocket/IXNetSystem.h>
@@ -148,7 +149,15 @@ void MayaraClient::SetStatus(const std::string& s) {
     std::lock_guard<std::mutex> lock(m_status_mutex);
     m_status = s;
   }
-  wxLogMessage("mayara_pi: %s", s.c_str());
+  // Never call wxLog from our worker threads. wxLog defers cross-thread records
+  // and flushes them later on the main idle loop; by then OpenCPN may have
+  // unloaded this plugin's dylib, leaving the __FILE__ pointer baked into the
+  // log record dangling -> strlen() segfault inside OcpnLog::DoLogRecord. Log
+  // only when we happen to be on the GUI thread; otherwise the status is still
+  // available via StatusLine().
+  if (wxThread::IsMain()) {
+    wxLogMessage("mayara_pi: %s", s.c_str());
+  }
 }
 
 RadarState* MayaraClient::State() {

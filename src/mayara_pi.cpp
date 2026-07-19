@@ -9,6 +9,8 @@
 
 #include <wx/bmpbndl.h>
 #include <wx/dcmemory.h>
+#include <wx/fileconf.h>
+#include <wx/spinctrl.h>
 
 #ifdef __WXOSX__
 #include <OpenGL/gl.h>
@@ -100,6 +102,7 @@ mayara_pi::~mayara_pi() = default;
 
 int mayara_pi::Init() {
   m_parent_window = GetOCPNCanvasWindow();
+  LoadConfig();
 
   m_tool_id = InsertPlugInTool(
       _("Mayara"), &m_tool_bitmap, &m_tool_bitmap, wxITEM_CHECK,
@@ -113,7 +116,8 @@ int mayara_pi::Init() {
   // Capabilities. The overlay callback is declared now but returns false until
   // Phase 1 wires up the spoke renderer.
   return WANTS_OPENGL_OVERLAY_CALLBACK | WANTS_OVERLAY_CALLBACK |
-         WANTS_TOOLBAR_CALLBACK | INSTALLS_TOOLBAR_TOOL | WANTS_CURSOR_LATLON;
+         WANTS_TOOLBAR_CALLBACK | INSTALLS_TOOLBAR_TOOL | WANTS_CURSOR_LATLON |
+         WANTS_PREFERENCES;
 }
 
 bool mayara_pi::DeInit() {
@@ -131,7 +135,87 @@ bool mayara_pi::DeInit() {
     m_client->Stop();
     m_client.reset();
   }
+  // Drain any pending (possibly cross-thread) log records now, while this
+  // plugin's dylib -- and the string literals its log records point at -- is
+  // still mapped. Otherwise OpenCPN flushes them on a later idle tick after
+  // unloading us, dereferencing freed memory in OcpnLog::DoLogRecord.
+  wxLog::FlushActive();
   return true;
+}
+
+// --- Preferences / settings ------------------------------------------------
+
+static const char* kConfigGroup = "/PlugIns/mayara";
+
+void mayara_pi::LoadConfig() {
+  wxFileConfig* cfg = GetOCPNConfigObject();
+  if (!cfg) return;
+  cfg->SetPath(kConfigGroup);
+  int windows = 1;
+  cfg->Read("WindowsCount", &windows, 1);
+  m_windows_count = windows < 1 ? 1 : windows;
+  bool overlay = true;
+  cfg->Read("OverlayEnabled", &overlay, true);
+  m_overlay_enabled = overlay;
+}
+
+void mayara_pi::SaveConfig() {
+  wxFileConfig* cfg = GetOCPNConfigObject();
+  if (!cfg) return;
+  cfg->SetPath(kConfigGroup);
+  cfg->Write("WindowsCount", m_windows_count);
+  cfg->Write("OverlayEnabled", m_overlay_enabled);
+  cfg->Flush();
+}
+
+// OpenCPN's "Preferences" button in the plugin manager routes here; our own
+// gear button routes here too. Both hand us a parent to centre on.
+void mayara_pi::ShowPreferencesDialog(wxWindow* parent) { ShowSettings(parent); }
+
+void mayara_pi::ShowSettings(wxWindow* parent) {
+  const int radar_count = m_client ? m_client->RadarCount() : 0;
+  // With N radars you can spread them across 1..N windows; the per-window count
+  // is N / windows (rounded up). Cap the spinner sensibly when nothing is found.
+  const int max_windows = radar_count > 0 ? radar_count : 4;
+
+  wxDialog dlg(parent, wxID_ANY, _("Mayara Radar Settings"), wxDefaultPosition,
+               wxDefaultSize, wxDEFAULT_DIALOG_STYLE);
+  auto* top = new wxBoxSizer(wxVERTICAL);
+
+  wxString summary =
+      radar_count > 0
+          ? wxString::Format(_("%d radar(s) discovered."), radar_count)
+          : _("No radars discovered yet.");
+  top->Add(new wxStaticText(&dlg, wxID_ANY, summary), 0, wxALL, 10);
+
+  auto* row = new wxBoxSizer(wxHORIZONTAL);
+  row->Add(new wxStaticText(&dlg, wxID_ANY, _("Number of PPI windows:")), 0,
+           wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+  auto* spin = new wxSpinCtrl(&dlg, wxID_ANY, wxEmptyString, wxDefaultPosition,
+                              wxDefaultSize, wxSP_ARROW_KEYS, 1, max_windows,
+                              m_windows_count);
+  row->Add(spin, 0, wxALIGN_CENTER_VERTICAL);
+  top->Add(row, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10);
+
+  auto* hint = new wxStaticText(
+      &dlg, wxID_ANY,
+      _("Radars are spread evenly across the windows. One window shows all "
+        "radars; more windows split them (e.g. 8 radars across 2 windows = 4 "
+        "per window)."));
+  hint->Wrap(360);
+  top->Add(hint, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10);
+
+  top->Add(dlg.CreateButtonSizer(wxOK | wxCANCEL), 0,
+           wxALIGN_RIGHT | wxALL, 10);
+  dlg.SetSizerAndFit(top);
+
+  if (dlg.ShowModal() == wxID_OK) {
+    m_windows_count = spin->GetValue();
+    SaveConfig();
+    // Window-layout application (creating/retiring PPI windows and assigning
+    // radars to each) lands with the presentation-mode work; the choice is
+    // persisted now so it survives the wiring.
+  }
 }
 
 int mayara_pi::GetAPIVersionMajor() { return OCPN_API_VERSION_MAJOR; }

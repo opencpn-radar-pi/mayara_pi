@@ -51,8 +51,14 @@ class mayara_pi : public opencpn_plugin_121 {
   void SetPositionFixEx(PlugIn_Position_Fix_Ex& pfix) override;
   void SetColorScheme(PI_ColorScheme cs) override;
 
+  // --- Preferences ---------------------------------------------------------
+  void ShowPreferencesDialog(wxWindow* parent) override;
+
  private:
   void TogglePpiWindow();
+  void ShowSettings(wxWindow* parent);
+  void LoadConfig();
+  void SaveConfig();
 
   wxWindow* m_parent_window = nullptr;
   wxBitmap m_panel_bitmap;   // shown in the plugin manager
@@ -63,6 +69,10 @@ class mayara_pi : public opencpn_plugin_121 {
   PI_ColorScheme m_color_scheme = PI_GLOBAL_COLOR_SCHEME_DAY;
   float m_radar_intensity = 1.0f;
   bool m_overlay_enabled = true;
+
+  // Presentation: how many PPI windows to spread the discovered radars across.
+  // 8 radars with m_windows_count = 2 => 4 radars per window. Persisted.
+  int m_windows_count = 1;
 
   // GL chart-overlay: each radar's cached disc uploaded as a texture and drawn
   // as a rotated/scaled quad, re-uploaded only when its disc changes. Radars
