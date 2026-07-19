@@ -40,6 +40,10 @@ class ControlsPanel : public wxScrolledWindow {
   void SetSettingsCallback(std::function<void()> cb) {
     m_on_settings = std::move(cb);
   }
+  void SetAutoLayoutCallback(std::function<void()> cb) {
+    m_on_autolayout = std::move(cb);
+    if (m_built) Rebuild();  // add the button to the View section
+  }
   void ApplyTheme(const MayaraTheme& theme);
 
   // View section wiring (overlay + PPI visibility live in the plugin/window).
@@ -84,6 +88,7 @@ class ControlsPanel : public wxScrolledWindow {
   std::vector<std::function<void()>> m_updaters;
   std::function<void()> m_on_close;
   std::function<void()> m_on_settings;
+  std::function<void()> m_on_autolayout;
   MayaraTheme m_theme;
 
   std::map<std::string, bool> m_collapsed;  // per-section collapse state

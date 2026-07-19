@@ -66,6 +66,10 @@ class mayara_pi : public opencpn_plugin_121 {
   // Distribute the discovered radars across m_windows_count windows.
   std::vector<std::vector<int>> RadarGroups() const;
   void ApplyThemeToWindows();
+  // Tile the radar windows down the right edge of the OpenCPN display. When
+  // reflow_ocpn is set, also resize the OpenCPN main window to fill the left,
+  // so together they fill the screen.
+  void AutoLayoutWindows(bool reflow_ocpn);
   void ShowSettings(wxWindow* parent);
   void LoadConfig();
   void SaveConfig();

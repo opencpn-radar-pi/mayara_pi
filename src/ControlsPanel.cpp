@@ -354,6 +354,14 @@ void ControlsPanel::FillViewSection(wxSizer* content) {
       cb->Enable(m_get_overlay && m_get_overlay());  // hide PPI only w/ overlay
     });
   }
+  if (m_on_autolayout) {
+    auto* b = new ThemedButton(this, _("Auto layout windows"), m_theme,
+                               /*toggle=*/false);
+    content->Add(b, 0, wxEXPAND | wxALL, 4);
+    b->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+      if (m_on_autolayout) m_on_autolayout();
+    });
+  }
 }
 
 void ControlsPanel::SetViewControls(std::function<bool()> get_overlay,

@@ -9,8 +9,10 @@
 
 #include <wx/bmpbndl.h>
 #include <wx/dcmemory.h>
+#include <wx/display.h>
 #include <wx/fileconf.h>
 #include <wx/spinctrl.h>
+#include <wx/toplevel.h>
 
 #ifdef __WXOSX__
 #include <OpenGL/gl.h>
@@ -341,8 +343,36 @@ void mayara_pi::RebuildWindows() {
                              GetOCPNCanvasWindow()->Refresh(false);
                            });
     win->SetSettingsControl([this, win]() { ShowSettings(win); });
+    win->SetAutoLayoutControl([this]() { AutoLayoutWindows(/*reflow=*/true); });
     win->Show(m_windows_visible);
     m_windows.push_back(win);
+  }
+  // More than one window would otherwise stack at the same spot; tile them so
+  // each is reachable without dragging. Don't disturb the OpenCPN window here.
+  if (m_windows.size() > 1) AutoLayoutWindows(/*reflow=*/false);
+}
+
+void mayara_pi::AutoLayoutWindows(bool reflow_ocpn) {
+  if (m_windows.empty()) return;
+  wxWindow* frame =
+      m_parent_window ? wxGetTopLevelParent(m_parent_window) : nullptr;
+  int disp = frame ? wxDisplay::GetFromWindow(frame) : wxNOT_FOUND;
+  if (disp == wxNOT_FOUND) disp = 0;
+  const wxRect area = wxDisplay(static_cast<unsigned>(disp)).GetClientArea();
+
+  const int n = static_cast<int>(m_windows.size());
+  const int radar_w = std::max(360, area.width * 38 / 100);
+  if (reflow_ocpn && frame)
+    frame->SetSize(area.x, area.y, area.width - radar_w, area.height);
+
+  // Radar windows stacked down the right edge of the display.
+  const int rx = area.x + area.width - radar_w;
+  int y = area.y;
+  for (int i = 0; i < n; ++i) {
+    const int hh =
+        (i == n - 1) ? (area.y + area.height - y) : (area.height / n);
+    if (m_windows[i]) m_windows[i]->SetSize(rx, y, radar_w, hh);
+    y += hh;
   }
 }
 

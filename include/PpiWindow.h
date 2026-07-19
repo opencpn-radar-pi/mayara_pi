@@ -31,6 +31,9 @@ class MayaraPpiWindow : public wxDialog {
   // Wire the settings (gear) button to the plugin's preferences dialog.
   void SetSettingsControl(std::function<void()> open);
 
+  // Wire the View section's "Auto layout" button.
+  void SetAutoLayoutControl(std::function<void()> cb);
+
  private:
   void OnClose(wxCloseEvent& event);
 

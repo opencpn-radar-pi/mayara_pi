@@ -99,6 +99,10 @@ void MayaraPpiWindow::SetSettingsControl(std::function<void()> open) {
   if (m_controls) m_controls->SetSettingsCallback(std::move(open));
 }
 
+void MayaraPpiWindow::SetAutoLayoutControl(std::function<void()> cb) {
+  if (m_controls) m_controls->SetAutoLayoutCallback(std::move(cb));
+}
+
 void MayaraPpiWindow::OnClose(wxCloseEvent& event) {
   // The plugin owns this window's lifetime; hide instead of destroying.
   Hide();
