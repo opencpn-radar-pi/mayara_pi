@@ -10,6 +10,7 @@
 #include <wx/wx.h>
 
 #include "MayaraTheme.h"
+#include "NavState.h"
 
 class MayaraClient;
 class RadarDisplayPanel;
@@ -33,6 +34,9 @@ class MayaraPpiWindow : public wxDialog {
 
   // Wire the View section's "Auto layout" button.
   void SetAutoLayoutControl(std::function<void()> cb);
+
+  // Provide own-ship nav state to the radar pictures (COG/heading/AIS layers).
+  void SetNavProvider(std::function<NavState()> provider);
 
  private:
   void OnClose(wxCloseEvent& event);

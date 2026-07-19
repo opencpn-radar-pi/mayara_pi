@@ -13,8 +13,18 @@
 #include <wx/timer.h>
 
 #include "MayaraTheme.h"
+#include "NavState.h"
 
 class MayaraClient;
+
+// Which extra layers to paint over the radar picture.
+struct PpiLayers {
+  bool range_rings = true;
+  bool heading_line = true;
+  bool cog_line = true;
+  bool north_marker = true;
+  bool ais = true;
+};
 
 class RadarDisplayPanel : public wxPanel {
  public:
@@ -28,6 +38,9 @@ class RadarDisplayPanel : public wxPanel {
   }
   void SetRadarIndex(int index) { m_index = index; }
   int RadarIndex() const { return m_index; }
+  void SetNavProvider(std::function<NavState()> p) { m_nav = std::move(p); }
+  void SetLayers(const PpiLayers& l) { m_layers = l; Refresh(false); }
+  const PpiLayers& Layers() const { return m_layers; }
   void ApplyTheme(const MayaraTheme& theme);
 
  private:
@@ -36,6 +49,9 @@ class RadarDisplayPanel : public wxPanel {
   void OnSize(wxSizeEvent& event);
   void OnLeftDown(wxMouseEvent& event);
   void DrawLozenges(wxDC& dc, const wxSize& sz);
+  // Paint the extra layers over the picture. `center` is the sweep origin,
+  // `radius` the pixel radius of `range_m`.
+  void DrawLayers(wxDC& dc, wxPoint center, double radius, uint32_t range_m);
   void TogglePower();
   void StepRange(int direction);  // -1 down, +1 up
 
@@ -44,6 +60,8 @@ class RadarDisplayPanel : public wxPanel {
   wxTimer m_timer;
   std::function<void()> m_on_menu;
   std::function<void()> m_on_focus;
+  std::function<NavState()> m_nav;  // own-ship nav provider (may be null)
+  PpiLayers m_layers;
   MayaraTheme m_theme;
 
   // Clickable overlay regions, updated each paint.

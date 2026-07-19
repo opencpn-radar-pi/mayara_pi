@@ -111,6 +111,10 @@ void MayaraPpiWindow::SetAutoLayoutControl(std::function<void()> cb) {
   if (m_controls) m_controls->SetAutoLayoutCallback(std::move(cb));
 }
 
+void MayaraPpiWindow::SetNavProvider(std::function<NavState()> provider) {
+  for (RadarDisplayPanel* p : m_radars) p->SetNavProvider(provider);
+}
+
 void MayaraPpiWindow::GrowForControls(int extra) {
   const wxSize cs = GetClientSize();
   SetClientSize(cs.x + extra, cs.y);

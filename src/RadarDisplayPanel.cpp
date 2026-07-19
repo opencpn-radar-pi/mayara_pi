@@ -14,6 +14,7 @@
 #include "MayaraClient.h"
 #include "RadarControls.h"
 #include "RadarState.h"
+#include "ocpn_plugin.h"
 
 enum { kRadarTimerId = wxID_HIGHEST + 10 };
 
@@ -114,6 +115,10 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
     for (int i = 1; i <= 4 && r > 0; ++i) dc.DrawCircle(cx, cy, (r * i) / 4);
   }
 
+  // Extra layers over the picture (rings, heading/COG lines, north, AIS).
+  const uint32_t range_m = state ? state->RangeMeters() : 0;
+  DrawLayers(dc, wxPoint(sz.x / 2, sz.y / 2), side / 2.0, range_m);
+
   DrawLozenges(dc, sz);
 
   wxString status =
@@ -208,6 +213,115 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
 
     m_range_plus_rect = wxRect(x, y, w, plus_h);
     m_range_minus_rect = wxRect(x, y + plus_h + val_h, w, minus_h);
+  }
+}
+
+namespace {
+// Head-up screen point for a target at true bearing `brg_deg` and pixel radius
+// `r`, given own-ship true `heading`. Screen 0deg = straight up (bow).
+wxPoint PolarPoint(wxPoint c, double r, double brg_deg, double heading) {
+  const double a = (brg_deg - heading) * M_PI / 180.0;
+  return wxPoint(c.x + static_cast<int>(std::lround(r * std::sin(a))),
+                 c.y - static_cast<int>(std::lround(r * std::cos(a))));
+}
+
+wxString RingLabel(double m) {
+  if (m >= 1852.0) return wxString::Format("%.2f NM", m / 1852.0);
+  return wxString::Format("%.0f m", m);
+}
+}  // namespace
+
+void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
+                                   uint32_t range_m) {
+  if (radius < 8) return;
+  RadarState* st = m_client ? m_client->StateAt(m_index) : nullptr;
+
+  NavState nav;
+  if (m_nav) nav = m_nav();
+  double heading = 0.0;
+  bool has_heading = false;
+  if (nav.has_hdt) {
+    heading = nav.hdt;
+    has_heading = true;
+  } else if (st) {
+    double h = 0.0;
+    if (st->Heading(h)) {
+      heading = h;
+      has_heading = true;
+    }
+  }
+
+  dc.SetBrush(*wxTRANSPARENT_BRUSH);
+
+  // Range rings, with a distance label on the outer three.
+  if (m_layers.range_rings) {
+    dc.SetPen(wxPen(m_theme.dim_text, 1));
+    dc.SetTextForeground(m_theme.dim_text);
+    const int rings = 4;
+    for (int i = 1; i <= rings; ++i) {
+      const double rr = radius * i / rings;
+      dc.DrawCircle(c.x, c.y, static_cast<int>(rr));
+      if (range_m > 0 && i < rings) {
+        const wxString lbl = RingLabel(static_cast<double>(range_m) * i / rings);
+        dc.DrawText(lbl, c.x + 3, c.y - static_cast<int>(rr) - 2);
+      }
+    }
+  }
+
+  // Heading line: bow is straight up on the head-up picture.
+  if (m_layers.heading_line) {
+    dc.SetPen(wxPen(m_theme.accent, 2));
+    dc.DrawLine(c.x, c.y, c.x, c.y - static_cast<int>(radius));
+  }
+
+  // North marker: a small "N" at the true-north bearing.
+  if (m_layers.north_marker && has_heading) {
+    const wxPoint n = PolarPoint(c, radius - 12, 0.0, heading);
+    dc.SetTextForeground(m_theme.text);
+    wxCoord tw, th;
+    dc.GetTextExtent("N", &tw, &th);
+    dc.DrawText("N", n.x - tw / 2, n.y - th / 2);
+  }
+
+  // COG line: dashed, from the centre out to the ring edge.
+  if (m_layers.cog_line && has_heading && nav.has_cog) {
+    wxPen pen(wxColour(0, 200, 255), 2, wxPENSTYLE_LONG_DASH);
+    dc.SetPen(pen);
+    const wxPoint e = PolarPoint(c, radius, nav.cog, heading);
+    dc.DrawLine(c.x, c.y, e.x, e.y);
+  }
+
+  // AIS targets: a bearing/range-placed triangle pointing along its COG.
+  if (m_layers.ais && has_heading && range_m > 0) {
+    ArrayOfPlugIn_AIS_Targets* arr = GetAISTargetArray();
+    if (arr) {
+      for (size_t i = 0; i < arr->GetCount(); ++i) {
+        PlugIn_AIS_Target* t = arr->Item(i);
+        if (!t) continue;
+        const double rng_m = t->Range_NM * 1852.0;
+        if (rng_m <= 0 || rng_m > range_m) continue;  // outside the ring
+        const double r = radius * rng_m / range_m;
+        const wxPoint p = PolarPoint(c, r, t->Brg, heading);
+        // Small triangle oriented to COG (fallback: bearing).
+        const double course =
+            (t->COG >= 0 && t->COG < 360) ? t->COG : t->Brg;
+        const double a = (course - heading) * M_PI / 180.0;
+        const double ca = std::cos(a), sa = std::sin(a);
+        auto rot = [&](double dx, double dy) {
+          return wxPoint(p.x + static_cast<int>(std::lround(dx * ca - dy * sa)),
+                         p.y + static_cast<int>(std::lround(dx * sa + dy * ca)));
+        };
+        // Triangle: nose forward (screen up = -y before rotation).
+        wxPoint tri[3] = {rot(0, -7), rot(-4, 5), rot(4, 5)};
+        const bool danger = t->bCPA_Valid && t->CPA < 0.5 && t->TCPA > 0;
+        dc.SetBrush(wxBrush(danger ? wxColour(255, 80, 80)
+                                   : wxColour(0, 220, 120)));
+        dc.SetPen(wxPen(m_theme.text, 1));
+        dc.DrawPolygon(3, tri);
+        delete t;  // core allocates fresh copies per call
+      }
+      delete arr;
+    }
   }
 }
 

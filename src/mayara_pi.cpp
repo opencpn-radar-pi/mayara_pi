@@ -344,6 +344,7 @@ void mayara_pi::RebuildWindows() {
                            });
     win->SetSettingsControl([this, win]() { ShowSettings(win); });
     win->SetAutoLayoutControl([this]() { AutoLayoutWindows(/*reflow=*/true); });
+    win->SetNavProvider([this]() { return m_nav; });
     win->Show(m_windows_visible);
     m_windows.push_back(win);
   }
@@ -519,6 +520,17 @@ void mayara_pi::SetPositionFixEx(PlugIn_Position_Fix_Ex& pfix) {
   m_ownship_lon = pfix.Lon;
   m_ownship_cog = pfix.Cog;
   m_heading_true = pfix.Hdt;
+
+  // NaN-tolerant fill of the shared nav state for the PPI overlays.
+  m_nav.lat = pfix.Lat;
+  m_nav.lon = pfix.Lon;
+  m_nav.valid = !std::isnan(pfix.Lat) && !std::isnan(pfix.Lon) &&
+                (pfix.Lat != 0.0 || pfix.Lon != 0.0);
+  m_nav.has_cog = !std::isnan(pfix.Cog) && pfix.Cog >= 0.0;
+  m_nav.cog = m_nav.has_cog ? pfix.Cog : 0.0;
+  m_nav.sog = std::isnan(pfix.Sog) ? 0.0 : pfix.Sog;
+  m_nav.has_hdt = !std::isnan(pfix.Hdt) && pfix.Hdt >= 0.0 && pfix.Hdt < 360.0;
+  m_nav.hdt = m_nav.has_hdt ? pfix.Hdt : 0.0;
 }
 
 void mayara_pi::SetColorScheme(PI_ColorScheme cs) {

@@ -16,6 +16,8 @@
 
 #include "ocpn_plugin.h"
 
+#include "NavState.h"
+
 // Forward declarations keep implementation types out of this header.
 class MayaraPpiWindow;
 class MayaraClient;
@@ -114,6 +116,7 @@ class mayara_pi : public opencpn_plugin_121 {
   double m_ownship_lon = 0.0;
   double m_ownship_cog = 0.0;
   double m_heading_true = 0.0;
+  NavState m_nav;  // shared with the PPI overlays
 };
 
 #endif  // MAYARA_PI_H_
