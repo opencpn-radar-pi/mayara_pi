@@ -24,6 +24,9 @@ class MayaraPpiWindow : public wxDialog {
   void SetOverlayControl(std::function<bool()> get,
                          std::function<void(bool)> set);
 
+  // Wire the settings (gear) button to the plugin's preferences dialog.
+  void SetSettingsControl(std::function<void()> open);
+
  private:
   void OnClose(wxCloseEvent& event);
 

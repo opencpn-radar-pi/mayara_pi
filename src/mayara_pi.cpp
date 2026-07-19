@@ -252,8 +252,11 @@ void mayara_pi::TogglePpiWindow() {
     m_ppi_window->SetOverlayControl([this]() { return m_overlay_enabled; },
                                     [this](bool on) {
                                       m_overlay_enabled = on;
+                                      SaveConfig();
                                       GetOCPNCanvasWindow()->Refresh(false);
                                     });
+    m_ppi_window->SetSettingsControl(
+        [this]() { ShowSettings(m_ppi_window); });
   }
   const bool show = !m_ppi_window->IsShown();
   m_ppi_window->Show(show);

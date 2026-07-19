@@ -141,6 +141,12 @@ wxSizer* ControlsPanel::MakeCloseRow() {
   f.MakeBold();
   title->SetFont(f);
   row->Add(title, 1, wxALIGN_CENTER_VERTICAL | wxLEFT, 6);
+  auto* gear = new ThemedButton(this, wxT("⚙"), m_theme, /*toggle=*/false);
+  gear->SetToolTip(_("Settings"));
+  gear->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+    if (m_on_settings) m_on_settings();
+  });
+  row->Add(gear, 0, wxTOP | wxBOTTOM | wxLEFT, 4);
   auto* close = new ThemedButton(this, wxT("✕"), m_theme, /*toggle=*/false);
   close->SetToolTip(_("Hide controls"));
   close->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {

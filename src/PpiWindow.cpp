@@ -66,6 +66,10 @@ void MayaraPpiWindow::SetOverlayControl(std::function<bool()> get,
       });
 }
 
+void MayaraPpiWindow::SetSettingsControl(std::function<void()> open) {
+  if (m_controls) m_controls->SetSettingsCallback(std::move(open));
+}
+
 void MayaraPpiWindow::OnClose(wxCloseEvent& event) {
   // The plugin owns this window's lifetime; hide instead of destroying.
   Hide();

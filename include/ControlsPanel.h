@@ -28,6 +28,9 @@ class ControlsPanel : public wxScrolledWindow {
   ControlsPanel(wxWindow* parent, MayaraClient* client);
 
   void SetCloseCallback(std::function<void()> cb) { m_on_close = std::move(cb); }
+  void SetSettingsCallback(std::function<void()> cb) {
+    m_on_settings = std::move(cb);
+  }
   void ApplyTheme(const MayaraTheme& theme);
 
   // View section wiring (overlay + PPI visibility live in the plugin/window).
@@ -69,6 +72,7 @@ class ControlsPanel : public wxScrolledWindow {
   // Value updaters: read the model and refresh the corresponding widgets.
   std::vector<std::function<void()>> m_updaters;
   std::function<void()> m_on_close;
+  std::function<void()> m_on_settings;
   MayaraTheme m_theme;
 
   std::map<std::string, bool> m_collapsed;  // per-section collapse state
