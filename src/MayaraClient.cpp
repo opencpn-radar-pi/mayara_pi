@@ -190,6 +190,41 @@ void MayaraClient::SetAllIntensity(float f) {
   for (auto& r : m_radars) r->state.SetIntensity(f);
 }
 
+RadarState* MayaraClient::StateAt(int index) {
+  std::lock_guard<std::mutex> lock(m_radars_mutex);
+  if (index < 0 || index >= static_cast<int>(m_radars.size())) return nullptr;
+  return &m_radars[index]->state;
+}
+
+RadarControls* MayaraClient::ControlsAt(int index) {
+  std::lock_guard<std::mutex> lock(m_radars_mutex);
+  if (index < 0 || index >= static_cast<int>(m_radars.size())) return nullptr;
+  return &m_radars[index]->controls;
+}
+
+std::string MayaraClient::RadarId(int index) {
+  std::lock_guard<std::mutex> lock(m_radars_mutex);
+  if (index < 0 || index >= static_cast<int>(m_radars.size())) return {};
+  return m_radars[index]->id;
+}
+
+std::vector<int> MayaraClient::ShownRadars() {
+  std::lock_guard<std::mutex> lock(m_radars_mutex);
+  const int n = static_cast<int>(m_radars.size());
+  std::vector<int> out;
+  for (int i : m_shown)
+    if (i >= 0 && i < n) out.push_back(i);
+  if (out.empty())
+    for (int i = 0; i < n && i < 2; ++i) out.push_back(i);  // default first two
+  return out;
+}
+
+void MayaraClient::SetShown(std::vector<int> indices) {
+  std::lock_guard<std::mutex> lock(m_radars_mutex);
+  if (indices.size() > 2) indices.resize(2);
+  m_shown = std::move(indices);
+}
+
 void MayaraClient::Run() {
   while (!m_stop) {
     std::vector<std::string> candidates;

@@ -3,6 +3,7 @@
  *****************************************************************************/
 #include "mayara_pi.h"
 
+#include <algorithm>
 #include <cstdlib>
 
 #include <wx/bmpbndl.h>
@@ -177,65 +178,84 @@ void mayara_pi::TogglePpiWindow() {
 bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
                                            PlugIn_ViewPort* vp, int canvasIndex,
                                            int priority) {
-  if (!m_overlay_enabled) return false;
-  RadarState* state = m_client ? m_client->State() : nullptr;
-  const uint32_t range_m = state ? state->RangeMeters() : 0;
+  if (!m_overlay_enabled || !m_client || !vp || !vp->bValid) return false;
+  const int n = m_client->RadarCount();
+  if (n == 0) return false;
+  if (static_cast<int>(m_overlay_tex.size()) != n)
+    m_overlay_tex.assign(n, OverlayTex{});
 
-  if (!m_client || !vp || !vp->bValid) return false;
+  // Collect radars that have data, sorted by range descending so the longest
+  // range is drawn first and the shortest composites on top (short-range inner
+  // disc, longer-range annulus beyond it).
+  struct Item {
+    int idx;
+    uint32_t range;
+  };
+  std::vector<Item> items;
+  for (int i : m_client->ShownRadars()) {  // at most two displayed radars
+    RadarState* st = m_client->StateAt(i);
+    if (st && st->RangeMeters() > 0) items.push_back({i, st->RangeMeters()});
+  }
+  if (items.empty()) return false;
+  std::sort(items.begin(), items.end(),
+            [](const Item& a, const Item& b) { return a.range > b.range; });
+
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glEnable(GL_TEXTURE_2D);
+  glColor4f(m_radar_intensity, m_radar_intensity, m_radar_intensity, 1.0f);
+
+  bool drew = false;
+  for (const auto& it : items)
+    if (DrawRadarOverlay(it.idx, vp)) drew = true;
+
+  glBindTexture(GL_TEXTURE_2D, 0);
+  glDisable(GL_TEXTURE_2D);
+  glDisable(GL_BLEND);
+  return drew;
+}
+
+bool mayara_pi::DrawRadarOverlay(int index, PlugIn_ViewPort* vp) {
+  RadarState* state = m_client->StateAt(index);
   if (!state) return false;
-  if (range_m == 0) return false;  // no radar data yet
+  const uint32_t range_m = state->RangeMeters();
+  if (range_m == 0) return false;
 
-  // Prefer OpenCPN's own-ship fix; fall back to the radar position stamped into
-  // the spoke data when OpenCPN has no fix of its own.
-  double lat = m_ownship_lat;
-  double lon = m_ownship_lon;
-  if (lat == 0.0 && lon == 0.0) {
-    if (!state->Position(lat, lon)) return false;  // nowhere to place it
+  double lat = m_ownship_lat, lon = m_ownship_lon;
+  if (lat == 0.0 && lon == 0.0)
+    if (!state->Position(lat, lon)) return false;
+
+  OverlayTex& t = m_overlay_tex[index];
+  if (t.tex == 0) {
+    glGenTextures(1, &t.tex);
+    t.gen = ~0ull;
   }
-
-  // Upload the cached disc as a texture, but only when it actually changed.
   const uint64_t gen = state->Generation();
-  if (m_overlay_tex == 0) {
-    glGenTextures(1, &m_overlay_tex);
-    m_overlay_gen = ~0ull;
-  }
-  if (gen != m_overlay_gen) {
-    m_overlay_size = state->CopyDisc(m_overlay_disc);
-    if (m_overlay_size <= 0) return false;
-    glBindTexture(GL_TEXTURE_2D, m_overlay_tex);
+  if (gen != t.gen) {
+    const int size = state->CopyDisc(m_overlay_disc);
+    if (size <= 0) return false;
+    glBindTexture(GL_TEXTURE_2D, t.tex);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_overlay_size, m_overlay_size, 0,
-                 GL_RGBA, GL_UNSIGNED_BYTE, m_overlay_disc.data());
-    m_overlay_gen = gen;
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, size, size, 0, GL_RGBA,
+                 GL_UNSIGNED_BYTE, m_overlay_disc.data());
+    t.gen = gen;
   }
-  if (m_overlay_size <= 0) return false;
 
   wxPoint center;
   GetCanvasPixLL(vp, &center, lat, lon);
-  // GetCanvasPixLL can overflow to INT_MIN when the boat is far off this
-  // viewport (e.g. a second canvas). Skip those.
   if (std::abs(center.x) > 1000000 || std::abs(center.y) > 1000000)
     return false;
   const double radius_px = range_m * vp->view_scale_ppm;
   if (radius_px < 1.0) return false;
 
-  // Prefer OpenCPN's true heading; fall back to the heading carried in the
-  // spoke data (bearing - angle) when OpenCPN has none. Disc is bow-up; rotate
-  // to place the bow toward heading, plus the chart's own rotation.
-  double heading = m_heading_true;
-  double spoke_heading = 0.0;
-  if (heading == 0.0 && state->Heading(spoke_heading)) heading = spoke_heading;
+  double heading = m_heading_true, sh = 0.0;
+  if (heading == 0.0 && state->Heading(sh)) heading = sh;
   const double rot_deg = heading + vp->rotation * 180.0 / M_PI;
 
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-  glEnable(GL_TEXTURE_2D);
-  glBindTexture(GL_TEXTURE_2D, m_overlay_tex);
-  glColor4f(m_radar_intensity, m_radar_intensity, m_radar_intensity, 1.0f);
-
+  glBindTexture(GL_TEXTURE_2D, t.tex);
   glPushMatrix();
   glTranslatef(center.x, center.y, 0.0f);
   glRotatef(rot_deg, 0.0f, 0.0f, 1.0f);
@@ -247,10 +267,6 @@ bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
   glTexCoord2f(0.0f, 1.0f); glVertex2f(-1.0f, 1.0f);
   glEnd();
   glPopMatrix();
-
-  glBindTexture(GL_TEXTURE_2D, 0);
-  glDisable(GL_TEXTURE_2D);
-  glDisable(GL_BLEND);
   return true;
 }
 

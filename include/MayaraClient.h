@@ -54,6 +54,15 @@ class MayaraClient {
   void SetActive(int index);
   void SetAllIntensity(float f);  // apply echo dimming to every radar
 
+  // Per-radar access (for the composite overlay and multi-PPI windows).
+  RadarState* StateAt(int index);
+  RadarControls* ControlsAt(int index);
+  std::string RadarId(int index);
+
+  // The (at most two) radars currently displayed. Defaults to the first two.
+  std::vector<int> ShownRadars();
+  void SetShown(std::vector<int> indices);
+
   // Set a control value on the active radar. `json_body` is the
   // BareControlValue JSON (e.g. {"value":75}). Sent via REST PUT.
   void SetControl(const std::string& control_id, const std::string& json_body);
@@ -80,6 +89,7 @@ class MayaraClient {
   std::vector<std::unique_ptr<Radar>> m_radars;
   std::atomic<int> m_active{0};
   std::atomic<float> m_intensity{1.0f};
+  std::vector<int> m_shown;  // <= 2 displayed radar indices (empty = default)
 
   std::unique_ptr<ix::WebSocket> m_control_ws;
 };

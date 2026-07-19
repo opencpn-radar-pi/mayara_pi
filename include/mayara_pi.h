@@ -64,12 +64,17 @@ class mayara_pi : public opencpn_plugin_121 {
   float m_radar_intensity = 1.0f;
   bool m_overlay_enabled = true;
 
-  // GL chart-overlay: the cached radar disc uploaded as a texture and drawn as
-  // a rotated/scaled quad. Re-uploaded only when the disc changes.
-  unsigned int m_overlay_tex = 0;
-  uint64_t m_overlay_gen = ~0ull;
-  int m_overlay_size = 0;
-  std::vector<uint8_t> m_overlay_disc;
+  // GL chart-overlay: each radar's cached disc uploaded as a texture and drawn
+  // as a rotated/scaled quad, re-uploaded only when its disc changes. Radars
+  // are drawn longest-range first so the shortest range composites on top.
+  struct OverlayTex {
+    unsigned int tex = 0;
+    uint64_t gen = ~0ull;
+  };
+  std::vector<OverlayTex> m_overlay_tex;  // per radar index
+  std::vector<uint8_t> m_overlay_disc;    // scratch reused per radar
+
+  bool DrawRadarOverlay(int index, PlugIn_ViewPort* vp);
 
   // Latest own-ship fix, for the overlay/PPI to place the radar.
   double m_ownship_lat = 0.0;
