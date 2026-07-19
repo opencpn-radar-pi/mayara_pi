@@ -44,6 +44,7 @@ class MayaraClient {
   bool FetchCapabilities(const std::string& radar_id);
   void FetchControlValues(const std::string& radar_id);
   bool ConnectSpokes(const std::string& spoke_url);  // true if it opens
+  void ConnectControlStream();  // Signal K JSON stream for live control values
   void SetStatus(const std::string& s);
 
   std::string m_explicit;   // forced address, or empty to discover
@@ -60,6 +61,7 @@ class MayaraClient {
   RadarState m_state;
   RadarControls m_controls;
   std::unique_ptr<ix::WebSocket> m_spoke_ws;
+  std::unique_ptr<ix::WebSocket> m_control_ws;
   std::string m_radar_id;
 };
 

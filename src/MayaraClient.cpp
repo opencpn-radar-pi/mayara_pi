@@ -49,15 +49,18 @@ ControlValue ParseControlValue(const json& v) {
   return cv;
 }
 
+// Convert an http(s) base URL to its ws(s) equivalent.
+std::string WsBase(const std::string& base) {
+  if (base.rfind("https://", 0) == 0) return "wss://" + base.substr(8);
+  if (base.rfind("http://", 0) == 0) return "ws://" + base.substr(7);
+  return base;
+}
+
 // Build the spoke WebSocket URL from an http(s) base + radar id (spec fallback
 // when spokeDataUrl is absent).
 std::string WsUrl(const std::string& base, const std::string& radar_id) {
-  std::string ws = base;
-  if (ws.rfind("https://", 0) == 0)
-    ws = "wss://" + ws.substr(8);
-  else if (ws.rfind("http://", 0) == 0)
-    ws = "ws://" + ws.substr(7);
-  return ws + "/signalk/v2/api/vessels/self/radars/" + radar_id + "/spokes";
+  return WsBase(base) + "/signalk/v2/api/vessels/self/radars/" + radar_id +
+         "/spokes";
 }
 }  // namespace
 
@@ -106,6 +109,10 @@ void MayaraClient::Stop() {
   if (m_spoke_ws) {
     m_spoke_ws->stop();
     m_spoke_ws.reset();
+  }
+  if (m_control_ws) {
+    m_control_ws->stop();
+    m_control_ws.reset();
   }
   if (m_thread.joinable()) m_thread.join();
 }
@@ -200,7 +207,42 @@ bool MayaraClient::DiscoverAndConnect() {
     SetStatus("no spoke stream at " + m_base_url);
     return false;
   }
+  ConnectControlStream();  // live control values (best-effort)
   return true;
+}
+
+void MayaraClient::ConnectControlStream() {
+  const std::string url =
+      WsBase(m_base_url) + "/signalk/v1/stream?subscribe=none";
+  m_control_ws = std::make_unique<ix::WebSocket>();
+  m_control_ws->setUrl(url);
+
+  const std::string prefix = "radars." + m_radar_id + ".controls.";
+  m_control_ws->setOnMessageCallback([this, prefix](
+                                         const ix::WebSocketMessagePtr& msg) {
+    if (msg->type == ix::WebSocketMessageType::Open) {
+      m_control_ws->send(
+          "{\"subscribe\":[{\"path\":\"radars.*.controls.*\",\"period\":1000}]}");
+      return;
+    }
+    if (msg->type != ix::WebSocketMessageType::Message || msg->binary) return;
+    try {
+      auto j = json::parse(msg->str);
+      if (!j.contains("updates")) return;
+      for (const auto& upd : j["updates"]) {
+        if (!upd.contains("values")) continue;
+        for (const auto& v : upd["values"]) {
+          const std::string path = v.value("path", std::string());
+          if (path.rfind(prefix, 0) != 0) continue;
+          const std::string ctrl = path.substr(prefix.size());
+          if (v.contains("value") && v["value"].is_object())
+            m_controls.SetValue(ctrl, ParseControlValue(v["value"]));
+        }
+      }
+    } catch (const std::exception&) {
+    }
+  });
+  m_control_ws->start();
 }
 
 bool MayaraClient::FetchCapabilities(const std::string& radar_id) {

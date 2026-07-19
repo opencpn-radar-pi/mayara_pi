@@ -12,8 +12,8 @@ wxEND_EVENT_TABLE()
 
 MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client)
     : wxDialog(parent, wxID_ANY, _("Mayara Radar"), wxDefaultPosition,
-               wxSize(760, 540), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER) {
-  SetMinSize(wxSize(400, 300));
+               wxSize(880, 560), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER) {
+  SetMinSize(wxSize(480, 320));
 
   auto* radar = new RadarDisplayPanel(this, client);
   auto* controls = new ControlsPanel(this, client);

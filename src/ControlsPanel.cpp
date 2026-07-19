@@ -63,7 +63,7 @@ ControlsPanel::ControlsPanel(wxWindow* parent, MayaraClient* client)
                        wxVSCROLL),
       m_client(client),
       m_timer(this, kControlsTimerId) {
-  SetMinSize(wxSize(250, -1));
+  SetMinSize(wxSize(300, -1));
   SetScrollRate(0, 12);
   auto* sizer = new wxBoxSizer(wxVERTICAL);
   sizer->Add(new wxStaticText(this, wxID_ANY, _("Waiting for radar…")), 0,
@@ -191,8 +191,11 @@ void ControlsPanel::AddNumber(wxSizer* outer, const ControlDef& def) {
     Set(id, BodyValueAuto(v, def.hasAuto, false));
   });
   if (autobtn) {
-    autobtn->Bind(wxEVT_TOGGLEBUTTON, [this, id, autobtn](wxCommandEvent&) {
-      Set(id, BodyAuto(autobtn->GetValue()));
+    autobtn->Bind(wxEVT_TOGGLEBUTTON, [this, id, autobtn, slider](
+                                          wxCommandEvent&) {
+      const bool a = autobtn->GetValue();
+      slider->Enable(!a);  // optimistic; the control stream confirms
+      Set(id, BodyAuto(a));
     });
   }
 
@@ -275,29 +278,38 @@ void ControlsPanel::AddEnum(wxSizer* outer, const ControlDef& def,
 }
 
 void ControlsPanel::AddRange(wxSizer* outer, const ControlDef& def,
-                             const std::vector<int>& ranges) {
+                             const std::vector<int>& supported) {
   outer->Add(new wxStaticText(this, wxID_ANY, _("Range")), 0, wxLEFT | wxTOP, 4);
   auto* choice = new wxChoice(this, wxID_ANY);
-  for (int r : ranges) choice->Append(FormatVal(r, "m"));
+
+  // Use the range control's own validValues (the settable ranges, with nice
+  // "1 nm"/"500 m" descriptions), not capabilities.supportedRanges which
+  // includes intermediate values the control does not accept.
+  std::vector<int> values = def.validValues.empty() ? supported : def.validValues;
+  for (int v : values) {
+    auto dit = def.descriptions.find(v);
+    choice->Append(dit != def.descriptions.end()
+                       ? wxString::FromUTF8(dit->second.c_str())
+                       : FormatVal(v, "m"));
+  }
   outer->Add(choice, 0, wxEXPAND | wxALL, 4);
 
   const std::string id = def.id;
-  choice->Bind(wxEVT_CHOICE, [this, id, choice, ranges](wxCommandEvent&) {
+  choice->Bind(wxEVT_CHOICE, [this, id, choice, values](wxCommandEvent&) {
     int sel = choice->GetSelection();
-    if (sel >= 0 && sel < static_cast<int>(ranges.size()))
-      Set(id, BodyValue(ranges[sel]));
+    if (sel >= 0 && sel < static_cast<int>(values.size()))
+      Set(id, BodyValue(values[sel]));
   });
-  m_updaters.push_back([this, id, choice, ranges]() {
+  m_updaters.push_back([this, id, choice, values]() {
     ControlValue val = m_client->Controls()->Value(id);
-    if (!val.has_value || ranges.empty()) return;
-    // Select the nearest supported range to the current value.
+    if (!val.has_value || values.empty()) return;
     int best = 0;
     double bestd = 1e18;
-    for (unsigned i = 0; i < ranges.size(); ++i) {
-      double d = std::fabs(ranges[i] - val.value);
+    for (unsigned i = 0; i < values.size(); ++i) {
+      double d = std::fabs(values[i] - val.value);
       if (d < bestd) {
         bestd = d;
-        best = i;
+        best = static_cast<int>(i);
       }
     }
     if (choice->GetSelection() != best) choice->SetSelection(best);
