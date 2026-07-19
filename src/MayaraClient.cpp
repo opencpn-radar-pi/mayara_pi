@@ -480,10 +480,15 @@ void MayaraClient::ConnectControlStream() {
           std::lock_guard<std::mutex> lock(m_radars_mutex);
           for (auto& r : m_radars)
             if (r->id == rid) {
-              if (is_meta)
+              if (is_meta) {
                 r->controls.UpdateDef(ParseControlDef(ctrl, value));
-              else
-                r->controls.SetValue(ctrl, ParseControlValue(value));
+              } else {
+                ControlValue cv = ParseControlValue(value);
+                r->controls.SetValue(ctrl, cv);
+                // Leaving Transmit (power < 2): erase the stale picture.
+                if (ctrl == "power" && cv.has_value && cv.value < 2.0)
+                  r->state.Clear();
+              }
               return;
             }
         };

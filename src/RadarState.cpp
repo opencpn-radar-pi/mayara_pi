@@ -160,6 +160,13 @@ void RadarState::SetIntensity(float f) {
   intensity_ = f;
 }
 
+void RadarState::Clear() {
+  std::lock_guard<std::mutex> lock(m_);
+  std::fill(spoke_len_.begin(), spoke_len_.end(), 0);
+  has_data_ = false;
+  ++generation_;  // forces disc/PPI to rebuild empty
+}
+
 void RadarState::SetPosition(double lat, double lon) {
   std::lock_guard<std::mutex> lock(m_);
   radar_lat_ = lat;

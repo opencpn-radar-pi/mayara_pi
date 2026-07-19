@@ -96,23 +96,13 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
   RadarState* state = m_client ? m_client->StateAt(m_index) : nullptr;
   const int side = std::max(16, std::min(sz.x, sz.y));
 
-  bool painted = false;
   if (state) {
     std::vector<uint8_t> rgb(static_cast<size_t>(side) * side * 3);
     if (state->RenderPPI(rgb.data(), side, side)) {
       wxImage img(side, side, rgb.data(), true);
       wxBitmap bmp(img);
       dc.DrawBitmap(bmp, (sz.x - side) / 2, (sz.y - side) / 2, false);
-      painted = true;
     }
-  }
-
-  if (!painted) {
-    const int cx = sz.x / 2, cy = sz.y / 2;
-    const int r = (std::min(sz.x, sz.y) / 2) - 8;
-    dc.SetBrush(*wxTRANSPARENT_BRUSH);
-    dc.SetPen(wxPen(wxColour(0, 100, 0), 1));
-    for (int i = 1; i <= 4 && r > 0; ++i) dc.DrawCircle(cx, cy, (r * i) / 4);
   }
 
   // Extra layers over the picture (rings, heading/COG lines, north, AIS).

@@ -53,6 +53,10 @@ class RadarState {
   void SetHeadingFromBearing(uint32_t angle, uint32_t bearing);
   bool Heading(double& degrees) const;
 
+  // Drop all echoes (e.g. when the radar goes to Standby) so the picture is
+  // erased until the next sweep repopulates it.
+  void Clear();
+
   // Echo brightness scale (1.0 = full; lower dims the PPI at dusk/night).
   void SetIntensity(float f);
 
