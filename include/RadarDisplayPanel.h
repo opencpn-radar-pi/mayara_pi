@@ -12,6 +12,8 @@
 #include <wx/wx.h>
 #include <wx/timer.h>
 
+#include "MayaraTheme.h"
+
 class MayaraClient;
 
 class RadarDisplayPanel : public wxPanel {
@@ -19,6 +21,7 @@ class RadarDisplayPanel : public wxPanel {
   RadarDisplayPanel(wxWindow* parent, MayaraClient* client);
 
   void SetMenuCallback(std::function<void()> cb) { m_on_menu = std::move(cb); }
+  void ApplyTheme(const MayaraTheme& theme);
 
  private:
   void OnPaint(wxPaintEvent& event);
@@ -33,6 +36,7 @@ class RadarDisplayPanel : public wxPanel {
   wxTimer m_timer;
   wxButton* m_menu_btn = nullptr;
   std::function<void()> m_on_menu;
+  MayaraTheme m_theme;
 
   // Clickable overlay regions, updated each paint.
   wxRect m_power_rect;

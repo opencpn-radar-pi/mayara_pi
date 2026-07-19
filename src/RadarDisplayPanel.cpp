@@ -35,9 +35,9 @@ wxString RangeLabel(uint32_t m) {
   return wxString::Format("%u m", m);
 }
 
-void LozengeBg(wxDC& dc, const wxRect& r, int radius) {
-  dc.SetBrush(wxBrush(wxColour(24, 24, 28)));
-  dc.SetPen(wxPen(wxColour(90, 90, 96)));
+void LozengeBg(wxDC& dc, const wxRect& r, int radius, const MayaraTheme& t) {
+  dc.SetBrush(wxBrush(t.lozenge_bg));
+  dc.SetPen(wxPen(t.lozenge_border));
   dc.DrawRoundedRectangle(r.x, r.y, r.width, r.height, radius);
 }
 
@@ -82,6 +82,11 @@ RadarDisplayPanel::RadarDisplayPanel(wxWindow* parent, MayaraClient* client)
 
 void RadarDisplayPanel::OnTimer(wxTimerEvent&) { Refresh(false); }
 
+void RadarDisplayPanel::ApplyTheme(const MayaraTheme& theme) {
+  m_theme = theme;
+  Refresh();
+}
+
 void RadarDisplayPanel::OnSize(wxSizeEvent& event) {
   if (m_menu_btn) {
     const wxSize sz = GetClientSize();
@@ -124,7 +129,7 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
   wxString status =
       m_client ? wxString::FromUTF8(m_client->StatusLine().c_str())
                : wxString("no client");
-  dc.SetTextForeground(wxColour(0, 230, 0));
+  dc.SetTextForeground(m_theme.text);
   dc.DrawText(status, 8, sz.y - 20);
 }
 
@@ -140,7 +145,7 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
   {
     const int p = pw.has_value ? static_cast<int>(pw.value) : 0;
     const bool tx = p >= 2;  // Transmit
-    const wxColour fg = tx ? wxColour(120, 255, 120) : wxColour(235, 200, 110);
+    const wxColour fg = tx ? m_theme.accent : m_theme.accent_dim;
     const wxString label =
         pw.has_value ? PowerLabel(m_client, p) : wxString(_("Power"));
     wxCoord tw, th;
@@ -149,14 +154,14 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
     const int h = std::max<int>(th, icon) + 12;
     const int w = padx + icon + gap + tw + padx;
     const int x = 10, y = 10;
-    LozengeBg(dc, wxRect(x, y, w, h), h / 2);
+    LozengeBg(dc, wxRect(x, y, w, h), h / 2, m_theme);
 
     // Power glyph: ring + top stem.
     const int ix = x + padx + icon / 2, iy = y + h / 2, r = icon / 2 - 1;
     dc.SetPen(wxPen(fg, 2));
     dc.SetBrush(*wxTRANSPARENT_BRUSH);
     dc.DrawCircle(ix, iy, r);
-    dc.SetBrush(wxBrush(wxColour(24, 24, 28)));  // erase the top gap
+    dc.SetBrush(wxBrush(m_theme.lozenge_bg));  // erase the top gap
     dc.SetPen(*wxTRANSPARENT_PEN);
     dc.DrawRectangle(ix - 2, iy - r - 2, 4, 5);
     dc.SetPen(wxPen(fg, 2));
@@ -179,9 +184,9 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
     const int btn = 30, textw = std::max<int>(tw + 8, 56);
     const int h = th + 22, w = btn + textw + btn;
     const int x = 10, y = (sz.y - h) / 2;
-    LozengeBg(dc, wxRect(x, y, w, h), 10);
+    LozengeBg(dc, wxRect(x, y, w, h), 10, m_theme);
 
-    const wxColour fg(235, 235, 240);
+    const wxColour fg = m_theme.text;
     const int cy = y + h / 2;
     // minus
     dc.SetPen(wxPen(fg, 2));

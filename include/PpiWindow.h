@@ -6,14 +6,23 @@
 
 #include <wx/wx.h>
 
+#include "MayaraTheme.h"
+
 class MayaraClient;
+class RadarDisplayPanel;
+class ControlsPanel;
 
 class MayaraPpiWindow : public wxDialog {
  public:
   MayaraPpiWindow(wxWindow* parent, MayaraClient* client);
 
+  void ApplyTheme(const MayaraTheme& theme);
+
  private:
   void OnClose(wxCloseEvent& event);
+
+  RadarDisplayPanel* m_radar = nullptr;
+  ControlsPanel* m_controls = nullptr;
 
   wxDECLARE_EVENT_TABLE();
 };

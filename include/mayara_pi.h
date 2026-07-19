@@ -60,6 +60,7 @@ class mayara_pi : public opencpn_plugin_121 {
   int m_tool_id = -1;
   MayaraPpiWindow* m_ppi_window = nullptr;
   std::unique_ptr<MayaraClient> m_client;
+  PI_ColorScheme m_color_scheme = PI_GLOBAL_COLOR_SCHEME_DAY;
 
   // GL chart-overlay: the cached radar disc uploaded as a texture and drawn as
   // a rotated/scaled quad. Re-uploaded only when the disc changes.

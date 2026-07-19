@@ -54,6 +54,14 @@ wxString FormatVal(double value, const std::string& units) {
 
 int Clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
+// Recursively apply the theme: panel-coloured background everywhere, themed
+// text on labels. (Native controls on macOS may ignore colour changes.)
+void ThemeWindow(wxWindow* w, const MayaraTheme& t) {
+  w->SetBackgroundColour(t.panel_bg);
+  if (wxDynamicCast(w, wxStaticText)) w->SetForegroundColour(t.text);
+  for (wxWindow* c : w->GetChildren()) ThemeWindow(c, t);
+}
+
 }  // namespace
 
 wxBEGIN_EVENT_TABLE(ControlsPanel, wxScrolledWindow)
@@ -94,6 +102,17 @@ wxSizer* ControlsPanel::MakeCloseRow() {
 
 void ControlsPanel::Set(const std::string& id, const std::string& body) {
   if (m_client) m_client->SetControl(id, body);
+}
+
+void ControlsPanel::ApplyTheme(const MayaraTheme& theme) {
+  m_theme = theme;
+  ThemeChildren();
+  Refresh();
+}
+
+void ControlsPanel::ThemeChildren() {
+  SetBackgroundColour(m_theme.panel_bg);
+  for (wxWindow* c : GetChildren()) ThemeWindow(c, m_theme);
 }
 
 void ControlsPanel::OnTimer(wxTimerEvent&) {
@@ -179,6 +198,7 @@ void ControlsPanel::Rebuild() {
   SetSizer(root);  // deletes the previous sizer
   FitInside();
   Layout();
+  ThemeChildren();  // theme the freshly created widgets
   ApplyValues();
 }
 

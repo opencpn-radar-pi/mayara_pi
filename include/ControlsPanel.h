@@ -16,6 +16,7 @@
 #include <wx/timer.h>
 #include <wx/wx.h>
 
+#include "MayaraTheme.h"
 #include "RadarControls.h"
 
 class MayaraClient;
@@ -25,9 +26,11 @@ class ControlsPanel : public wxScrolledWindow {
   ControlsPanel(wxWindow* parent, MayaraClient* client);
 
   void SetCloseCallback(std::function<void()> cb) { m_on_close = std::move(cb); }
+  void ApplyTheme(const MayaraTheme& theme);
 
  private:
   wxSizer* MakeCloseRow();  // a "Controls  ×" header row
+  void ThemeChildren();
   void OnTimer(wxTimerEvent& event);
   void Rebuild();      // (re)build widgets from the schema
   void ApplyValues();  // push current model values into the widgets
@@ -52,6 +55,7 @@ class ControlsPanel : public wxScrolledWindow {
   // Value updaters: read the model and refresh the corresponding widgets.
   std::vector<std::function<void()>> m_updaters;
   std::function<void()> m_on_close;
+  MayaraTheme m_theme;
 
   wxDECLARE_EVENT_TABLE();
 };
