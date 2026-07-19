@@ -219,6 +219,26 @@ wxString RingLabel(double m) {
   if (m >= 1852.0) return wxString::Format("%.2f NM", m / 1852.0);
   return wxString::Format("%.0f m", m);
 }
+
+// A step is "nice" if its leading digits read cleanly (1, 1.5, 2, 2.5, 3, ...).
+bool NiceStep(double x) {
+  if (x <= 0) return false;
+  double m = x;
+  while (m >= 10.0) m /= 10.0;
+  while (m < 1.0) m *= 10.0;
+  const double nice[] = {1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0};
+  for (double n : nice)
+    if (std::fabs(m - n) < 0.02) return true;
+  return false;
+}
+
+// Three rings when the reported range divides into nice thirds (1.5/3/6/12 NM,
+// 750 m, ...), otherwise four. Tested in both NM and metres so either unit's
+// round ranges get thirds.
+int RingCount(double report_m) {
+  if (NiceStep(report_m / 1852.0 / 3.0) || NiceStep(report_m / 3.0)) return 3;
+  return 4;
+}
 }  // namespace
 
 void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
@@ -243,18 +263,25 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
 
   dc.SetBrush(*wxTRANSPARENT_BRUSH);
 
-  // Range rings, with a distance label on the outer three.
-  if (m_layers.range_rings) {
+  // Range rings mark the reported (nominal, round) range; the picture extends
+  // past the outer ring as overzoom (spoke range > report range). report_m is
+  // the range control's value; fall back to the spoke range if unknown.
+  double report_m = range_m;
+  if (RadarControls* ctrl = m_client ? m_client->ControlsAt(m_index) : nullptr) {
+    ControlValue rv = ctrl->Value("range");
+    if (rv.has_value && rv.value > 0) report_m = rv.value;
+  }
+  const double ring_outer =
+      range_m > 0 ? radius * std::min(1.0, report_m / range_m) : radius;
+  if (m_layers.range_rings && report_m > 0) {
+    const int rings = RingCount(report_m);
     dc.SetPen(wxPen(m_theme.dim_text, 1));
     dc.SetTextForeground(m_theme.dim_text);
-    const int rings = 4;
     for (int i = 1; i <= rings; ++i) {
-      const double rr = radius * i / rings;
+      const double rr = ring_outer * i / rings;
       dc.DrawCircle(c.x, c.y, static_cast<int>(rr));
-      if (range_m > 0 && i < rings) {
-        const wxString lbl = RingLabel(static_cast<double>(range_m) * i / rings);
-        dc.DrawText(lbl, c.x + 3, c.y - static_cast<int>(rr) - 2);
-      }
+      dc.DrawText(RingLabel(report_m * i / rings), c.x + 3,
+                  c.y - static_cast<int>(rr) - 2);
     }
   }
 
@@ -309,9 +336,21 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
           return wxPoint(p.x + static_cast<int>(std::lround(dx * ca - dy * sa)),
                          p.y + static_cast<int>(std::lround(dx * sa + dy * ca)));
         };
+        const bool danger = t->bCPA_Valid && t->CPA < 0.5 && t->TCPA > 0;
+
+        // Course predictor ("extension line"): where the target will be in
+        // 10 minutes at its current SOG, along its COG.
+        if (t->SOG > 0.1 && t->SOG < 102.2) {
+          const double pred_m = (t->SOG / 6.0) * 1852.0;  // 10 min = SOG/6 NM
+          const double pred_px = radius * pred_m / range_m;
+          const wxPoint e2(p.x + static_cast<int>(std::lround(pred_px * sa)),
+                           p.y - static_cast<int>(std::lround(pred_px * ca)));
+          dc.SetPen(wxPen(danger ? red : green, 1));
+          dc.DrawLine(p.x, p.y, e2.x, e2.y);
+        }
+
         // Triangle: nose forward (screen up = -y before rotation).
         wxPoint tri[3] = {rot(0, -8), rot(-5, 6), rot(5, 6)};
-        const bool danger = t->bCPA_Valid && t->CPA < 0.5 && t->TCPA > 0;
         dc.SetBrush(wxBrush(danger ? red : green));
         dc.SetPen(wxPen(m_theme.text, 1));
         dc.DrawPolygon(3, tri);
