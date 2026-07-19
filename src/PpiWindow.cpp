@@ -3,6 +3,8 @@
  *****************************************************************************/
 #include "PpiWindow.h"
 
+#include <algorithm>
+
 #include "ControlsPanel.h"
 #include "RadarDisplayPanel.h"
 
@@ -53,6 +55,14 @@ void MayaraPpiWindow::SetOverlayControl(std::function<bool()> get,
         if (m_radar) m_radar->Show(show);
         if (!show && m_controls) m_controls->Show(true);  // keep menu visible
         Layout();
+        // Narrow to just the menu when the PPI is hidden; widen to show it.
+        const int h = GetSize().y;
+        if (show) {
+          SetSize(wxSize(std::max(GetSize().x, 820), h));
+        } else {
+          Fit();
+          SetSize(wxSize(GetSize().x, h));
+        }
       });
 }
 

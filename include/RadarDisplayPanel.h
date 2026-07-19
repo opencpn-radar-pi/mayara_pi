@@ -34,11 +34,11 @@ class RadarDisplayPanel : public wxPanel {
 
   MayaraClient* m_client;  // not owned
   wxTimer m_timer;
-  wxButton* m_menu_btn = nullptr;
   std::function<void()> m_on_menu;
   MayaraTheme m_theme;
 
   // Clickable overlay regions, updated each paint.
+  wxRect m_menu_rect;
   wxRect m_power_rect;
   wxRect m_range_minus_rect;
   wxRect m_range_plus_rect;

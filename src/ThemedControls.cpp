@@ -29,10 +29,8 @@ ThemedButton::ThemedButton(wxWindow* parent, const wxString& label,
       m_toggle(toggle) {
   SetLabel(label);
   SetBackgroundStyle(wxBG_STYLE_PAINT);
-  wxClientDC dc(this);
-  dc.SetFont(GetFont());
   wxCoord tw, th;
-  dc.GetTextExtent(label, &tw, &th);
+  GetTextExtent(label, &tw, &th);  // uses the window font; no DC needed
   SetMinSize(wxSize(tw + 22, th + 12));
   Bind(wxEVT_PAINT, &ThemedButton::OnPaint, this);
   Bind(wxEVT_LEFT_DOWN, &ThemedButton::OnClick, this);
@@ -174,10 +172,8 @@ void ThemedChoice::SetTheme(const MayaraTheme& t) {
 
 void ThemedChoice::Append(const wxString& label, int data) {
   m_items.push_back({label, data});
-  wxClientDC dc(this);
-  dc.SetFont(GetFont());
   wxCoord tw, th;
-  dc.GetTextExtent(label, &tw, &th);
+  GetTextExtent(label, &tw, &th);
   const wxSize cur = GetMinSize();
   SetMinSize(wxSize(std::max(cur.x, tw + 34), std::max<int>(cur.y, th + 12)));
 }

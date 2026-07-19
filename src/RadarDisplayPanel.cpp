@@ -69,14 +69,6 @@ RadarDisplayPanel::RadarDisplayPanel(wxWindow* parent, MayaraClient* client)
       m_timer(this, kRadarTimerId) {
   SetBackgroundStyle(wxBG_STYLE_PAINT);
   SetMinSize(wxSize(256, 256));
-
-  m_menu_btn = new wxButton(this, wxID_ANY, wxT("☰"), wxDefaultPosition,
-                            wxSize(34, 28), wxBU_EXACTFIT);
-  m_menu_btn->SetToolTip(_("Controls"));
-  m_menu_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-    if (m_on_menu) m_on_menu();
-  });
-
   m_timer.Start(200);  // ~5 Hz
 }
 
@@ -88,14 +80,7 @@ void RadarDisplayPanel::ApplyTheme(const MayaraTheme& theme) {
   Refresh();
 }
 
-void RadarDisplayPanel::OnSize(wxSizeEvent& event) {
-  if (m_menu_btn) {
-    const wxSize sz = GetClientSize();
-    const wxSize bs = m_menu_btn->GetSize();
-    m_menu_btn->Move(sz.x - bs.x - 8, 8);
-  }
-  event.Skip();
-}
+void RadarDisplayPanel::OnSize(wxSizeEvent& event) { event.Skip(); }
 
 void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
   wxAutoBufferedPaintDC dc(this);
@@ -135,9 +120,23 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
 }
 
 void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
+  m_menu_rect = wxRect();
   m_power_rect = wxRect();
   m_range_minus_rect = wxRect();
   m_range_plus_rect = wxRect();
+
+  // Hamburger button (top-right), painted so it themes.
+  {
+    const int bw = 32, bh = 26, x = sz.x - bw - 8, y = 8;
+    LozengeBg(dc, wxRect(x, y, bw, bh), 5, m_theme);
+    dc.SetPen(wxPen(m_theme.text, 2));
+    const int lx0 = x + 8, lx1 = x + bw - 8, cy = y + bh / 2;
+    dc.DrawLine(lx0, cy - 5, lx1, cy - 5);
+    dc.DrawLine(lx0, cy, lx1, cy);
+    dc.DrawLine(lx0, cy + 5, lx1, cy + 5);
+    m_menu_rect = wxRect(x, y, bw, bh);
+  }
+
   if (!m_client) return;
   RadarControls* controls = m_client->Controls();
 
@@ -209,7 +208,9 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
 
 void RadarDisplayPanel::OnLeftDown(wxMouseEvent& event) {
   const wxPoint p = event.GetPosition();
-  if (m_power_rect.Contains(p))
+  if (m_menu_rect.Contains(p)) {
+    if (m_on_menu) m_on_menu();
+  } else if (m_power_rect.Contains(p))
     TogglePower();
   else if (m_range_minus_rect.Contains(p))
     StepRange(-1);
