@@ -12,13 +12,12 @@
 #include <set>
 #include <string>
 
-#include <wx/checkbox.h>
-#include <wx/choice.h>
 #include <wx/dcclient.h>
 #include <wx/statline.h>
 #include <wx/tglbtn.h>
 
 #include "MayaraClient.h"
+#include "ThemedControls.h"
 
 enum { kControlsTimerId = wxID_HIGHEST + 20 };
 
@@ -142,8 +141,7 @@ wxSizer* ControlsPanel::MakeCloseRow() {
   f.MakeBold();
   title->SetFont(f);
   row->Add(title, 1, wxALIGN_CENTER_VERTICAL | wxLEFT, 6);
-  auto* close = new wxButton(this, wxID_ANY, wxT("✕"), wxDefaultPosition,
-                             wxSize(30, 26), wxBU_EXACTFIT);
+  auto* close = new ThemedButton(this, wxT("✕"), m_theme, /*toggle=*/false);
   close->SetToolTip(_("Hide controls"));
   close->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
     if (m_on_close) m_on_close();
@@ -286,9 +284,10 @@ void ControlsPanel::AddControl(wxSizer* content, const ControlDef& d) {
 
 void ControlsPanel::FillViewSection(wxSizer* content) {
   if (m_set_overlay) {
-    auto* cb = new wxCheckBox(this, wxID_ANY, _("Radar overlay on chart"));
-    content->Add(cb, 0, wxALL, 4);
-    cb->Bind(wxEVT_CHECKBOX, [this, cb](wxCommandEvent&) {
+    auto* cb =
+        new ThemedButton(this, _("Radar overlay on chart"), m_theme, true);
+    content->Add(cb, 0, wxEXPAND | wxALL, 4);
+    cb->Bind(wxEVT_TOGGLEBUTTON, [this, cb](wxCommandEvent&) {
       if (m_set_overlay) m_set_overlay(cb->GetValue());
     });
     m_updaters.push_back([this, cb]() {
@@ -296,9 +295,9 @@ void ControlsPanel::FillViewSection(wxSizer* content) {
     });
   }
   if (m_set_ppi) {
-    auto* cb = new wxCheckBox(this, wxID_ANY, _("Show PPI"));
-    content->Add(cb, 0, wxALL, 4);
-    cb->Bind(wxEVT_CHECKBOX, [this, cb](wxCommandEvent&) {
+    auto* cb = new ThemedButton(this, _("Show PPI"), m_theme, true);
+    content->Add(cb, 0, wxEXPAND | wxALL, 4);
+    cb->Bind(wxEVT_TOGGLEBUTTON, [this, cb](wxCommandEvent&) {
       if (m_set_ppi) m_set_ppi(cb->GetValue());
     });
     m_updaters.push_back([this, cb]() {
@@ -327,17 +326,16 @@ void ControlsPanel::AddNumber(wxSizer* outer, const ControlDef& def) {
 
   // slider | value | Auto  — value has a fixed width so it never clips.
   auto* row = new wxBoxSizer(wxHORIZONTAL);
-  auto* slider = new wxSlider(this, wxID_ANY, 0, 0, 1000);
-  slider->SetMinSize(wxSize(80, -1));
+  auto* slider = new ThemedSlider(this, m_theme);
+  slider->SetMinSize(wxSize(90, 24));
   row->Add(slider, 1, wxALIGN_CENTER_VERTICAL);
   auto* valtext = new wxStaticText(this, wxID_ANY, "", wxDefaultPosition,
                                    wxSize(46, -1),
                                    wxALIGN_RIGHT | wxST_NO_AUTORESIZE);
   row->Add(valtext, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 4);
-  wxToggleButton* autobtn = nullptr;
+  ThemedButton* autobtn = nullptr;
   if (def.hasAuto) {
-    autobtn = new wxToggleButton(this, wxID_ANY, _("Auto"), wxDefaultPosition,
-                                 wxSize(52, -1));
+    autobtn = new ThemedButton(this, _("Auto"), m_theme, /*toggle=*/true);
     row->Add(autobtn, 0, wxALIGN_CENTER_VERTICAL);
   }
   box->Add(row, 0, wxEXPAND);
@@ -432,16 +430,16 @@ void ControlsPanel::AddEnum(wxSizer* outer, const ControlDef& def,
 
   if (as_buttons) {
     auto* row = new wxBoxSizer(wxHORIZONTAL);
-    std::vector<std::pair<int, wxToggleButton*>> buttons;
+    std::vector<std::pair<int, ThemedButton*>> buttons;
     for (int v : values) {
       auto dit = def.descriptions.find(v);
       wxString label = dit != def.descriptions.end()
                            ? wxString::FromUTF8(dit->second.c_str())
                            : wxString::Format("%d", v);
-      auto* b = new wxToggleButton(this, wxID_ANY, label);
+      auto* b = new ThemedButton(this, label, m_theme, /*toggle=*/false);
       row->Add(b, 1, wxALL, 2);
       buttons.emplace_back(v, b);
-      b->Bind(wxEVT_TOGGLEBUTTON, [this, id, v](wxCommandEvent&) {
+      b->Bind(wxEVT_BUTTON, [this, id, v](wxCommandEvent&) {
         Set(id, BodyValue(v));
       });
     }
@@ -453,21 +451,19 @@ void ControlsPanel::AddEnum(wxSizer* outer, const ControlDef& def,
                             static_cast<int>(val.value) == pb.first);
     });
   } else {
-    auto* choice = new wxChoice(this, wxID_ANY);
+    auto* choice = new ThemedChoice(this, m_theme);
     for (int v : values) {
       auto dit = def.descriptions.find(v);
       wxString label = dit != def.descriptions.end()
                            ? wxString::FromUTF8(dit->second.c_str())
                            : wxString::Format("%d", v);
-      choice->Append(label, reinterpret_cast<void*>(static_cast<intptr_t>(v)));
+      choice->Append(label, v);
     }
     outer->Add(choice, 0, wxEXPAND | wxALL, 4);
     choice->Bind(wxEVT_CHOICE, [this, id, choice](wxCommandEvent&) {
       int sel = choice->GetSelection();
       if (sel == wxNOT_FOUND) return;
-      int v = static_cast<int>(reinterpret_cast<intptr_t>(
-          choice->GetClientData(sel)));
-      Set(id, BodyValue(v));
+      Set(id, BodyValue(choice->GetItemData(sel)));
     });
     m_updaters.push_back([this, id, choice, values]() {
       ControlValue val = m_client->Controls()->Value(id);
@@ -484,7 +480,7 @@ void ControlsPanel::AddEnum(wxSizer* outer, const ControlDef& def,
 void ControlsPanel::AddRange(wxSizer* outer, const ControlDef& def,
                              const std::vector<int>& supported) {
   outer->Add(new wxStaticText(this, wxID_ANY, _("Range")), 0, wxLEFT | wxTOP, 4);
-  auto* choice = new wxChoice(this, wxID_ANY);
+  auto* choice = new ThemedChoice(this, m_theme);
 
   // Use the range control's own validValues (the settable ranges, with nice
   // "1 nm"/"500 m" descriptions), not capabilities.supportedRanges which
@@ -521,7 +517,8 @@ void ControlsPanel::AddRange(wxSizer* outer, const ControlDef& def,
 }
 
 void ControlsPanel::AddButton(wxSizer* outer, const ControlDef& def) {
-  auto* b = new wxButton(this, wxID_ANY, wxString::FromUTF8(def.name.c_str()));
+  auto* b = new ThemedButton(this, wxString::FromUTF8(def.name.c_str()),
+                             m_theme, /*toggle=*/false);
   outer->Add(b, 0, wxEXPAND | wxALL, 4);
   const std::string id = def.id;
   b->Bind(wxEVT_BUTTON, [this, id](wxCommandEvent&) { Set(id, "{}"); });

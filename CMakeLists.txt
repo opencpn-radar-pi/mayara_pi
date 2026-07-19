@@ -135,6 +135,7 @@ set(SRCS
     src/RadarDisplayPanel.cpp
     src/ControlsPanel.cpp
     src/RadarControls.cpp
+    src/ThemedControls.cpp
 )
 
 set(HDRS

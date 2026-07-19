@@ -7,6 +7,7 @@ src/MayaraDiscovery.cpp
 src/RadarDisplayPanel.cpp
 src/ControlsPanel.cpp
 src/RadarControls.cpp
+src/ThemedControls.cpp
 include/mayara_pi.h
 include/PpiWindow.h
 include/MayaraClient.h
