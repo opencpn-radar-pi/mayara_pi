@@ -6,7 +6,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <functional>
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 
@@ -98,16 +100,18 @@ void ControlsPanel::OnTimer(wxTimerEvent&) {
   if (!m_client) return;
   RadarControls* controls = m_client->Controls();
   if (!controls->HasSchema()) return;
-  const uint64_t gen = controls->Generation();
-  if (!m_built) {
-    Rebuild();
+  const uint64_t sgen = controls->SchemaGeneration();
+  if (!m_built || sgen != m_schema_gen) {
+    Rebuild();  // schema changed (e.g. range labels after a units change)
     m_built = true;
-    m_last_gen = gen;
+    m_schema_gen = sgen;
+    m_last_gen = controls->Generation();
     return;
   }
+  const uint64_t gen = controls->Generation();
   if (gen != m_last_gen) {
     m_last_gen = gen;
-    ApplyValues();  // schema is stable; only values change
+    ApplyValues();
   }
 }
 
@@ -210,14 +214,37 @@ void ControlsPanel::AddNumber(wxSizer* outer, const ControlDef& def) {
   // The slider's range/meaning depends on the live auto state:
   //   - auto + hasAutoAdjustable -> adjusts autoValue over autoAdjust{Min,Max}
   //   - otherwise               -> the manual value over min..max
-  auto in_adjust = [def](const ControlValue& v) {
-    return def.hasAutoAdjustable && v.auto_;
-  };
+  // Track dragging explicitly (a toggle-button click doesn't move focus off the
+  // slider on macOS, so a HasFocus() guard would leave it stuck).
+  auto dragging = std::make_shared<bool>(false);
 
-  slider->Bind(wxEVT_SCROLL_THUMBRELEASE, [this, id, mn, mx, def, in_adjust,
-                                           slider](wxScrollEvent&) {
+  std::function<void(const ControlValue&)> refresh =
+      [slider, valtext, autobtn, def, mn, mx, units,
+       dragging](const ControlValue& v) {
+        const bool adj = def.hasAutoAdjustable && v.auto_;
+        const double lo = adj ? def.autoAdjustMin : mn;
+        const double hi = adj ? def.autoAdjustMax : mx;
+        const double cur = adj ? v.autoValue : v.value;
+        if (!*dragging && hi > lo)
+          slider->SetValue(Clampi(
+              static_cast<int>((cur - lo) / (hi - lo) * 1000.0 + 0.5), 0,
+              1000));
+        if (adj) {
+          const long a = std::lround(cur);
+          valtext->SetLabel(a == 0 ? wxString("A")
+                                   : wxString::Format("A%+ld", a));
+        } else {
+          valtext->SetLabel(FormatVal(v.value, units));
+        }
+        if (autobtn) {
+          autobtn->SetValue(v.auto_);
+          slider->Enable(!v.auto_ || def.hasAutoAdjustable);
+        }
+      };
+
+  auto send = [this, id, mn, mx, def, slider]() {
     ControlValue v = m_client->Controls()->Value(id);
-    const bool adj = in_adjust(v);
+    const bool adj = def.hasAutoAdjustable && v.auto_;
     const double lo = adj ? def.autoAdjustMin : mn;
     const double hi = adj ? def.autoAdjustMax : mx;
     const double val = lo + (hi - lo) * slider->GetValue() / 1000.0;
@@ -225,41 +252,34 @@ void ControlsPanel::AddNumber(wxSizer* outer, const ControlDef& def) {
       Set(id, "{\"auto\":true,\"autoValue\":" + Num(val) + "}");
     else
       Set(id, BodyValueAuto(val, def.hasAuto, false));  // manual -> auto off
+  };
+
+  slider->Bind(wxEVT_SCROLL_THUMBTRACK,
+               [dragging](wxScrollEvent&) { *dragging = true; });
+  slider->Bind(wxEVT_SCROLL_THUMBRELEASE, [dragging, send](wxScrollEvent&) {
+    *dragging = false;
+    send();
   });
+  slider->Bind(wxEVT_SCROLL_CHANGED, [dragging, send](wxScrollEvent&) {
+    *dragging = false;
+    send();
+  });
+
   if (autobtn) {
-    autobtn->Bind(wxEVT_TOGGLEBUTTON, [this, id, def, autobtn, slider](
-                                          wxCommandEvent&) {
+    autobtn->Bind(wxEVT_TOGGLEBUTTON, [this, id, refresh,
+                                       autobtn](wxCommandEvent&) {
       const bool a = autobtn->GetValue();
-      // Slider stays live in auto only for auto-adjustable controls.
-      slider->Enable(!a || def.hasAutoAdjustable);
       Set(id, BodyAuto(a));
+      // Reflect the new mode immediately; the stream confirms shortly after.
+      ControlValue v = m_client->Controls()->Value(id);
+      v.auto_ = a;
+      v.has_auto = true;
+      refresh(v);
     });
   }
 
-  m_updaters.push_back([this, id, slider, valtext, autobtn, mn, mx, units, def,
-                        in_adjust]() {
-    ControlValue v = m_client->Controls()->Value(id);
-    const bool adj = in_adjust(v);
-    const double lo = adj ? def.autoAdjustMin : mn;
-    const double hi = adj ? def.autoAdjustMax : mx;
-    const double cur = adj ? v.autoValue : v.value;
-    if (v.has_value || adj) {
-      if (!slider->HasFocus() && hi > lo)
-        slider->SetValue(Clampi(
-            static_cast<int>((cur - lo) / (hi - lo) * 1000.0 + 0.5), 0, 1000));
-      if (adj) {
-        const int a = static_cast<int>(cur + (cur < 0 ? -0.5 : 0.5));
-        valtext->SetLabel(a == 0 ? wxString("A")
-                                 : wxString::Format("A%+d", a));
-      } else {
-        valtext->SetLabel(FormatVal(v.value, units));
-      }
-    }
-    if (autobtn) {
-      autobtn->SetValue(v.auto_);
-      slider->Enable(!v.auto_ || def.hasAutoAdjustable);
-    }
-  });
+  m_updaters.push_back(
+      [this, id, refresh]() { refresh(m_client->Controls()->Value(id)); });
 }
 
 void ControlsPanel::AddEnum(wxSizer* outer, const ControlDef& def,

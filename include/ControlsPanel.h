@@ -46,6 +46,7 @@ class ControlsPanel : public wxScrolledWindow {
   MayaraClient* m_client;  // not owned
   wxTimer m_timer;
   uint64_t m_last_gen = ~0ull;
+  uint64_t m_schema_gen = ~0ull;
   bool m_built = false;
 
   // Value updaters: read the model and refresh the corresponding widgets.

@@ -41,13 +41,15 @@ struct ControlValue {
 class RadarControls {
  public:
   void SetSchema(std::vector<ControlDef> defs, std::vector<int> ranges);
+  void UpdateDef(const ControlDef& def);  // replace/insert one control's schema
   void SetValue(const std::string& id, const ControlValue& v);
 
   bool HasSchema() const;
   std::vector<ControlDef> Schema() const;      // in received order
   std::vector<int> SupportedRanges() const;
   ControlValue Value(const std::string& id) const;  // default if unknown
-  uint64_t Generation() const;  // bumps on any schema/value change
+  uint64_t Generation() const;        // bumps on any value change
+  uint64_t SchemaGeneration() const;  // bumps when the schema changes
 
  private:
   mutable std::mutex m_;
@@ -55,6 +57,7 @@ class RadarControls {
   std::vector<int> ranges_;
   std::map<std::string, ControlValue> values_;
   uint64_t generation_ = 0;
+  uint64_t schema_generation_ = 0;
   bool has_schema_ = false;
 };
 

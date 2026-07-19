@@ -56,6 +56,48 @@ std::string WsBase(const std::string& base) {
   return base;
 }
 
+ControlDef ParseControlDef(const std::string& id, const json& c) {
+  ControlDef d;
+  d.id = id;
+  d.numeric_id = c.value("id", 0);
+  d.name = c.value("name", id);
+  d.description = c.value("description", std::string());
+  d.category = c.value("category", std::string());
+  d.dataType = c.value("dataType", std::string());
+  d.units = c.value("units", std::string());
+  d.isReadOnly = c.value("isReadOnly", false);
+  d.hasEnabled = c.value("hasEnabled", false);
+  d.hasAuto = c.value("hasAuto", false) || c.contains("automatic");
+  d.hasAutoAdjustable = c.value("hasAutoAdjustable", false);
+  d.autoAdjustMin = c.value("autoAdjustMinValue", 0.0);
+  d.autoAdjustMax = c.value("autoAdjustMaxValue", 0.0);
+  if (c.contains("minValue")) {
+    d.has_min = true;
+    d.minValue = c["minValue"].get<double>();
+  }
+  if (c.contains("maxValue")) {
+    d.has_max = true;
+    d.maxValue = c["maxValue"].get<double>();
+  }
+  if (c.contains("stepValue")) {
+    d.has_step = true;
+    d.stepValue = c["stepValue"].get<double>();
+  }
+  d.maxDistance = c.value("maxDistance", 0.0);
+  if (c.contains("descriptions") && c["descriptions"].is_object()) {
+    for (auto dit = c["descriptions"].begin(); dit != c["descriptions"].end();
+         ++dit) {
+      try {
+        d.descriptions[std::stoi(dit.key())] = dit.value().get<std::string>();
+      } catch (...) {
+      }
+    }
+  }
+  if (c.contains("validValues") && c["validValues"].is_array())
+    for (const auto& v : c["validValues"]) d.validValues.push_back(v.get<int>());
+  return d;
+}
+
 // Build the spoke WebSocket URL from an http(s) base + radar id (spec fallback
 // when spokeDataUrl is absent).
 std::string WsUrl(const std::string& base, const std::string& radar_id) {
@@ -230,6 +272,16 @@ void MayaraClient::ConnectControlStream() {
       auto j = json::parse(msg->str);
       if (!j.contains("updates")) return;
       for (const auto& upd : j["updates"]) {
+        // meta: schema (re)definitions, e.g. range labels change with units.
+        if (upd.contains("meta")) {
+          for (const auto& mv : upd["meta"]) {
+            const std::string path = mv.value("path", std::string());
+            if (path.rfind(prefix, 0) != 0) continue;
+            const std::string ctrl = path.substr(prefix.size());
+            if (mv.contains("value") && mv["value"].is_object())
+              m_controls.UpdateDef(ParseControlDef(ctrl, mv["value"]));
+          }
+        }
         if (!upd.contains("values")) continue;
         for (const auto& v : upd["values"]) {
           const std::string path = v.value("path", std::string());
@@ -273,52 +325,9 @@ bool MayaraClient::FetchCapabilities(const std::string& radar_id) {
 
     // Control schema (self-describing) + supported ranges, for the UI.
     std::vector<ControlDef> defs;
-    if (j.contains("controls") && j["controls"].is_object()) {
-      for (auto it = j["controls"].begin(); it != j["controls"].end(); ++it) {
-        const auto& c = it.value();
-        ControlDef d;
-        d.id = it.key();
-        d.numeric_id = c.value("id", 0);
-        d.name = c.value("name", d.id);
-        d.description = c.value("description", std::string());
-        d.category = c.value("category", std::string());
-        d.dataType = c.value("dataType", std::string());
-        d.units = c.value("units", std::string());
-        d.isReadOnly = c.value("isReadOnly", false);
-        d.hasEnabled = c.value("hasEnabled", false);
-        d.hasAuto = c.value("hasAuto", false) || c.contains("automatic");
-        d.hasAutoAdjustable = c.value("hasAutoAdjustable", false);
-        d.autoAdjustMin = c.value("autoAdjustMinValue", 0.0);
-        d.autoAdjustMax = c.value("autoAdjustMaxValue", 0.0);
-        if (c.contains("minValue")) {
-          d.has_min = true;
-          d.minValue = c["minValue"].get<double>();
-        }
-        if (c.contains("maxValue")) {
-          d.has_max = true;
-          d.maxValue = c["maxValue"].get<double>();
-        }
-        if (c.contains("stepValue")) {
-          d.has_step = true;
-          d.stepValue = c["stepValue"].get<double>();
-        }
-        d.maxDistance = c.value("maxDistance", 0.0);
-        if (c.contains("descriptions") && c["descriptions"].is_object()) {
-          for (auto dit = c["descriptions"].begin();
-               dit != c["descriptions"].end(); ++dit) {
-            try {
-              d.descriptions[std::stoi(dit.key())] =
-                  dit.value().get<std::string>();
-            } catch (...) {
-            }
-          }
-        }
-        if (c.contains("validValues") && c["validValues"].is_array())
-          for (const auto& v : c["validValues"])
-            d.validValues.push_back(v.get<int>());
-        defs.push_back(std::move(d));
-      }
-    }
+    if (j.contains("controls") && j["controls"].is_object())
+      for (auto it = j["controls"].begin(); it != j["controls"].end(); ++it)
+        defs.push_back(ParseControlDef(it.key(), it.value()));
     std::vector<int> ranges;
     if (j.contains("supportedRanges") && j["supportedRanges"].is_array())
       for (const auto& r : j["supportedRanges"])

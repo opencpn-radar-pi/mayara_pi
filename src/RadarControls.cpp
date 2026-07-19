@@ -10,6 +10,19 @@ void RadarControls::SetSchema(std::vector<ControlDef> defs,
   ranges_ = std::move(ranges);
   has_schema_ = true;
   ++generation_;
+  ++schema_generation_;
+}
+
+void RadarControls::UpdateDef(const ControlDef& def) {
+  std::lock_guard<std::mutex> lock(m_);
+  for (auto& d : defs_)
+    if (d.id == def.id) {
+      d = def;
+      ++schema_generation_;
+      return;
+    }
+  defs_.push_back(def);
+  ++schema_generation_;
 }
 
 void RadarControls::SetValue(const std::string& id, const ControlValue& v) {
@@ -42,4 +55,9 @@ ControlValue RadarControls::Value(const std::string& id) const {
 uint64_t RadarControls::Generation() const {
   std::lock_guard<std::mutex> lock(m_);
   return generation_;
+}
+
+uint64_t RadarControls::SchemaGeneration() const {
+  std::lock_guard<std::mutex> lock(m_);
+  return schema_generation_;
 }
