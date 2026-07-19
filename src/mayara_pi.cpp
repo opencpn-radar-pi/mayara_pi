@@ -3,6 +3,7 @@
  *****************************************************************************/
 #include "mayara_pi.h"
 
+#include <wx/bmpbndl.h>
 #include <wx/dcmemory.h>
 
 #include "PpiWindow.h"
@@ -15,25 +16,31 @@ extern "C" DECL_EXP opencpn_plugin* create_pi(void* ppimgr) {
 
 extern "C" DECL_EXP void destroy_pi(opencpn_plugin* p) { delete p; }
 
-// Draw a simple radar-sweep glyph so we need no shipped image assets yet.
-static wxBitmap MakeGlyph(int size) {
-  wxBitmap bmp(size, size, 32);
-  wxMemoryDC dc(bmp);
-  dc.SetBackground(*wxBLACK_BRUSH);
-  dc.Clear();
-  const int c = size / 2;
-  dc.SetBrush(*wxTRANSPARENT_BRUSH);
-  dc.SetPen(wxPen(wxColour(0, 220, 0), 2));
-  dc.DrawCircle(c, c, c - 2);
-  dc.DrawCircle(c, c, (c - 2) / 2);
-  dc.DrawLine(c, c, c, 2);          // sweep line to top (bow)
-  dc.SelectObject(wxNullBitmap);
-  return bmp;
+// Radar / PPI glyph with a transparent background and light strokes, matching
+// the OpenCPN toolbar. Embedded and rasterized in-process so the plugin needs
+// no shipped image files (and can be updated by replacing the .dylib alone).
+static const char kRadarSvg[] =
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' "
+    "stroke='#e8e8e8' stroke-width='1.6' stroke-linecap='round' "
+    "stroke-linejoin='round'>"
+    "<circle cx='12' cy='12' r='9.5'/>"
+    "<circle cx='12' cy='12' r='6'/>"
+    "<circle cx='12' cy='12' r='2.3'/>"
+    "<path d='M12 12 L12 2.5 A9.5 9.5 0 0 1 20.4 7.2 Z' fill='#e8e8e8' "
+    "fill-opacity='0.25' stroke='none'/>"
+    "<line x1='12' y1='12' x2='12' y2='2.5'/>"
+    "<circle cx='16' cy='8' r='1.1' fill='#e8e8e8' stroke='none'/>"
+    "</svg>";
+
+static wxBitmap RadarIcon(int px) {
+  wxBitmapBundle bb = wxBitmapBundle::FromSVG(kRadarSvg, wxSize(px, px));
+  if (bb.IsOk()) return bb.GetBitmap(wxSize(px, px));
+  return wxBitmap(px, px, 32);  // transparent fallback
 }
 
 mayara_pi::mayara_pi(void* ppimgr) : opencpn_plugin_118(ppimgr) {
-  m_panel_bitmap = MakeGlyph(32);
-  m_tool_bitmap = MakeGlyph(24);
+  m_panel_bitmap = RadarIcon(48);
+  m_tool_bitmap = RadarIcon(32);
 }
 
 mayara_pi::~mayara_pi() = default;
