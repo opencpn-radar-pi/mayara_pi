@@ -1,0 +1,86 @@
+# mayara_pi CI. Replaces the FE2 template's CircleCI/AppVeyor/Travis with
+# GitHub Actions. Each job just runs the portable FE2 ci/ build scripts on a
+# GitHub-hosted runner, then the (GitHub-Actions-aware) cloudsmith-upload.sh.
+#
+# Status: macOS is the validated target. windows/linux jobs are wired but need
+# a first CI run to shake out; expand to arm64/armhf/flatpak/android later.
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  # Set these as repository secrets to enable Cloudsmith publishing.
+  CLOUDSMITH_API_KEY: ${{ secrets.CLOUDSMITH_API_KEY }}
+  CLOUDSMITH_STABLE_REPO: ${{ secrets.CLOUDSMITH_STABLE_REPO }}
+  CLOUDSMITH_UNSTABLE_REPO: ${{ secrets.CLOUDSMITH_UNSTABLE_REPO }}
+  CLOUDSMITH_BETA_REPO: ${{ secrets.CLOUDSMITH_BETA_REPO }}
+
+jobs:
+  macos-universal:
+    runs-on: macos-14
+    env:
+      OCPN_TARGET: macos
+      WX_VER: '32'
+      CMAKE_BUILD_PARALLEL_LEVEL: '3'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - name: Build (arm64 + x86_64 universal)
+        run: bash ci/circleci-build-macos-universal.sh
+      - name: Publish to Cloudsmith
+        if: env.CLOUDSMITH_API_KEY != ''
+        run: bash ci/cloudsmith-upload.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mayara_pi-macos-universal
+          path: |
+            build/*.tar.gz
+            build/*.pkg
+          if-no-files-found: warn
+
+  # --- Expansion targets: wired, not yet validated on a runner --------------
+  windows:
+    runs-on: windows-latest
+    if: ${{ false }} # flip to true to enable once validated
+    env:
+      OCPN_TARGET: MSVC
+      WX_VER: '32'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - name: Build
+        shell: cmd
+        run: ci\circleci-build-msvc.bat
+      - name: Publish to Cloudsmith
+        if: env.CLOUDSMITH_API_KEY != ''
+        shell: bash
+        run: bash ci/cloudsmith-upload.sh
+
+  linux-x86_64:
+    runs-on: ubuntu-latest
+    if: ${{ false }} # flip to true to enable once validated
+    container: debian:bookworm
+    env:
+      OCPN_TARGET: bookworm
+      BUILD_ENV: debian
+      WX_VER: '32'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - name: Build
+        run: bash ci/circleci-build-debian.sh
+      - name: Publish to Cloudsmith
+        if: env.CLOUDSMITH_API_KEY != ''
+        run: bash ci/cloudsmith-upload.sh
