@@ -63,6 +63,7 @@ class ControlsPanel : public wxScrolledWindow {
   wxTimer m_timer;
   uint64_t m_last_gen = ~0ull;
   uint64_t m_schema_gen = ~0ull;
+  int m_active_radar = -1;
   bool m_built = false;
 
   // Value updaters: read the model and refresh the corresponding widgets.

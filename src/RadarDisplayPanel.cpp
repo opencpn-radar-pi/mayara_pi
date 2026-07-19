@@ -76,7 +76,7 @@ void RadarDisplayPanel::OnTimer(wxTimerEvent&) { Refresh(false); }
 
 void RadarDisplayPanel::ApplyTheme(const MayaraTheme& theme) {
   m_theme = theme;
-  if (m_client) m_client->State()->SetIntensity(theme.radar_intensity);
+  if (m_client) m_client->SetAllIntensity(theme.radar_intensity);
   Refresh();
 }
 

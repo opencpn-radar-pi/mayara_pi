@@ -171,11 +171,13 @@ void ControlsPanel::ThemeChildren() {
 void ControlsPanel::OnTimer(wxTimerEvent&) {
   if (!m_client) return;
   RadarControls* controls = m_client->Controls();
-  if (!controls->HasSchema()) return;
+  if (!controls || !controls->HasSchema()) return;
+  const int active = m_client->ActiveIndex();
   const uint64_t sgen = controls->SchemaGeneration();
-  if (!m_built || sgen != m_schema_gen) {
-    Rebuild();  // schema changed (e.g. range labels after a units change)
+  if (!m_built || active != m_active_radar || sgen != m_schema_gen) {
+    Rebuild();  // schema changed, or the active radar changed
     m_built = true;
+    m_active_radar = active;
     m_schema_gen = sgen;
     m_last_gen = controls->Generation();
     return;
@@ -196,6 +198,12 @@ void ControlsPanel::Rebuild() {
   m_updaters.clear();
 
   RadarControls* controls = m_client->Controls();
+  if (!controls) {
+    auto* sizer = new wxBoxSizer(wxVERTICAL);
+    sizer->Add(MakeCloseRow(), 0, wxEXPAND);
+    SetSizer(sizer);
+    return;
+  }
   std::vector<ControlDef> defs = controls->Schema();
   std::vector<int> ranges = controls->SupportedRanges();
 
@@ -204,6 +212,20 @@ void ControlsPanel::Rebuild() {
 
   auto* root = new wxBoxSizer(wxVERTICAL);
   root->Add(MakeCloseRow(), 0, wxEXPAND);
+
+  // Radar selector (only when more than one radar is present).
+  if (m_client->RadarCount() > 1) {
+    root->Add(new wxStaticText(this, wxID_ANY, _("Radar")), 0, wxLEFT | wxTOP,
+              4);
+    auto* sel = new ThemedChoice(this, m_theme);
+    for (const auto& n : m_client->RadarNames())
+      sel->Append(wxString::FromUTF8(n.c_str()));
+    sel->SetSelection(m_client->ActiveIndex());
+    sel->Bind(wxEVT_CHOICE, [this, sel](wxCommandEvent&) {
+      m_client->SetActive(sel->GetSelection());
+    });
+    root->Add(sel, 0, wxEXPAND | wxALL, 4);
+  }
 
   // --- Quick controls: prominent, fixed placement ---
   if (by_id.count("power")) AddEnum(root, *by_id["power"], /*buttons=*/true);

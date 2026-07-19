@@ -111,8 +111,7 @@ int mayara_pi::Init() {
   // Capabilities. The overlay callback is declared now but returns false until
   // Phase 1 wires up the spoke renderer.
   return WANTS_OPENGL_OVERLAY_CALLBACK | WANTS_OVERLAY_CALLBACK |
-         WANTS_TOOLBAR_CALLBACK | INSTALLS_TOOLBAR_TOOL |
-         WANTS_CURSOR_LATLON | USES_AUI_MANAGER;
+         WANTS_TOOLBAR_CALLBACK | INSTALLS_TOOLBAR_TOOL | WANTS_CURSOR_LATLON;
 }
 
 bool mayara_pi::DeInit() {
@@ -264,6 +263,6 @@ void mayara_pi::SetColorScheme(PI_ColorScheme cs) {
   m_color_scheme = cs;
   const MayaraTheme t = ThemeFor(cs);
   m_radar_intensity = t.radar_intensity;
-  if (m_client) m_client->State()->SetIntensity(t.radar_intensity);
+  if (m_client) m_client->SetAllIntensity(t.radar_intensity);
   if (m_ppi_window) m_ppi_window->ApplyTheme(t);
 }
