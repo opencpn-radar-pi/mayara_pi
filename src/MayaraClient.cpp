@@ -23,6 +23,32 @@ void StripTrailingSlash(std::string& s) {
   while (!s.empty() && s.back() == '/') s.pop_back();
 }
 
+ControlValue ParseControlValue(const json& v) {
+  ControlValue cv;
+  if (v.contains("value") && !v["value"].is_null()) {
+    cv.has_value = true;
+    if (v["value"].is_string())
+      cv.str_value = v["value"].get<std::string>();
+    else
+      cv.value = v["value"].get<double>();
+  }
+  if (v.contains("auto")) {
+    cv.has_auto = true;
+    cv.auto_ = v["auto"].get<bool>();
+  }
+  if (v.contains("enabled")) {
+    cv.has_enabled = true;
+    cv.enabled = v["enabled"].get<bool>();
+  }
+  cv.allowed = v.value("allowed", true);
+  cv.autoValue = v.value("autoValue", 0.0);
+  cv.endValue = v.value("endValue", 0.0);
+  cv.startDistance = v.value("startDistance", 0.0);
+  cv.endDistance = v.value("endDistance", 0.0);
+  cv.error = v.value("error", std::string());
+  return cv;
+}
+
 // Build the spoke WebSocket URL from an http(s) base + radar id (spec fallback
 // when spokeDataUrl is absent).
 std::string WsUrl(const std::string& base, const std::string& radar_id) {
@@ -202,11 +228,99 @@ bool MayaraClient::FetchCapabilities(const std::string& radar_id) {
       }
     }
     m_state.Configure(spokes, maxlen, std::move(legend));
+
+    // Control schema (self-describing) + supported ranges, for the UI.
+    std::vector<ControlDef> defs;
+    if (j.contains("controls") && j["controls"].is_object()) {
+      for (auto it = j["controls"].begin(); it != j["controls"].end(); ++it) {
+        const auto& c = it.value();
+        ControlDef d;
+        d.id = it.key();
+        d.numeric_id = c.value("id", 0);
+        d.name = c.value("name", d.id);
+        d.description = c.value("description", std::string());
+        d.category = c.value("category", std::string());
+        d.dataType = c.value("dataType", std::string());
+        d.units = c.value("units", std::string());
+        d.isReadOnly = c.value("isReadOnly", false);
+        d.hasEnabled = c.value("hasEnabled", false);
+        d.hasAuto = c.value("hasAuto", false) || c.contains("automatic");
+        if (c.contains("minValue")) {
+          d.has_min = true;
+          d.minValue = c["minValue"].get<double>();
+        }
+        if (c.contains("maxValue")) {
+          d.has_max = true;
+          d.maxValue = c["maxValue"].get<double>();
+        }
+        if (c.contains("stepValue")) {
+          d.has_step = true;
+          d.stepValue = c["stepValue"].get<double>();
+        }
+        d.maxDistance = c.value("maxDistance", 0.0);
+        if (c.contains("descriptions") && c["descriptions"].is_object()) {
+          for (auto dit = c["descriptions"].begin();
+               dit != c["descriptions"].end(); ++dit) {
+            try {
+              d.descriptions[std::stoi(dit.key())] =
+                  dit.value().get<std::string>();
+            } catch (...) {
+            }
+          }
+        }
+        if (c.contains("validValues") && c["validValues"].is_array())
+          for (const auto& v : c["validValues"])
+            d.validValues.push_back(v.get<int>());
+        defs.push_back(std::move(d));
+      }
+    }
+    std::vector<int> ranges;
+    if (j.contains("supportedRanges") && j["supportedRanges"].is_array())
+      for (const auto& r : j["supportedRanges"])
+        ranges.push_back(r.get<int>());
+    m_controls.SetSchema(std::move(defs), std::move(ranges));
+
+    FetchControlValues(radar_id);
     return true;
   } catch (const std::exception& e) {
     SetStatus(std::string("capabilities JSON error: ") + e.what());
     return false;
   }
+}
+
+void MayaraClient::FetchControlValues(const std::string& radar_id) {
+  ix::HttpClient http(/*async=*/false);
+  auto args = http.createRequest();
+  args->connectTimeout = 5;
+  args->transferTimeout = 5;
+  const std::string url = m_base_url +
+                          "/signalk/v2/api/vessels/self/radars/" + radar_id +
+                          "/controls";
+  auto resp = http.get(url, args);
+  if (!resp || resp->statusCode != 200) return;
+  try {
+    auto j = json::parse(resp->body);
+    if (j.is_object())
+      for (auto it = j.begin(); it != j.end(); ++it)
+        m_controls.SetValue(it.key(), ParseControlValue(it.value()));
+  } catch (const std::exception&) {
+  }
+}
+
+void MayaraClient::SetControl(const std::string& control_id,
+                              const std::string& json_body) {
+  const std::string base = m_base_url;
+  const std::string radar = m_radar_id;
+  std::thread([base, radar, control_id, json_body] {
+    ix::HttpClient http(/*async=*/false);
+    auto args = http.createRequest();
+    args->connectTimeout = 5;
+    args->transferTimeout = 5;
+    args->extraHeaders["Content-Type"] = "application/json";
+    const std::string url = base + "/signalk/v2/api/vessels/self/radars/" +
+                            radar + "/controls/" + control_id;
+    http.put(url, json_body, args);
+  }).detach();
 }
 
 bool MayaraClient::ConnectSpokes(const std::string& spoke_url) {

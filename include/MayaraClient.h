@@ -13,6 +13,7 @@
 #include <string>
 #include <thread>
 
+#include "RadarControls.h"
 #include "RadarState.h"
 
 namespace ix {
@@ -31,11 +32,17 @@ class MayaraClient {
 
   std::string StatusLine();
   RadarState* State() { return &m_state; }
+  RadarControls* Controls() { return &m_controls; }
+
+  // Set a control value. `json_body` is the BareControlValue JSON (e.g.
+  // {"value":75} or {"auto":true}). Sent via REST PUT on a background thread.
+  void SetControl(const std::string& control_id, const std::string& json_body);
 
  private:
   void Run();                          // background: discover + connect, retry
   bool DiscoverAndConnect();           // one attempt; true once streaming
   bool FetchCapabilities(const std::string& radar_id);
+  void FetchControlValues(const std::string& radar_id);
   bool ConnectSpokes(const std::string& spoke_url);  // true if it opens
   void SetStatus(const std::string& s);
 
@@ -51,6 +58,7 @@ class MayaraClient {
   std::atomic<bool> m_ws_error{false};   // spoke WS failed to connect
 
   RadarState m_state;
+  RadarControls m_controls;
   std::unique_ptr<ix::WebSocket> m_spoke_ws;
   std::string m_radar_id;
 };

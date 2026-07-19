@@ -132,6 +132,9 @@ set(SRCS
     src/RadarState.cpp
     src/RadarMessage.cpp
     src/MayaraDiscovery.cpp
+    src/RadarDisplayPanel.cpp
+    src/ControlsPanel.cpp
+    src/RadarControls.cpp
 )
 
 set(HDRS
@@ -141,6 +144,8 @@ set(HDRS
     include/RadarState.h
     include/RadarMessage.h
     include/MayaraDiscovery.h
+    include/RadarDisplayPanel.h
+    include/ControlsPanel.h
 )
 
 if(PLUGIN_USE_SVG)
