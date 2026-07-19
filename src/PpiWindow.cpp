@@ -5,11 +5,33 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
+#include <vector>
 
 #include <wx/display.h>
 
 #include "ControlsPanel.h"
+#include "MayaraClient.h"
 #include "RadarDisplayPanel.h"
+
+namespace {
+// "Mayara radar Halo A" / "Mayara radars Halo A + Halo B".
+wxString WindowTitle(MayaraClient* client, const std::vector<int>& idx) {
+  std::vector<std::string> names = client ? client->RadarNames() : std::vector<std::string>();
+  wxString joined;
+  for (size_t i = 0; i < idx.size(); ++i) {
+    const int ri = idx[i];
+    wxString nm = (ri >= 0 && ri < static_cast<int>(names.size()) &&
+                   !names[ri].empty())
+                      ? wxString::FromUTF8(names[ri].c_str())
+                      : wxString::Format("Radar %d", ri + 1);
+    if (i) joined += " + ";
+    joined += nm;
+  }
+  if (idx.size() == 1) return "Mayara radar " + joined;
+  return "Mayara radars " + joined;
+}
+}  // namespace
 
 wxBEGIN_EVENT_TABLE(MayaraPpiWindow, wxDialog)
     EVT_CLOSE(MayaraPpiWindow::OnClose)
@@ -21,6 +43,7 @@ MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client,
                wxSize(880, 560), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER) {
   SetMinSize(wxSize(480, 320));
   if (radar_indices.empty()) radar_indices.push_back(0);
+  SetTitle(WindowTitle(client, radar_indices));
 
   // The radar pictures, laid out in a near-square grid.
   m_grid = new wxPanel(this, wxID_ANY);

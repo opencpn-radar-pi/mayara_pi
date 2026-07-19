@@ -281,15 +281,23 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
     dc.DrawLine(c.x, c.y, e.x, e.y);
   }
 
-  // AIS targets: a bearing/range-placed triangle pointing along its COG.
+  // AIS targets: a bearing/range-placed triangle pointing along its COG, with
+  // a small name + course/speed label.
   if (m_layers.ais && has_heading && range_m > 0) {
     ArrayOfPlugIn_AIS_Targets* arr = GetAISTargetArray();
     if (arr) {
+      wxFont label_font = dc.GetFont();
+      label_font.SetPointSize(std::max(7, label_font.GetPointSize() - 2));
+      dc.SetFont(label_font);
+      const wxColour green(0, 220, 120), red(255, 80, 80);
       for (size_t i = 0; i < arr->GetCount(); ++i) {
         PlugIn_AIS_Target* t = arr->Item(i);
         if (!t) continue;
         const double rng_m = t->Range_NM * 1852.0;
-        if (rng_m <= 0 || rng_m > range_m) continue;  // outside the ring
+        if (rng_m <= 0 || rng_m > range_m) {
+          delete t;
+          continue;  // outside the ring
+        }
         const double r = radius * rng_m / range_m;
         const wxPoint p = PolarPoint(c, r, t->Brg, heading);
         // Small triangle oriented to COG (fallback: bearing).
@@ -302,12 +310,27 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
                          p.y + static_cast<int>(std::lround(dx * sa + dy * ca)));
         };
         // Triangle: nose forward (screen up = -y before rotation).
-        wxPoint tri[3] = {rot(0, -7), rot(-4, 5), rot(4, 5)};
+        wxPoint tri[3] = {rot(0, -8), rot(-5, 6), rot(5, 6)};
         const bool danger = t->bCPA_Valid && t->CPA < 0.5 && t->TCPA > 0;
-        dc.SetBrush(wxBrush(danger ? wxColour(255, 80, 80)
-                                   : wxColour(0, 220, 120)));
+        dc.SetBrush(wxBrush(danger ? red : green));
         dc.SetPen(wxPen(m_theme.text, 1));
         dc.DrawPolygon(3, tri);
+
+        // Label: ship name (or MMSI), plus COG/SOG when moving.
+        wxString name = wxString::FromUTF8(t->ShipName).Trim().Trim(false);
+        if (name.IsEmpty() && t->MMSI) name = wxString::Format("%d", t->MMSI);
+        wxString line2;
+        if (t->SOG >= 0 && t->SOG < 102.2)
+          line2 = wxString::Format("%03.0f° %.1fkn",
+                                   (t->COG >= 0 && t->COG < 360) ? t->COG : 0.0,
+                                   t->SOG);
+        dc.SetTextForeground(danger ? red : green);
+        int ty = p.y + 8;
+        if (!name.IsEmpty()) {
+          dc.DrawText(name, p.x + 8, ty);
+          ty += label_font.GetPixelSize().y + 1;
+        }
+        if (!line2.IsEmpty()) dc.DrawText(line2, p.x + 8, ty);
         delete t;  // core allocates fresh copies per call
       }
       delete arr;
