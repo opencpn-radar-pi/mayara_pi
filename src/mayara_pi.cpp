@@ -162,6 +162,11 @@ void mayara_pi::TogglePpiWindow() {
   if (!m_ppi_window) {
     m_ppi_window = new MayaraPpiWindow(m_parent_window, m_client.get());
     m_ppi_window->ApplyTheme(ThemeFor(m_color_scheme));
+    m_ppi_window->SetOverlayControl([this]() { return m_overlay_enabled; },
+                                    [this](bool on) {
+                                      m_overlay_enabled = on;
+                                      GetOCPNCanvasWindow()->Refresh(false);
+                                    });
   }
   const bool show = !m_ppi_window->IsShown();
   m_ppi_window->Show(show);
@@ -171,6 +176,7 @@ void mayara_pi::TogglePpiWindow() {
 bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
                                            PlugIn_ViewPort* vp, int canvasIndex,
                                            int priority) {
+  if (!m_overlay_enabled) return false;
   RadarState* state = m_client ? m_client->State() : nullptr;
   const uint32_t range_m = state ? state->RangeMeters() : 0;
 

@@ -12,7 +12,9 @@
 #include <set>
 #include <string>
 
+#include <wx/checkbox.h>
 #include <wx/choice.h>
+#include <wx/dcclient.h>
 #include <wx/statline.h>
 #include <wx/tglbtn.h>
 
@@ -62,6 +64,56 @@ void ThemeWindow(wxWindow* w, const MayaraTheme& t) {
   for (wxWindow* c : w->GetChildren()) ThemeWindow(c, t);
 }
 
+// Owner-drawn collapsible section header: a themed bar with a disclosure
+// triangle and title; clicking fires a callback.
+class SectionHeader : public wxPanel {
+ public:
+  SectionHeader(wxWindow* parent, const wxString& title,
+                const MayaraTheme& theme)
+      : wxPanel(parent, wxID_ANY), m_title(title), m_theme(theme) {
+    SetMinSize(wxSize(-1, 24));
+    Bind(wxEVT_PAINT, &SectionHeader::OnPaint, this);
+    Bind(wxEVT_LEFT_DOWN,
+         [this](wxMouseEvent&) { if (m_onclick) m_onclick(); });
+  }
+  void SetCollapsed(bool c) { m_collapsed = c; Refresh(); }
+  void SetOnClick(std::function<void()> f) { m_onclick = std::move(f); }
+
+ private:
+  void OnPaint(wxPaintEvent&) {
+    wxPaintDC dc(this);
+    const wxSize sz = GetClientSize();
+    dc.SetBackground(wxBrush(m_theme.lozenge_bg));
+    dc.Clear();
+    const int cy = sz.y / 2, cx = 10;
+    dc.SetBrush(wxBrush(m_theme.text));
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    wxPoint tri[3];
+    if (m_collapsed) {
+      tri[0] = wxPoint(cx - 3, cy - 5);
+      tri[1] = wxPoint(cx - 3, cy + 5);
+      tri[2] = wxPoint(cx + 4, cy);
+    } else {
+      tri[0] = wxPoint(cx - 5, cy - 3);
+      tri[1] = wxPoint(cx + 5, cy - 3);
+      tri[2] = wxPoint(cx, cy + 4);
+    }
+    dc.DrawPolygon(3, tri);
+    wxFont f = GetFont();
+    f.MakeBold();
+    dc.SetFont(f);
+    dc.SetTextForeground(m_theme.text);
+    wxCoord tw, th;
+    dc.GetTextExtent(m_title, &tw, &th);
+    dc.DrawText(m_title, 22, (sz.y - th) / 2);
+  }
+
+  wxString m_title;
+  MayaraTheme m_theme;
+  bool m_collapsed = true;
+  std::function<void()> m_onclick;
+};
+
 }  // namespace
 
 wxBEGIN_EVENT_TABLE(ControlsPanel, wxScrolledWindow)
@@ -106,7 +158,10 @@ void ControlsPanel::Set(const std::string& id, const std::string& body) {
 
 void ControlsPanel::ApplyTheme(const MayaraTheme& theme) {
   m_theme = theme;
-  ThemeChildren();
+  if (m_built)
+    Rebuild();  // re-theme owner-drawn section headers too
+  else
+    ThemeChildren();
   Refresh();
 }
 
@@ -159,6 +214,10 @@ void ControlsPanel::Rebuild() {
     AddEnum(root, *by_id["rangeUnits"], /*buttons=*/true);
   root->Add(new wxStaticLine(this), 0, wxEXPAND | wxALL, 4);
 
+  // View section (plugin/window toggles), placed before Base.
+  AddCollapsibleSection(root, _("View"), "view",
+                        [this](wxSizer* c) { FillViewSection(c); });
+
   const std::set<std::string> quick = {"power", "range", "rangeUnits"};
   const char* categories[] = {"base",         "targets",      "trails",
                               "advanced",     "installation", "info"};
@@ -172,27 +231,10 @@ void ControlsPanel::Rebuild() {
               [](const ControlDef* a, const ControlDef* b) {
                 return a->numeric_id < b->numeric_id;
               });
-
-    auto* header = new wxStaticText(this, wxID_ANY, wxString(cat).Capitalize());
-    wxFont f = header->GetFont();
-    f.MakeBold();
-    header->SetFont(f);
-    root->Add(header, 0, wxTOP | wxLEFT, 8);
-
-    for (const ControlDef* d : group) {
-      if (d->isReadOnly)
-        AddReadonly(root, *d);
-      else if (d->dataType == "number")
-        AddNumber(root, *d);
-      else if (d->dataType == "enum")
-        AddEnum(root, *d, /*buttons=*/false);
-      else if (d->dataType == "button")
-        AddButton(root, *d);
-      else if (d->dataType == "string")
-        AddReadonly(root, *d);
-      else
-        AddPlaceholder(root, *d);  // sector/zone/rect: editors later
-    }
+    AddCollapsibleSection(
+        root, wxString(cat).Capitalize(), cat, [this, group](wxSizer* c) {
+          for (const ControlDef* d : group) AddControl(c, *d);
+        });
   }
 
   SetSizer(root);  // deletes the previous sizer
@@ -200,6 +242,81 @@ void ControlsPanel::Rebuild() {
   Layout();
   ThemeChildren();  // theme the freshly created widgets
   ApplyValues();
+}
+
+void ControlsPanel::AddCollapsibleSection(wxSizer* root, const wxString& title,
+                                          const std::string& key,
+                                          std::function<void(wxSizer*)> fill) {
+  const bool collapsed = m_collapsed.count(key) ? m_collapsed[key] : true;
+  m_collapsed[key] = collapsed;
+
+  auto* content = new wxBoxSizer(wxVERTICAL);
+  fill(content);
+
+  auto* header = new SectionHeader(this, title, m_theme);
+  header->SetCollapsed(collapsed);
+  root->Add(header, 0, wxEXPAND | wxTOP, 4);
+  root->Add(content, 0, wxEXPAND | wxLEFT, 8);
+
+  header->SetOnClick([this, root, content, header, key]() {
+    const bool c = !m_collapsed[key];
+    m_collapsed[key] = c;
+    header->SetCollapsed(c);
+    root->Show(content, !c, true);
+    Layout();
+    FitInside();
+  });
+  root->Show(content, !collapsed, true);
+}
+
+void ControlsPanel::AddControl(wxSizer* content, const ControlDef& d) {
+  if (d.isReadOnly)
+    AddReadonly(content, d);
+  else if (d.dataType == "number")
+    AddNumber(content, d);
+  else if (d.dataType == "enum")
+    AddEnum(content, d, /*buttons=*/false);
+  else if (d.dataType == "button")
+    AddButton(content, d);
+  else if (d.dataType == "string")
+    AddReadonly(content, d);
+  else
+    AddPlaceholder(content, d);  // sector/zone/rect: editors later
+}
+
+void ControlsPanel::FillViewSection(wxSizer* content) {
+  if (m_set_overlay) {
+    auto* cb = new wxCheckBox(this, wxID_ANY, _("Radar overlay on chart"));
+    content->Add(cb, 0, wxALL, 4);
+    cb->Bind(wxEVT_CHECKBOX, [this, cb](wxCommandEvent&) {
+      if (m_set_overlay) m_set_overlay(cb->GetValue());
+    });
+    m_updaters.push_back([this, cb]() {
+      if (m_get_overlay) cb->SetValue(m_get_overlay());
+    });
+  }
+  if (m_set_ppi) {
+    auto* cb = new wxCheckBox(this, wxID_ANY, _("Show PPI"));
+    content->Add(cb, 0, wxALL, 4);
+    cb->Bind(wxEVT_CHECKBOX, [this, cb](wxCommandEvent&) {
+      if (m_set_ppi) m_set_ppi(cb->GetValue());
+    });
+    m_updaters.push_back([this, cb]() {
+      if (m_get_ppi) cb->SetValue(m_get_ppi());
+      cb->Enable(m_get_overlay && m_get_overlay());  // hide PPI only w/ overlay
+    });
+  }
+}
+
+void ControlsPanel::SetViewControls(std::function<bool()> get_overlay,
+                                    std::function<void(bool)> set_overlay,
+                                    std::function<bool()> get_ppi,
+                                    std::function<void(bool)> set_ppi) {
+  m_get_overlay = std::move(get_overlay);
+  m_set_overlay = std::move(set_overlay);
+  m_get_ppi = std::move(get_ppi);
+  m_set_ppi = std::move(set_ppi);
+  if (m_built) Rebuild();  // add the View section now that we can drive it
 }
 
 void ControlsPanel::AddNumber(wxSizer* outer, const ControlDef& def) {

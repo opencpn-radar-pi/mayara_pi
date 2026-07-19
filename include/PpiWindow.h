@@ -4,6 +4,8 @@
 #ifndef MAYARA_PPI_WINDOW_H_
 #define MAYARA_PPI_WINDOW_H_
 
+#include <functional>
+
 #include <wx/wx.h>
 
 #include "MayaraTheme.h"
@@ -17,6 +19,10 @@ class MayaraPpiWindow : public wxDialog {
   MayaraPpiWindow(wxWindow* parent, MayaraClient* client);
 
   void ApplyTheme(const MayaraTheme& theme);
+
+  // Wire the plugin's overlay on/off state into the View section.
+  void SetOverlayControl(std::function<bool()> get,
+                         std::function<void(bool)> set);
 
  private:
   void OnClose(wxCloseEvent& event);

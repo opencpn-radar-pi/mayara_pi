@@ -43,6 +43,19 @@ void MayaraPpiWindow::ApplyTheme(const MayaraTheme& theme) {
   Refresh();
 }
 
+void MayaraPpiWindow::SetOverlayControl(std::function<bool()> get,
+                                        std::function<void(bool)> set) {
+  if (!m_controls) return;
+  m_controls->SetViewControls(
+      std::move(get), std::move(set),
+      [this]() { return m_radar && m_radar->IsShown(); },
+      [this](bool show) {
+        if (m_radar) m_radar->Show(show);
+        if (!show && m_controls) m_controls->Show(true);  // keep menu visible
+        Layout();
+      });
+}
+
 void MayaraPpiWindow::OnClose(wxCloseEvent& event) {
   // The plugin owns this window's lifetime; hide instead of destroying.
   Hide();
