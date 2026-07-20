@@ -136,6 +136,7 @@ int mayara_pi::Init() {
 bool mayara_pi::DeInit() {
   // Destroy the window first (synchronously) so its panels' timers stop calling
   // into the client before we free it.
+  SaveWindowState();  // remember visibility + positions before tearing down
   DestroyWindows(/*sync=*/true);
   if (m_tool_id != -1) {
     RemovePlugInTool(m_tool_id);
@@ -173,6 +174,47 @@ void mayara_pi::LoadConfig() {
   int orient = 0;
   cfg->Read("Orientation", &orient, 0);
   m_orientation = (orient >= 0 && orient <= 2) ? orient : 0;
+  bool shown = false;
+  cfg->Read("WindowsVisible", &shown, false);
+  m_windows_visible = shown;  // restored on the next fix (see SetPositionFixEx)
+}
+
+void mayara_pi::SaveWindowState() {
+  wxFileConfig* cfg = GetOCPNConfigObject();
+  if (!cfg) return;
+  cfg->SetPath(kConfigGroup);
+  cfg->Write("WindowsVisible", AnyWindowShown());
+  cfg->Write("WinCount", static_cast<int>(m_windows.size()));
+  for (size_t i = 0; i < m_windows.size(); ++i) {
+    if (!m_windows[i]) continue;
+    const wxRect r = m_windows[i]->GetScreenRect();
+    const int k = static_cast<int>(i);
+    cfg->Write(wxString::Format("Win%d_x", k), r.x);
+    cfg->Write(wxString::Format("Win%d_y", k), r.y);
+    cfg->Write(wxString::Format("Win%d_w", k), r.width);
+    cfg->Write(wxString::Format("Win%d_h", k), r.height);
+  }
+  cfg->Flush();
+}
+
+bool mayara_pi::RestoreWindowGeometry() {
+  wxFileConfig* cfg = GetOCPNConfigObject();
+  if (!cfg) return false;
+  cfg->SetPath(kConfigGroup);
+  int wc = 0;
+  cfg->Read("WinCount", &wc, 0);
+  if (wc <= 0 || wc != static_cast<int>(m_windows.size())) return false;
+  for (size_t i = 0; i < m_windows.size(); ++i) {
+    if (!m_windows[i]) continue;
+    const int k = static_cast<int>(i);
+    int x, y, w, h;
+    if (cfg->Read(wxString::Format("Win%d_x", k), &x) &&
+        cfg->Read(wxString::Format("Win%d_y", k), &y) &&
+        cfg->Read(wxString::Format("Win%d_w", k), &w) &&
+        cfg->Read(wxString::Format("Win%d_h", k), &h) && w > 80 && h > 80)
+      m_windows[i]->SetSize(x, y, w, h);
+  }
+  return true;
 }
 
 void mayara_pi::SaveConfig() {
@@ -360,9 +402,10 @@ void mayara_pi::RebuildWindows() {
     win->Show(m_windows_visible);
     m_windows.push_back(win);
   }
-  // More than one window would otherwise stack at the same spot; tile them so
-  // each is reachable without dragging. Don't disturb the OpenCPN window here.
-  if (m_windows.size() > 1) AutoLayoutWindows(/*reflow=*/false);
+  // Restore saved positions if they match this window count; otherwise tile
+  // multiple windows so they don't stack at the same spot.
+  if (!RestoreWindowGeometry() && m_windows.size() > 1)
+    AutoLayoutWindows(/*reflow=*/false);
 }
 
 void mayara_pi::AutoLayoutWindows(bool reflow_ocpn) {
@@ -543,6 +586,14 @@ void mayara_pi::SetPositionFixEx(PlugIn_Position_Fix_Ex& pfix) {
   m_nav.sog = std::isnan(pfix.Sog) ? 0.0 : pfix.Sog;
   m_nav.has_hdt = !std::isnan(pfix.Hdt) && pfix.Hdt >= 0.0 && pfix.Hdt < 360.0;
   m_nav.hdt = m_nav.has_hdt ? pfix.Hdt : 0.0;
+
+  // Restore windows that were shown last session, once radars are available.
+  // (They can't be opened in Init: discovery is still in flight there.)
+  if (m_windows_visible && m_windows.empty() && m_client &&
+      m_client->RadarCount() > 0) {
+    RebuildWindows();  // shows them (Show(m_windows_visible)) at saved positions
+    if (m_tool_id != -1) SetToolbarItemState(m_tool_id, true);
+  }
 }
 
 void mayara_pi::SetColorScheme(PI_ColorScheme cs) {

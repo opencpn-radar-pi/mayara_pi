@@ -75,6 +75,8 @@ class mayara_pi : public opencpn_plugin_121 {
   void ShowSettings(wxWindow* parent);
   void LoadConfig();
   void SaveConfig();
+  void SaveWindowState();          // visibility + geometry of the PPI windows
+  bool RestoreWindowGeometry();    // apply saved geometry; false if none match
 
   wxWindow* m_parent_window = nullptr;
   wxBitmap m_panel_bitmap;   // shown in the plugin manager
