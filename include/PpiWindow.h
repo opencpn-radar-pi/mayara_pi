@@ -47,10 +47,14 @@ class MayaraPpiWindow : public wxDialog {
 
  private:
   void OnClose(wxCloseEvent& event);
+  void OnSize(wxSizeEvent& event);
   // Widen the window by `extra` px to fit the controls, shifting it left/up if
   // that would push it off the current display.
   void GrowForControls(int extra);
   RadarDisplayPanel* FocusedPanel();  // panel driving the shared controls
+  // Float the controls immediately to the right of `focused`, growing the
+  // window only if needed (and allowed) to make room.
+  void PositionControls(RadarDisplayPanel* focused, bool allow_grow = true);
 
   MayaraClient* m_client = nullptr;  // not owned
   wxWindow* m_grid = nullptr;        // container of the radar pictures

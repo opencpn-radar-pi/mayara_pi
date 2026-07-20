@@ -92,6 +92,7 @@ class mayara_pi : public opencpn_plugin_121 {
   wxMenuItem* m_mi_overlay_item = nullptr;  // owned by OpenCPN after adding
   wxMenuItem* m_mi_ppi_item = nullptr;
   std::vector<MayaraPpiWindow*> m_windows;
+  std::unique_ptr<wxTimer> m_heartbeat;  // 1 Hz: restore + geometry snapshot
   bool m_windows_visible = false;  // user's show/hide intent for the windows
   int m_windows_radar_count = -1;  // radar count the windows were built for
   std::unique_ptr<MayaraClient> m_client;

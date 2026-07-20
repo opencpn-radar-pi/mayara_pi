@@ -35,6 +35,7 @@ wxString WindowTitle(MayaraClient* client, const std::vector<int>& idx) {
 
 wxBEGIN_EVENT_TABLE(MayaraPpiWindow, wxDialog)
     EVT_CLOSE(MayaraPpiWindow::OnClose)
+    EVT_SIZE(MayaraPpiWindow::OnSize)
 wxEND_EVENT_TABLE()
 
 MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client,
@@ -59,41 +60,34 @@ MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client,
   }
   m_grid->SetSizer(grid);
 
-  // One control panel, bound to the focused radar (the first by default).
+  // One control panel, bound to the focused radar (the first by default). It
+  // floats over the pictures (not in the sizer) so it can pop up next to
+  // whichever picture's hamburger was clicked.
   m_controls = new ControlsPanel(this, client, radar_indices.front());
   m_controls->SetRadarList(radar_indices);
   m_controls->Hide();  // opened via a picture's hamburger button
 
   auto* sizer = new wxBoxSizer(wxHORIZONTAL);
   sizer->Add(m_grid, 1, wxEXPAND);
-  sizer->Add(m_controls, 0, wxEXPAND);
   SetSizer(sizer);
 
   ControlsPanel* controls = m_controls;
   for (RadarDisplayPanel* p : m_radars) {
-    const int ri = p->RadarIndex();
-    // Hamburger: toggle the controls, bound to this picture's radar.
-    p->SetMenuCallback([this, controls, ri]() {
-      if (controls->IsShown() && controls->RadarIndex() == ri) {
+    // Hamburger: toggle the controls next to this picture.
+    p->SetMenuCallback([this, controls, p]() {
+      if (controls->IsShown() && controls->RadarIndex() == p->RadarIndex()) {
         controls->Hide();
-        Layout();
         return;
       }
-      const bool was_hidden = !controls->IsShown();
-      controls->SetRadarIndex(ri);
-      controls->Show(true);
-      // Only widen the window if the picture would otherwise be squeezed too
-      // small; large windows just give the controls some of their width.
-      if (was_hidden) {
-        const int needed = std::max(320, controls->GetEffectiveMinSize().x) + 260;
-        const wxSize cs = GetClientSize();
-        if (cs.x < needed) GrowForControls(needed - cs.x);
-      }
-      Layout();
+      controls->SetRadarIndex(p->RadarIndex());
+      PositionControls(p);
     });
-    // Clicking a picture focuses its radar in the (already open) controls.
-    p->SetFocusCallback([controls, ri]() {
-      if (controls->IsShown()) controls->SetRadarIndex(ri);
+    // Clicking a picture re-homes the open controls next to it.
+    p->SetFocusCallback([this, controls, p]() {
+      if (controls->IsShown()) {
+        controls->SetRadarIndex(p->RadarIndex());
+        PositionControls(p);
+      }
     });
   }
   controls->SetCloseCallback([this, controls]() {
@@ -117,15 +111,19 @@ void MayaraPpiWindow::SetOverlayControl(std::function<bool()> get,
       [this]() { return m_grid && m_grid->IsShown(); },
       [this](bool show) {
         if (m_grid) m_grid->Show(show);
-        if (!show && m_controls) m_controls->Show(true);  // keep menu visible
-        Layout();
-        // Narrow to just the menu when the pictures are hidden; widen to show.
         const int h = GetSize().y;
         if (show) {
+          Layout();
           SetSize(wxSize(std::max(GetSize().x, 820), h));
-        } else {
-          Fit();
-          SetSize(wxSize(GetSize().x, h));
+        } else if (m_controls) {
+          // Show only the menu: dock the floating controls to fill a narrow
+          // window.
+          const int ctrl_w =
+              std::max(320, m_controls->GetEffectiveMinSize().x);
+          SetClientSize(ctrl_w, GetClientSize().y);
+          m_controls->SetSize(0, 0, ctrl_w, GetClientSize().y);
+          m_controls->Show(true);
+          m_controls->Raise();
         }
       });
 }
@@ -148,6 +146,33 @@ RadarDisplayPanel* MayaraPpiWindow::FocusedPanel() {
   for (RadarDisplayPanel* p : m_radars)
     if (p->RadarIndex() == ri) return p;
   return m_radars.empty() ? nullptr : m_radars[0];
+}
+
+void MayaraPpiWindow::PositionControls(RadarDisplayPanel* focused,
+                                       bool allow_grow) {
+  if (!m_controls || !focused) return;
+  const int ctrl_w = std::max(320, m_controls->GetEffectiveMinSize().x);
+  // Right edge of the focused picture, in this window's client coordinates.
+  wxPoint tr = focused->GetScreenPosition();
+  tr.x += focused->GetSize().x;
+  int x = ScreenToClient(tr).x;
+  wxSize cs = GetClientSize();
+  if (x + ctrl_w > cs.x) {
+    if (allow_grow) {
+      GrowForControls(x + ctrl_w - cs.x);
+      cs = GetClientSize();
+    }
+    x = std::max(0, cs.x - ctrl_w);  // clamp so the panel stays visible
+  }
+  m_controls->SetSize(x, 0, ctrl_w, cs.y);
+  m_controls->Show(true);
+  m_controls->Raise();
+}
+
+void MayaraPpiWindow::OnSize(wxSizeEvent& event) {
+  event.Skip();
+  if (m_controls && m_controls->IsShown())
+    PositionControls(FocusedPanel(), /*allow_grow=*/false);
 }
 
 void MayaraPpiWindow::SetOrientationHandlers(
