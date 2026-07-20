@@ -126,23 +126,33 @@ int RadarState::CopyDisc(std::vector<uint8_t>& dst) {
   return disc_size_;
 }
 
-bool RadarState::RenderPPI(uint8_t* rgb, int w, int h) {
+bool RadarState::RenderPPI(uint8_t* rgb, int w, int h, double zoom) {
   std::lock_guard<std::mutex> lock(m_);
   std::memset(rgb, 0, static_cast<size_t>(w) * h * 3);
   if (!has_data_ || disc_size_ <= 0) return false;
   EnsureDisc();
 
-  // Nearest-neighbour scale the cached disc into a centred square. No trig.
+  // Nearest-neighbour scale the cached disc into a centred square. `zoom`
+  // magnifies about the disc centre; samples outside the disc stay black. No
+  // trig.
   const int side = std::min(w, h);
   if (side <= 0) return true;
+  if (zoom <= 0.0) zoom = 1.0;
   const int ox = (w - side) / 2;
   const int oy = (h - side) / 2;
+  const double dcenter = disc_size_ / 2.0;
+  const double step = (static_cast<double>(disc_size_) / side) / zoom;
   for (int y = 0; y < side; ++y) {
-    const int sy = y * disc_size_ / side;
+    const double syf = dcenter + (y - side / 2.0) * step;
+    const int sy = static_cast<int>(syf);
+    if (sy < 0 || sy >= disc_size_) continue;
     const uint8_t* srow = &disc_[static_cast<size_t>(sy) * disc_size_ * 4];
     uint8_t* orow = rgb + (static_cast<size_t>(oy + y) * w + ox) * 3;
     for (int x = 0; x < side; ++x) {
-      const uint8_t* s = srow + static_cast<size_t>(x * disc_size_ / side) * 4;
+      const double sxf = dcenter + (x - side / 2.0) * step;
+      const int sx = static_cast<int>(sxf);
+      if (sx < 0 || sx >= disc_size_) continue;
+      const uint8_t* s = srow + static_cast<size_t>(sx) * 4;
       const uint8_t a = s[3];
       if (a) {
         const float f = a * intensity_ / 255.0f;

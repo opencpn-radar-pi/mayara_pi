@@ -39,8 +39,10 @@ class RadarState {
   int DiscSize() const { return disc_size_; }
 
   // Render a head-up PPI into an RGB buffer (w*h*3), pre-blended over black, by
-  // scaling the cached disc. Returns true if radar data is present.
-  bool RenderPPI(uint8_t* rgb, int w, int h);
+  // scaling the cached disc. `zoom` > 1 magnifies about the centre so the inner
+  // 1/zoom of the spoke range fills the square (the rest spills past the edge as
+  // overzoom). Returns true if radar data is present.
+  bool RenderPPI(uint8_t* rgb, int w, int h, double zoom = 1.0);
 
   // Radar position stamped into the spoke data (best-effort). Used to place the
   // chart overlay when OpenCPN has no own-ship fix of its own.

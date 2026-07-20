@@ -50,8 +50,12 @@ class RadarDisplayPanel : public wxPanel {
   void OnLeftDown(wxMouseEvent& event);
   void DrawLozenges(wxDC& dc, const wxSize& sz);
   // Paint the extra layers over the picture. `center` is the sweep origin,
-  // `radius` the pixel radius of `range_m`.
-  void DrawLayers(wxDC& dc, wxPoint center, double radius, uint32_t range_m);
+  // `radius` the pixel radius of the reported range `report_m`.
+  void DrawLayers(wxDC& dc, wxPoint center, double radius, double report_m,
+                  bool metric);
+  // Reported range (range control value, metres) + whether the range unit is
+  // metric. Leaves the passed default report_m/metric if unavailable.
+  void EffectiveRange(double& report_m, bool& metric) const;
   void TogglePower();
   void StepRange(int direction);  // -1 down, +1 up
 

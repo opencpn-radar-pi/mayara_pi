@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numeric>
 #include <string>
 #include <vector>
 
@@ -96,18 +97,26 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
   RadarState* state = m_client ? m_client->StateAt(m_index) : nullptr;
   const int side = std::max(16, std::min(sz.x, sz.y));
 
+  // The reported (nominal, round) range fills the window; the larger spoke
+  // range spills past the edge as overzoom (zoom = spoke / report).
+  const uint32_t spoke_m = state ? state->RangeMeters() : 0;
+  double report_m = spoke_m;
+  bool metric = false;
+  EffectiveRange(report_m, metric);
+  const double zoom =
+      (report_m > 0 && spoke_m > 0) ? spoke_m / report_m : 1.0;
+
   if (state) {
     std::vector<uint8_t> rgb(static_cast<size_t>(side) * side * 3);
-    if (state->RenderPPI(rgb.data(), side, side)) {
+    if (state->RenderPPI(rgb.data(), side, side, zoom)) {
       wxImage img(side, side, rgb.data(), true);
       wxBitmap bmp(img);
       dc.DrawBitmap(bmp, (sz.x - side) / 2, (sz.y - side) / 2, false);
     }
   }
 
-  // Extra layers over the picture (rings, heading/COG lines, north, AIS).
-  const uint32_t range_m = state ? state->RangeMeters() : 0;
-  DrawLayers(dc, wxPoint(sz.x / 2, sz.y / 2), side / 2.0, range_m);
+  // Extra layers over the picture. Radius now maps to the reported range.
+  DrawLayers(dc, wxPoint(sz.x / 2, sz.y / 2), side / 2.0, report_m, metric);
 
   DrawLozenges(dc, sz);
 
@@ -215,8 +224,35 @@ wxPoint PolarPoint(wxPoint c, double r, double brg_deg, double heading) {
                  c.y - static_cast<int>(std::lround(r * std::cos(a))));
 }
 
-wxString RingLabel(double m) {
-  if (m >= 1852.0) return wxString::Format("%.2f NM", m / 1852.0);
+// Concise range label. Nautical: whole NM without decimals ("4 NM"), a single
+// decimal otherwise ("1.5 NM"), and fractions below 1 NM ("1/8 NM"). Metric:
+// metres, or km above 1000 m.
+wxString FormatRange(double m, bool metric) {
+  if (metric) {
+    if (m >= 1000.0) {
+      const double km = m / 1000.0;
+      if (std::fabs(km - std::lround(km)) < 0.05)
+        return wxString::Format("%ld km", std::lround(km));
+      return wxString::Format("%.1f km", km);
+    }
+    return wxString::Format("%.0f m", m);
+  }
+  const double nm = m / 1852.0;
+  if (nm >= 0.95) {
+    if (std::fabs(nm - std::lround(nm)) < 0.03)
+      return wxString::Format("%ld NM", std::lround(nm));
+    return wxString::Format("%.1f NM", nm);
+  }
+  for (long d : {16L, 8L, 4L, 2L}) {
+    const double num = nm * d;
+    const long n = std::lround(num);
+    if (n >= 1 && std::fabs(num - n) < 0.03) {
+      const long g = std::gcd(n, d);
+      const long nn = n / g, dd = d / g;
+      if (dd == 1) return wxString::Format("%ld NM", nn);
+      return wxString::Format("%ld/%ld NM", nn, dd);
+    }
+  }
   return wxString::Format("%.0f m", m);
 }
 
@@ -241,8 +277,25 @@ int RingCount(double report_m) {
 }
 }  // namespace
 
+void RadarDisplayPanel::EffectiveRange(double& report_m, bool& metric) const {
+  RadarControls* ctrl = m_client ? m_client->ControlsAt(m_index) : nullptr;
+  if (!ctrl) return;
+  ControlValue rv = ctrl->Value("range");
+  if (rv.has_value && rv.value > 0) report_m = rv.value;
+  ControlValue ru = ctrl->Value("rangeUnits");
+  if (ru.has_value)
+    for (const auto& d : ctrl->Schema())
+      if (d.id == "rangeUnits") {
+        auto it = d.descriptions.find(static_cast<int>(ru.value));
+        if (it != d.descriptions.end())
+          metric = wxString::FromUTF8(it->second.c_str()).Lower().Contains(
+              "metric");
+        break;
+      }
+}
+
 void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
-                                   uint32_t range_m) {
+                                   double report_m, bool metric) {
   if (radius < 8) return;
   RadarState* st = m_client ? m_client->StateAt(m_index) : nullptr;
 
@@ -263,24 +316,16 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
 
   dc.SetBrush(*wxTRANSPARENT_BRUSH);
 
-  // Range rings mark the reported (nominal, round) range; the picture extends
-  // past the outer ring as overzoom (spoke range > report range). report_m is
-  // the range control's value; fall back to the spoke range if unknown.
-  double report_m = range_m;
-  if (RadarControls* ctrl = m_client ? m_client->ControlsAt(m_index) : nullptr) {
-    ControlValue rv = ctrl->Value("range");
-    if (rv.has_value && rv.value > 0) report_m = rv.value;
-  }
-  const double ring_outer =
-      range_m > 0 ? radius * std::min(1.0, report_m / range_m) : radius;
+  // The reported range fills the window (the picture is zoomed to it), so the
+  // outer ring sits at the window edge and the picture beyond is overzoom.
   if (m_layers.range_rings && report_m > 0) {
     const int rings = RingCount(report_m);
     dc.SetPen(wxPen(m_theme.dim_text, 1));
     dc.SetTextForeground(m_theme.dim_text);
     for (int i = 1; i <= rings; ++i) {
-      const double rr = ring_outer * i / rings;
+      const double rr = radius * i / rings;
       dc.DrawCircle(c.x, c.y, static_cast<int>(rr));
-      dc.DrawText(RingLabel(report_m * i / rings), c.x + 3,
+      dc.DrawText(FormatRange(report_m * i / rings, metric), c.x + 3,
                   c.y - static_cast<int>(rr) - 2);
     }
   }
@@ -310,7 +355,7 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
 
   // AIS targets: a bearing/range-placed triangle pointing along its COG, with
   // a small name + course/speed label.
-  if (m_layers.ais && has_heading && range_m > 0) {
+  if (m_layers.ais && has_heading && report_m > 0) {
     ArrayOfPlugIn_AIS_Targets* arr = GetAISTargetArray();
     if (arr) {
       wxFont label_font = dc.GetFont();
@@ -321,11 +366,13 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
         PlugIn_AIS_Target* t = arr->Item(i);
         if (!t) continue;
         const double rng_m = t->Range_NM * 1852.0;
-        if (rng_m <= 0 || rng_m > range_m) {
+        // Show targets within the picture (report range plus the overzoom
+        // corners, ~1.45x).
+        if (rng_m <= 0 || rng_m > report_m * 1.45) {
           delete t;
-          continue;  // outside the ring
+          continue;
         }
-        const double r = radius * rng_m / range_m;
+        const double r = radius * rng_m / report_m;
         const wxPoint p = PolarPoint(c, r, t->Brg, heading);
         // Small triangle oriented to COG (fallback: bearing).
         const double course =
@@ -342,7 +389,7 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
         // 10 minutes at its current SOG, along its COG.
         if (t->SOG > 0.1 && t->SOG < 102.2) {
           const double pred_m = (t->SOG / 6.0) * 1852.0;  // 10 min = SOG/6 NM
-          const double pred_px = radius * pred_m / range_m;
+          const double pred_px = radius * pred_m / report_m;
           const wxPoint e2(p.x + static_cast<int>(std::lround(pred_px * sa)),
                            p.y - static_cast<int>(std::lround(pred_px * ca)));
           dc.SetPen(wxPen(danger ? red : green, 1));
@@ -384,9 +431,9 @@ void RadarDisplayPanel::OnLeftDown(wxMouseEvent& event) {
   } else if (m_power_rect.Contains(p))
     TogglePower();
   else if (m_range_minus_rect.Contains(p))
-    StepRange(-1);
+    StepRange(+1);  // "-" zooms out to a longer range
   else if (m_range_plus_rect.Contains(p))
-    StepRange(+1);
+    StepRange(-1);  // "+" zooms in to a shorter range
   else {
     if (m_on_focus) m_on_focus();
     event.Skip();
