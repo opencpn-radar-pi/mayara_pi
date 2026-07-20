@@ -20,6 +20,7 @@ class MayaraClient;
 // Which extra layers to paint over the radar picture.
 struct PpiLayers {
   bool range_rings = true;
+  bool compass = true;  // degree ring with bearing ticks/labels
   bool heading_line = true;
   bool cog_line = true;
   bool north_marker = true;

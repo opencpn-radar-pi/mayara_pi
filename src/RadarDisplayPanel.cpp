@@ -335,6 +335,33 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
     }
   }
 
+  // Compass ring: bearing ticks every 10 deg, major ticks + labels every 30.
+  // Placed by true bearing so (head-up) the labels stay geographic.
+  if (m_layers.compass) {
+    const double ringR = radius - 16;
+    if (ringR > 20) {
+      const wxColour green(0, 210, 0);
+      dc.SetPen(wxPen(green, 1));
+      dc.SetTextForeground(green);
+      wxFont f = dc.GetFont();
+      f.SetPointSize(std::max(7, f.GetPointSize() - 1));
+      dc.SetFont(f);
+      for (int deg = 0; deg < 360; deg += 10) {
+        const bool major = (deg % 30) == 0;
+        const int tick = major ? 9 : 5;
+        dc.DrawLine(PolarPoint(c, ringR - tick, deg, heading),
+                    PolarPoint(c, ringR, deg, heading));
+        if (major) {
+          const wxString lbl = wxString::Format("%d", deg);
+          wxCoord tw, th;
+          dc.GetTextExtent(lbl, &tw, &th);
+          const wxPoint lp = PolarPoint(c, ringR - tick - 9, deg, heading);
+          dc.DrawText(lbl, lp.x - tw / 2, lp.y - th / 2);
+        }
+      }
+    }
+  }
+
   // Heading line: bow is straight up on the head-up picture.
   if (m_layers.heading_line) {
     dc.SetPen(wxPen(m_theme.accent, 1));
