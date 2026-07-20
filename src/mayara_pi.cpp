@@ -408,28 +408,50 @@ void mayara_pi::RebuildWindows() {
     AutoLayoutWindows(/*reflow=*/false);
 }
 
-void mayara_pi::AutoLayoutWindows(bool reflow_ocpn) {
-  if (m_windows.empty()) return;
-  wxWindow* frame =
-      m_parent_window ? wxGetTopLevelParent(m_parent_window) : nullptr;
-  int disp = frame ? wxDisplay::GetFromWindow(frame) : wxNOT_FOUND;
-  if (disp == wxNOT_FOUND) disp = 0;
-  const wxRect area = wxDisplay(static_cast<unsigned>(disp)).GetClientArea();
-
-  const int n = static_cast<int>(m_windows.size());
-  const int radar_w = std::max(360, area.width * 38 / 100);
-  if (reflow_ocpn && frame)
-    frame->SetSize(area.x, area.y, area.width - radar_w, area.height);
-
-  // Radar windows stacked down the right edge of the display.
-  const int rx = area.x + area.width - radar_w;
+// Stack the radar windows to fill `area` top-to-bottom.
+static void TileInArea(const std::vector<MayaraPpiWindow*>& wins,
+                       const wxRect& area) {
+  const int n = static_cast<int>(wins.size());
   int y = area.y;
   for (int i = 0; i < n; ++i) {
     const int hh =
         (i == n - 1) ? (area.y + area.height - y) : (area.height / n);
-    if (m_windows[i]) m_windows[i]->SetSize(rx, y, radar_w, hh);
+    if (wins[i]) wins[i]->SetSize(area.x, y, area.width, hh);
     y += hh;
   }
+}
+
+void mayara_pi::AutoLayoutWindows(bool reflow_ocpn) {
+  if (m_windows.empty()) return;
+  wxWindow* frame =
+      m_parent_window ? wxGetTopLevelParent(m_parent_window) : nullptr;
+  int main_disp = frame ? wxDisplay::GetFromWindow(frame) : wxNOT_FOUND;
+  if (main_disp == wxNOT_FOUND) main_disp = 0;
+  const unsigned n_disp = wxDisplay::GetCount();
+
+  if (n_disp > 1) {
+    // Put the radars on a display the main window is NOT on and let them share
+    // that whole screen; the main window can then fill its own screen.
+    unsigned target = (static_cast<unsigned>(main_disp) + 1) % n_disp;
+    if (target == static_cast<unsigned>(main_disp)) target = 0;
+    TileInArea(m_windows, wxDisplay(target).GetClientArea());
+    if (reflow_ocpn && frame) {
+      const wxRect ma =
+          wxDisplay(static_cast<unsigned>(main_disp)).GetClientArea();
+      frame->SetSize(ma.x, ma.y, ma.width, ma.height);
+    }
+    return;
+  }
+
+  // Single display: OpenCPN fills the left, radars stack down the right.
+  const wxRect area =
+      wxDisplay(static_cast<unsigned>(main_disp)).GetClientArea();
+  const int radar_w = std::max(360, area.width * 38 / 100);
+  if (reflow_ocpn && frame)
+    frame->SetSize(area.x, area.y, area.width - radar_w, area.height);
+  TileInArea(m_windows,
+             wxRect(area.x + area.width - radar_w, area.y, radar_w,
+                    area.height));
 }
 
 void mayara_pi::TogglePpiWindow() {
