@@ -47,18 +47,12 @@ MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client,
   m_client = client;
   SetTitle(WindowTitle(client, radar_indices));
 
-  // The radar pictures, laid out in a near-square grid.
+  // The radar pictures live in m_grid; BuildGrid() arranges them by the
+  // window's aspect (see DesiredCols).
   m_grid = new wxPanel(this, wxID_ANY);
-  const int n = static_cast<int>(radar_indices.size());
-  int cols = std::max(1, static_cast<int>(std::ceil(std::sqrt((double)n))));
-  int rows = (n + cols - 1) / cols;
-  auto* grid = new wxGridSizer(rows, cols, 2, 2);
-  for (int ri : radar_indices) {
-    auto* panel = new RadarDisplayPanel(m_grid, client, ri);
-    m_radars.push_back(panel);
-    grid->Add(panel, 1, wxEXPAND);
-  }
-  m_grid->SetSizer(grid);
+  for (int ri : radar_indices)
+    m_radars.push_back(new RadarDisplayPanel(m_grid, client, ri));
+  BuildGrid();
 
   // One control panel, bound to the focused radar (the first by default). It
   // floats over the pictures (not in the sizer) so it can pop up next to
@@ -73,13 +67,17 @@ MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client,
 
   ControlsPanel* controls = m_controls;
   for (RadarDisplayPanel* p : m_radars) {
-    // Hamburger: toggle the controls next to this picture.
+    // Hamburger: toggle the controls next to this picture. In a multi-radar
+    // window, opening the menu shows only that radar (and hides the others)
+    // until the menu closes.
     p->SetMenuCallback([this, controls, p]() {
       if (controls->IsShown() && controls->RadarIndex() == p->RadarIndex()) {
         controls->Hide();
+        if (m_solo) BuildGrid();
         return;
       }
       controls->SetRadarIndex(p->RadarIndex());
+      if (m_radars.size() > 1) SoloPicture(p);
       PositionControls(p);
     });
     // Clicking a picture re-homes the open controls next to it.
@@ -92,6 +90,7 @@ MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client,
   }
   controls->SetCloseCallback([this, controls]() {
     controls->Hide();
+    if (m_solo) BuildGrid();  // restore the other pictures
     Layout();
   });
 }
@@ -169,8 +168,41 @@ void MayaraPpiWindow::PositionControls(RadarDisplayPanel* focused,
   m_controls->Raise();
 }
 
+int MayaraPpiWindow::DesiredCols() const {
+  const int n = static_cast<int>(m_radars.size());
+  if (n <= 1) return 1;
+  const wxSize cs = GetClientSize();
+  if (cs.y > cs.x) return 1;  // narrow window: stack top-to-bottom
+  return std::max(1, static_cast<int>(std::ceil(std::sqrt((double)n))));
+}
+
+void MayaraPpiWindow::BuildGrid() {
+  m_solo = false;
+  for (RadarDisplayPanel* p : m_radars) p->Show(true);
+  const int n = static_cast<int>(m_radars.size());
+  m_grid_cols = DesiredCols();
+  const int rows = (n + m_grid_cols - 1) / m_grid_cols;
+  auto* g = new wxGridSizer(rows, m_grid_cols, 2, 2);
+  for (RadarDisplayPanel* p : m_radars) g->Add(p, 1, wxEXPAND);
+  m_grid->SetSizer(g);  // deletes the previous sizer
+  m_grid->Layout();
+}
+
+void MayaraPpiWindow::SoloPicture(RadarDisplayPanel* only) {
+  m_solo = true;
+  m_grid_cols = -1;
+  for (RadarDisplayPanel* p : m_radars) p->Show(p == only);
+  auto* s = new wxBoxSizer(wxHORIZONTAL);
+  s->Add(only, 1, wxEXPAND);
+  m_grid->SetSizer(s);  // deletes the previous sizer
+  m_grid->Layout();
+}
+
 void MayaraPpiWindow::OnSize(wxSizeEvent& event) {
   event.Skip();
+  // Re-flow the (non-soloed) grid when the window's aspect flips.
+  if (!m_solo && m_radars.size() > 1 && DesiredCols() != m_grid_cols)
+    BuildGrid();
   if (m_controls && m_controls->IsShown())
     PositionControls(FocusedPanel(), /*allow_grow=*/false);
 }

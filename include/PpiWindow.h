@@ -55,10 +55,15 @@ class MayaraPpiWindow : public wxDialog {
   // Float the controls immediately to the right of `focused`, growing the
   // window only if needed (and allowed) to make room.
   void PositionControls(RadarDisplayPanel* focused, bool allow_grow = true);
+  int DesiredCols() const;             // columns from the window's aspect
+  void BuildGrid();                    // show all pictures in a grid
+  void SoloPicture(RadarDisplayPanel* only);  // show just one picture
 
   MayaraClient* m_client = nullptr;  // not owned
   wxWindow* m_grid = nullptr;        // container of the radar pictures
   std::vector<RadarDisplayPanel*> m_radars;
+  int m_grid_cols = 0;      // current grid column count (-1 while soloed)
+  bool m_solo = false;      // a single picture is shown for its open menu
   ControlsPanel* m_controls = nullptr;
   std::function<int(const std::string&)> m_orient_get;
   std::function<void(const std::string&, int)> m_orient_set;
