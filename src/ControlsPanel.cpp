@@ -376,19 +376,22 @@ void ControlsPanel::FillViewSection(wxSizer* content) {
                  wxLEFT | wxTOP, 4);
     auto* row = new wxBoxSizer(wxHORIZONTAL);
     const wxString labels[3] = {_("Head up"), _("North up"), _("Course up")};
-    std::vector<ThemedButton*> btns;
+    auto btns = std::make_shared<std::vector<ThemedButton*>>();
     for (int i = 0; i < 3; ++i) {
       auto* b = new ThemedButton(this, labels[i], m_theme, /*toggle=*/false);
       row->Add(b, 1, wxALL, 2);
-      btns.push_back(b);
-      b->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&) {
+      btns->push_back(b);
+      b->Bind(wxEVT_BUTTON, [this, i, btns](wxCommandEvent&) {
         if (m_set_orientation) m_set_orientation(i);
+        for (size_t j = 0; j < btns->size(); ++j)
+          (*btns)[j]->SetValue(static_cast<int>(j) == i);
       });
     }
     content->Add(row, 0, wxEXPAND | wxLEFT | wxRIGHT, 2);
     m_updaters.push_back([this, btns]() {
       const int o = m_get_orientation ? m_get_orientation() : 0;
-      for (int i = 0; i < 3; ++i) btns[i]->SetValue(i == o);
+      for (size_t j = 0; j < btns->size(); ++j)
+        (*btns)[j]->SetValue(static_cast<int>(j) == o);
     });
   }
   if (m_on_autolayout) {

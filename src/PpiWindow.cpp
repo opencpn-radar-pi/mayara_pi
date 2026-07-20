@@ -43,6 +43,7 @@ MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client,
                wxSize(880, 560), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER) {
   SetMinSize(wxSize(480, 320));
   if (radar_indices.empty()) radar_indices.push_back(0);
+  m_client = client;
   SetTitle(WindowTitle(client, radar_indices));
 
   // The radar pictures, laid out in a near-square grid.
@@ -73,19 +74,22 @@ MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client,
     const int ri = p->RadarIndex();
     // Hamburger: toggle the controls, bound to this picture's radar.
     p->SetMenuCallback([this, controls, ri]() {
-      const int ctrl_w = std::max(320, controls->GetEffectiveMinSize().x);
       if (controls->IsShown() && controls->RadarIndex() == ri) {
         controls->Hide();
         Layout();
-        const wxSize cs = GetClientSize();  // give the width back
-        SetClientSize(std::max(360, cs.x - ctrl_w), cs.y);
-      } else {
-        const bool was_hidden = !controls->IsShown();
-        controls->SetRadarIndex(ri);
-        controls->Show(true);
-        if (was_hidden) GrowForControls(ctrl_w);
-        Layout();
+        return;
       }
+      const bool was_hidden = !controls->IsShown();
+      controls->SetRadarIndex(ri);
+      controls->Show(true);
+      // Only widen the window if the picture would otherwise be squeezed too
+      // small; large windows just give the controls some of their width.
+      if (was_hidden) {
+        const int needed = std::max(320, controls->GetEffectiveMinSize().x) + 260;
+        const wxSize cs = GetClientSize();
+        if (cs.x < needed) GrowForControls(needed - cs.x);
+      }
+      Layout();
     });
     // Clicking a picture focuses its radar in the (already open) controls.
     p->SetFocusCallback([controls, ri]() {
@@ -138,14 +142,39 @@ void MayaraPpiWindow::SetNavProvider(std::function<NavState()> provider) {
   for (RadarDisplayPanel* p : m_radars) p->SetNavProvider(provider);
 }
 
-void MayaraPpiWindow::SetOrientation(int o) {
-  for (RadarDisplayPanel* p : m_radars) p->SetOrientation(o);
+RadarDisplayPanel* MayaraPpiWindow::FocusedPanel() {
+  const int ri = m_controls ? m_controls->RadarIndex()
+                            : (m_radars.empty() ? 0 : m_radars[0]->RadarIndex());
+  for (RadarDisplayPanel* p : m_radars)
+    if (p->RadarIndex() == ri) return p;
+  return m_radars.empty() ? nullptr : m_radars[0];
 }
 
-void MayaraPpiWindow::SetOrientationControl(std::function<int()> get,
-                                            std::function<void(int)> set) {
-  if (m_controls) m_controls->SetOrientationControl(std::move(get),
-                                                    std::move(set));
+void MayaraPpiWindow::SetOrientationHandlers(
+    std::function<int(const std::string&)> get_mode,
+    std::function<void(const std::string&, int)> set_mode) {
+  m_orient_get = std::move(get_mode);
+  m_orient_set = std::move(set_mode);
+  // Initialise each picture from its radar's persisted orientation.
+  for (RadarDisplayPanel* p : m_radars) {
+    const std::string id = m_client ? m_client->RadarId(p->RadarIndex()) : "";
+    p->SetOrientation(m_orient_get ? m_orient_get(id) : 0);
+  }
+  // Drive the View toggle from/into the focused radar's picture.
+  if (m_controls)
+    m_controls->SetOrientationControl(
+        [this]() {
+          RadarDisplayPanel* p = FocusedPanel();
+          return p ? p->Orientation() : 0;
+        },
+        [this](int o) {
+          RadarDisplayPanel* p = FocusedPanel();
+          if (!p) return;
+          p->SetOrientation(o);
+          const std::string id = m_client ? m_client->RadarId(p->RadarIndex())
+                                          : "";
+          if (m_orient_set) m_orient_set(id, o);
+        });
 }
 
 void MayaraPpiWindow::GrowForControls(int extra) {

@@ -9,7 +9,9 @@
 #define MAYARA_PI_H_
 
 #include <cstdint>
+#include <map>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include <wx/wx.h>
@@ -77,6 +79,9 @@ class mayara_pi : public opencpn_plugin_121 {
   void SaveConfig();
   void SaveWindowState();          // visibility + geometry of the PPI windows
   bool RestoreWindowGeometry();    // apply saved geometry; false if none match
+  void CaptureWindowState();       // snapshot geometry while windows are alive
+  int OrientationFor(const std::string& radar_id) const;   // per-radar mode
+  void SetOrientationFor(const std::string& radar_id, int mode);
 
   wxWindow* m_parent_window = nullptr;
   wxBitmap m_panel_bitmap;   // shown in the plugin manager
@@ -97,7 +102,10 @@ class mayara_pi : public opencpn_plugin_121 {
   // Presentation: how many PPI windows to spread the discovered radars across.
   // 8 radars with m_windows_count = 2 => 4 radars per window. Persisted.
   int m_windows_count = 1;
-  int m_orientation = 0;  // 0 head-up, 1 north-up, 2 course-up. Persisted.
+  // Per-radar orientation (0 head-up, 1 north-up, 2 course-up), keyed by radar
+  // id. Persisted.
+  std::map<std::string, int> m_orient;
+  std::vector<wxRect> m_geom_cache;  // last live snapshot of window geometry
 
   // GL chart-overlay: each radar's cached disc uploaded as a texture and drawn
   // as a rotated/scaled quad, re-uploaded only when its disc changes. Radars

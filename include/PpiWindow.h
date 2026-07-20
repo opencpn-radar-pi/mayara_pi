@@ -5,6 +5,7 @@
 #define MAYARA_PPI_WINDOW_H_
 
 #include <functional>
+#include <string>
 #include <vector>
 
 #include <wx/wx.h>
@@ -38,20 +39,25 @@ class MayaraPpiWindow : public wxDialog {
   // Provide own-ship nav state to the radar pictures (COG/heading/AIS layers).
   void SetNavProvider(std::function<NavState()> provider);
 
-  // Orientation: set the mode on every picture, and wire the View toggle.
-  void SetOrientation(int o);
-  void SetOrientationControl(std::function<int()> get,
-                             std::function<void(int)> set);
+  // Per-radar orientation: `get_mode(radarId)` / `set_mode(radarId, mode)`
+  // initialise each picture and wire the View toggle to the focused radar.
+  void SetOrientationHandlers(
+      std::function<int(const std::string&)> get_mode,
+      std::function<void(const std::string&, int)> set_mode);
 
  private:
   void OnClose(wxCloseEvent& event);
   // Widen the window by `extra` px to fit the controls, shifting it left/up if
   // that would push it off the current display.
   void GrowForControls(int extra);
+  RadarDisplayPanel* FocusedPanel();  // panel driving the shared controls
 
-  wxWindow* m_grid = nullptr;  // container of the radar pictures
+  MayaraClient* m_client = nullptr;  // not owned
+  wxWindow* m_grid = nullptr;        // container of the radar pictures
   std::vector<RadarDisplayPanel*> m_radars;
   ControlsPanel* m_controls = nullptr;
+  std::function<int(const std::string&)> m_orient_get;
+  std::function<void(const std::string&, int)> m_orient_set;
 
   wxDECLARE_EVENT_TABLE();
 };

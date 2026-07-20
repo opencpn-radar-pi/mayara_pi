@@ -12,6 +12,7 @@
 #include <wx/display.h>
 #include <wx/fileconf.h>
 #include <wx/spinctrl.h>
+#include <wx/tokenzr.h>
 #include <wx/toplevel.h>
 
 #ifdef __WXOSX__
@@ -171,23 +172,51 @@ void mayara_pi::LoadConfig() {
   bool overlay = true;
   cfg->Read("OverlayEnabled", &overlay, true);
   m_overlay_enabled = overlay;
-  int orient = 0;
-  cfg->Read("Orientation", &orient, 0);
-  m_orientation = (orient >= 0 && orient <= 2) ? orient : 0;
+  // Per-radar orientation: "id=mode;id=mode;..."
+  m_orient.clear();
+  wxString orient;
+  if (cfg->Read("Orientations", &orient) && !orient.IsEmpty()) {
+    wxStringTokenizer tok(orient, ";");
+    while (tok.HasMoreTokens()) {
+      const wxString pair = tok.GetNextToken();
+      const int eq = pair.Find('=');
+      if (eq == wxNOT_FOUND) continue;
+      long m = 0;
+      if (pair.Mid(eq + 1).ToLong(&m) && m >= 0 && m <= 2)
+        m_orient[std::string(pair.Left(eq).mb_str())] = static_cast<int>(m);
+    }
+  }
   bool shown = false;
   cfg->Read("WindowsVisible", &shown, false);
   m_windows_visible = shown;  // restored on the next fix (see SetPositionFixEx)
+}
+
+int mayara_pi::OrientationFor(const std::string& radar_id) const {
+  auto it = m_orient.find(radar_id);
+  return it != m_orient.end() ? it->second : 0;
+}
+
+void mayara_pi::SetOrientationFor(const std::string& radar_id, int mode) {
+  m_orient[radar_id] = mode;
+  SaveConfig();
+}
+
+// Snapshot geometry + visibility while the windows are definitely alive. wx may
+// destroy top-level windows before DeInit, so we never read them at shutdown.
+void mayara_pi::CaptureWindowState() {
+  m_geom_cache.clear();
+  for (MayaraPpiWindow* w : m_windows)
+    if (w) m_geom_cache.push_back(w->GetScreenRect());
 }
 
 void mayara_pi::SaveWindowState() {
   wxFileConfig* cfg = GetOCPNConfigObject();
   if (!cfg) return;
   cfg->SetPath(kConfigGroup);
-  cfg->Write("WindowsVisible", AnyWindowShown());
-  cfg->Write("WinCount", static_cast<int>(m_windows.size()));
-  for (size_t i = 0; i < m_windows.size(); ++i) {
-    if (!m_windows[i]) continue;
-    const wxRect r = m_windows[i]->GetScreenRect();
+  cfg->Write("WindowsVisible", m_windows_visible);
+  cfg->Write("WinCount", static_cast<int>(m_geom_cache.size()));
+  for (size_t i = 0; i < m_geom_cache.size(); ++i) {
+    const wxRect& r = m_geom_cache[i];
     const int k = static_cast<int>(i);
     cfg->Write(wxString::Format("Win%d_x", k), r.x);
     cfg->Write(wxString::Format("Win%d_y", k), r.y);
@@ -223,7 +252,10 @@ void mayara_pi::SaveConfig() {
   cfg->SetPath(kConfigGroup);
   cfg->Write("WindowsCount", m_windows_count);
   cfg->Write("OverlayEnabled", m_overlay_enabled);
-  cfg->Write("Orientation", m_orientation);
+  wxString orient;
+  for (const auto& kv : m_orient)
+    orient += wxString::Format("%s=%d;", kv.first.c_str(), kv.second);
+  cfg->Write("Orientations", orient);
   cfg->Flush();
 }
 
@@ -391,14 +423,9 @@ void mayara_pi::RebuildWindows() {
     win->SetSettingsControl([this, win]() { ShowSettings(win); });
     win->SetAutoLayoutControl([this]() { AutoLayoutWindows(/*reflow=*/true); });
     win->SetNavProvider([this]() { return m_nav; });
-    win->SetOrientation(m_orientation);
-    win->SetOrientationControl([this]() { return m_orientation; },
-                               [this](int o) {
-                                 m_orientation = o;
-                                 SaveConfig();
-                                 for (MayaraPpiWindow* w : m_windows)
-                                   if (w) w->SetOrientation(o);
-                               });
+    win->SetOrientationHandlers(
+        [this](const std::string& id) { return OrientationFor(id); },
+        [this](const std::string& id, int o) { SetOrientationFor(id, o); });
     win->Show(m_windows_visible);
     m_windows.push_back(win);
   }
@@ -463,6 +490,7 @@ void mayara_pi::TogglePpiWindow() {
   for (MayaraPpiWindow* win : m_windows)
     if (win) win->Show(m_windows_visible);
   SetToolbarItemState(m_tool_id, m_windows_visible);
+  if (m_windows_visible) CaptureWindowState();
 }
 
 bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
@@ -616,6 +644,7 @@ void mayara_pi::SetPositionFixEx(PlugIn_Position_Fix_Ex& pfix) {
     RebuildWindows();  // shows them (Show(m_windows_visible)) at saved positions
     if (m_tool_id != -1) SetToolbarItemState(m_tool_id, true);
   }
+  if (AnyWindowShown()) CaptureWindowState();  // keep the snapshot current
 }
 
 void mayara_pi::SetColorScheme(PI_ColorScheme cs) {
