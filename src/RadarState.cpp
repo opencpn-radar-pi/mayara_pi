@@ -126,15 +126,16 @@ int RadarState::CopyDisc(std::vector<uint8_t>& dst) {
   return disc_size_;
 }
 
-bool RadarState::RenderPPI(uint8_t* rgb, int w, int h, double zoom) {
+bool RadarState::RenderPPI(uint8_t* rgb, int w, int h, double zoom,
+                          double rot_deg) {
   std::lock_guard<std::mutex> lock(m_);
   std::memset(rgb, 0, static_cast<size_t>(w) * h * 3);
   if (!has_data_ || disc_size_ <= 0) return false;
   EnsureDisc();
 
-  // Nearest-neighbour scale the cached disc into a centred square. `zoom`
-  // magnifies about the disc centre; samples outside the disc stay black. No
-  // trig.
+  // Nearest-neighbour sample the cached (bow-up) disc into a centred square.
+  // `zoom` magnifies about the centre; `rot_deg` rotates the picture clockwise.
+  // Samples outside the disc stay black.
   const int side = std::min(w, h);
   if (side <= 0) return true;
   if (zoom <= 0.0) zoom = 1.0;
@@ -142,17 +143,18 @@ bool RadarState::RenderPPI(uint8_t* rgb, int w, int h, double zoom) {
   const int oy = (h - side) / 2;
   const double dcenter = disc_size_ / 2.0;
   const double step = (static_cast<double>(disc_size_) / side) / zoom;
+  const double th = rot_deg * 3.14159265358979323846 / 180.0;
+  const double cs = std::cos(th), sn = std::sin(th);
   for (int y = 0; y < side; ++y) {
-    const double syf = dcenter + (y - side / 2.0) * step;
-    const int sy = static_cast<int>(syf);
-    if (sy < 0 || sy >= disc_size_) continue;
-    const uint8_t* srow = &disc_[static_cast<size_t>(sy) * disc_size_ * 4];
+    const double fy = (y - side / 2.0) * step;
     uint8_t* orow = rgb + (static_cast<size_t>(oy + y) * w + ox) * 3;
     for (int x = 0; x < side; ++x) {
-      const double sxf = dcenter + (x - side / 2.0) * step;
-      const int sx = static_cast<int>(sxf);
-      if (sx < 0 || sx >= disc_size_) continue;
-      const uint8_t* s = srow + static_cast<size_t>(sx) * 4;
+      const double fx = (x - side / 2.0) * step;
+      const int sx = static_cast<int>(dcenter + fx * cs + fy * sn);
+      const int sy = static_cast<int>(dcenter - fx * sn + fy * cs);
+      if (sx < 0 || sx >= disc_size_ || sy < 0 || sy >= disc_size_) continue;
+      const uint8_t* s =
+          &disc_[(static_cast<size_t>(sy) * disc_size_ + sx) * 4];
       const uint8_t a = s[3];
       if (a) {
         const float f = a * intensity_ / 255.0f;

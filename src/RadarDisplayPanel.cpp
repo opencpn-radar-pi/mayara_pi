@@ -106,16 +106,21 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
   const double zoom =
       (report_m > 0 && spoke_m > 0) ? spoke_m / report_m : 1.0;
 
+  double up_bearing = 0, raster_rot = 0, heading = 0;
+  bool has_heading = false;
+  ResolveOrientation(up_bearing, raster_rot, heading, has_heading);
+
   if (state) {
     std::vector<uint8_t> rgb(static_cast<size_t>(side) * side * 3);
-    if (state->RenderPPI(rgb.data(), side, side, zoom)) {
+    if (state->RenderPPI(rgb.data(), side, side, zoom, raster_rot)) {
       wxImage img(side, side, rgb.data(), true);
       wxBitmap bmp(img);
       dc.DrawBitmap(bmp, (sz.x - side) / 2, (sz.y - side) / 2, false);
     }
   }
 
-  // Extra layers over the picture. Radius now maps to the reported range.
+  // Extra layers over the picture. Radius maps to the reported range; layers
+  // are placed relative to whatever bearing is shown at screen-up.
   DrawLayers(dc, wxPoint(sz.x / 2, sz.y / 2), side / 2.0, report_m, metric);
 
   DrawLozenges(dc, sz);
@@ -277,6 +282,34 @@ int RingCount(double report_m) {
 }
 }  // namespace
 
+void RadarDisplayPanel::ResolveOrientation(double& up_bearing,
+                                           double& raster_rot, double& heading,
+                                           bool& has_heading) const {
+  NavState nav;
+  if (m_nav) nav = m_nav();
+  heading = 0.0;
+  has_heading = false;
+  if (nav.has_hdt) {
+    heading = nav.hdt;
+    has_heading = true;
+  } else if (RadarState* st = m_client ? m_client->StateAt(m_index) : nullptr) {
+    double h = 0.0;
+    if (st->Heading(h)) {
+      heading = h;
+      has_heading = true;
+    }
+  }
+  up_bearing = has_heading ? heading : 0.0;  // head-up: bow at screen-up
+  raster_rot = 0.0;
+  if (m_orientation == kNorthUp && has_heading) {
+    up_bearing = 0.0;  // north at screen-up
+    raster_rot = heading;
+  } else if (m_orientation == kCourseUp && has_heading && nav.has_cog) {
+    up_bearing = nav.cog;  // course at screen-up
+    raster_rot = heading - nav.cog;
+  }
+}
+
 void RadarDisplayPanel::EffectiveRange(double& report_m, bool& metric) const {
   RadarControls* ctrl = m_client ? m_client->ControlsAt(m_index) : nullptr;
   if (!ctrl) return;
@@ -297,22 +330,14 @@ void RadarDisplayPanel::EffectiveRange(double& report_m, bool& metric) const {
 void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
                                    double report_m, bool metric) {
   if (radius < 8) return;
-  RadarState* st = m_client ? m_client->StateAt(m_index) : nullptr;
 
   NavState nav;
   if (m_nav) nav = m_nav();
-  double heading = 0.0;
+  // `up_bearing` is the true bearing shown at screen-up for the current
+  // orientation; every true-referenced layer is placed relative to it.
+  double up_bearing = 0, raster_rot = 0, heading = 0;
   bool has_heading = false;
-  if (nav.has_hdt) {
-    heading = nav.hdt;
-    has_heading = true;
-  } else if (st) {
-    double h = 0.0;
-    if (st->Heading(h)) {
-      heading = h;
-      has_heading = true;
-    }
-  }
+  ResolveOrientation(up_bearing, raster_rot, heading, has_heading);
 
   dc.SetBrush(*wxTRANSPARENT_BRUSH);
 
@@ -349,28 +374,31 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
       for (int deg = 0; deg < 360; deg += 10) {
         const bool major = (deg % 30) == 0;
         const int tick = major ? 9 : 5;
-        dc.DrawLine(PolarPoint(c, ringR - tick, deg, heading),
-                    PolarPoint(c, ringR, deg, heading));
+        dc.DrawLine(PolarPoint(c, ringR - tick, deg, up_bearing),
+                    PolarPoint(c, ringR, deg, up_bearing));
         if (major) {
           const wxString lbl = wxString::Format("%d", deg);
           wxCoord tw, th;
           dc.GetTextExtent(lbl, &tw, &th);
-          const wxPoint lp = PolarPoint(c, ringR - tick - 9, deg, heading);
+          const wxPoint lp = PolarPoint(c, ringR - tick - 9, deg, up_bearing);
           dc.DrawText(lbl, lp.x - tw / 2, lp.y - th / 2);
         }
       }
     }
   }
 
-  // Heading line: bow is straight up on the head-up picture.
+  // Heading line: from the centre towards the bow (true heading). On head-up
+  // that is straight up; on north/course-up it points where the bow is.
   if (m_layers.heading_line) {
     dc.SetPen(wxPen(m_theme.accent, 1));
-    dc.DrawLine(c.x, c.y, c.x, c.y - static_cast<int>(radius));
+    const wxPoint e = has_heading ? PolarPoint(c, radius, heading, up_bearing)
+                                  : wxPoint(c.x, c.y - static_cast<int>(radius));
+    dc.DrawLine(c.x, c.y, e.x, e.y);
   }
 
   // North marker: a small "N" at the true-north bearing.
   if (m_layers.north_marker && has_heading) {
-    const wxPoint n = PolarPoint(c, radius - 12, 0.0, heading);
+    const wxPoint n = PolarPoint(c, radius - 12, 0.0, up_bearing);
     dc.SetTextForeground(m_theme.text);
     wxCoord tw, th;
     dc.GetTextExtent("N", &tw, &th);
@@ -381,7 +409,7 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
   if (m_layers.cog_line && has_heading && nav.has_cog) {
     wxPen pen(wxColour(0, 200, 255), 2, wxPENSTYLE_LONG_DASH);
     dc.SetPen(pen);
-    const wxPoint e = PolarPoint(c, radius, nav.cog, heading);
+    const wxPoint e = PolarPoint(c, radius, nav.cog, up_bearing);
     dc.DrawLine(c.x, c.y, e.x, e.y);
   }
 
@@ -405,11 +433,11 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
           continue;
         }
         const double r = radius * rng_m / report_m;
-        const wxPoint p = PolarPoint(c, r, t->Brg, heading);
+        const wxPoint p = PolarPoint(c, r, t->Brg, up_bearing);
         // Small triangle oriented to COG (fallback: bearing).
         const double course =
             (t->COG >= 0 && t->COG < 360) ? t->COG : t->Brg;
-        const double a = (course - heading) * M_PI / 180.0;
+        const double a = (course - up_bearing) * M_PI / 180.0;
         const double ca = std::cos(a), sa = std::sin(a);
         auto rot = [&](double dx, double dy) {
           return wxPoint(p.x + static_cast<int>(std::lround(dx * ca - dy * sa)),

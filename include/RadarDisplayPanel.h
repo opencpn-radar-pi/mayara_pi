@@ -17,6 +17,8 @@
 
 class MayaraClient;
 
+enum PpiOrientation { kHeadUp = 0, kNorthUp = 1, kCourseUp = 2 };
+
 // Which extra layers to paint over the radar picture.
 struct PpiLayers {
   bool range_rings = true;
@@ -42,6 +44,8 @@ class RadarDisplayPanel : public wxPanel {
   void SetNavProvider(std::function<NavState()> p) { m_nav = std::move(p); }
   void SetLayers(const PpiLayers& l) { m_layers = l; Refresh(false); }
   const PpiLayers& Layers() const { return m_layers; }
+  void SetOrientation(int o) { m_orientation = o; Refresh(false); }
+  int Orientation() const { return m_orientation; }
   void ApplyTheme(const MayaraTheme& theme);
 
  private:
@@ -57,6 +61,10 @@ class RadarDisplayPanel : public wxPanel {
   // Reported range (range control value, metres) + whether the range unit is
   // metric. Leaves the passed default report_m/metric if unavailable.
   void EffectiveRange(double& report_m, bool& metric) const;
+  // Resolve the current orientation into: the true bearing shown at screen-up
+  // (`up_bearing`), the clockwise raster rotation, and own-ship heading.
+  void ResolveOrientation(double& up_bearing, double& raster_rot,
+                          double& heading, bool& has_heading) const;
   void TogglePower();
   void StepRange(int direction);  // -1 down, +1 up
 
@@ -67,6 +75,7 @@ class RadarDisplayPanel : public wxPanel {
   std::function<void()> m_on_focus;
   std::function<NavState()> m_nav;  // own-ship nav provider (may be null)
   PpiLayers m_layers;
+  int m_orientation = kHeadUp;
   MayaraTheme m_theme;
 
   // Clickable overlay regions, updated each paint.

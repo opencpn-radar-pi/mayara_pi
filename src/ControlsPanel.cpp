@@ -371,6 +371,26 @@ void ControlsPanel::FillViewSection(wxSizer* content) {
       cb->Enable(m_get_overlay && m_get_overlay());  // hide PPI only w/ overlay
     });
   }
+  if (m_get_orientation && m_set_orientation) {
+    content->Add(new wxStaticText(this, wxID_ANY, _("Orientation")), 0,
+                 wxLEFT | wxTOP, 4);
+    auto* row = new wxBoxSizer(wxHORIZONTAL);
+    const wxString labels[3] = {_("Head up"), _("North up"), _("Course up")};
+    std::vector<ThemedButton*> btns;
+    for (int i = 0; i < 3; ++i) {
+      auto* b = new ThemedButton(this, labels[i], m_theme, /*toggle=*/false);
+      row->Add(b, 1, wxALL, 2);
+      btns.push_back(b);
+      b->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&) {
+        if (m_set_orientation) m_set_orientation(i);
+      });
+    }
+    content->Add(row, 0, wxEXPAND | wxLEFT | wxRIGHT, 2);
+    m_updaters.push_back([this, btns]() {
+      const int o = m_get_orientation ? m_get_orientation() : 0;
+      for (int i = 0; i < 3; ++i) btns[i]->SetValue(i == o);
+    });
+  }
   if (m_on_autolayout) {
     auto* b = new ThemedButton(this, _("Auto layout windows"), m_theme,
                                /*toggle=*/false);
@@ -379,6 +399,13 @@ void ControlsPanel::FillViewSection(wxSizer* content) {
       if (m_on_autolayout) m_on_autolayout();
     });
   }
+}
+
+void ControlsPanel::SetOrientationControl(std::function<int()> get,
+                                          std::function<void(int)> set) {
+  m_get_orientation = std::move(get);
+  m_set_orientation = std::move(set);
+  if (m_built) Rebuild();
 }
 
 void ControlsPanel::SetViewControls(std::function<bool()> get_overlay,

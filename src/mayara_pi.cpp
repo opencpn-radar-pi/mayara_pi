@@ -170,6 +170,9 @@ void mayara_pi::LoadConfig() {
   bool overlay = true;
   cfg->Read("OverlayEnabled", &overlay, true);
   m_overlay_enabled = overlay;
+  int orient = 0;
+  cfg->Read("Orientation", &orient, 0);
+  m_orientation = (orient >= 0 && orient <= 2) ? orient : 0;
 }
 
 void mayara_pi::SaveConfig() {
@@ -178,6 +181,7 @@ void mayara_pi::SaveConfig() {
   cfg->SetPath(kConfigGroup);
   cfg->Write("WindowsCount", m_windows_count);
   cfg->Write("OverlayEnabled", m_overlay_enabled);
+  cfg->Write("Orientation", m_orientation);
   cfg->Flush();
 }
 
@@ -345,6 +349,14 @@ void mayara_pi::RebuildWindows() {
     win->SetSettingsControl([this, win]() { ShowSettings(win); });
     win->SetAutoLayoutControl([this]() { AutoLayoutWindows(/*reflow=*/true); });
     win->SetNavProvider([this]() { return m_nav; });
+    win->SetOrientation(m_orientation);
+    win->SetOrientationControl([this]() { return m_orientation; },
+                               [this](int o) {
+                                 m_orientation = o;
+                                 SaveConfig();
+                                 for (MayaraPpiWindow* w : m_windows)
+                                   if (w) w->SetOrientation(o);
+                               });
     win->Show(m_windows_visible);
     m_windows.push_back(win);
   }

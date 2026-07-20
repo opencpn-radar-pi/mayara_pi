@@ -95,6 +95,7 @@ class mayara_pi : public opencpn_plugin_121 {
   // Presentation: how many PPI windows to spread the discovered radars across.
   // 8 radars with m_windows_count = 2 => 4 radars per window. Persisted.
   int m_windows_count = 1;
+  int m_orientation = 0;  // 0 head-up, 1 north-up, 2 course-up. Persisted.
 
   // GL chart-overlay: each radar's cached disc uploaded as a texture and drawn
   // as a rotated/scaled quad, re-uploaded only when its disc changes. Radars

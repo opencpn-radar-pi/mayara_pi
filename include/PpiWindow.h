@@ -38,6 +38,11 @@ class MayaraPpiWindow : public wxDialog {
   // Provide own-ship nav state to the radar pictures (COG/heading/AIS layers).
   void SetNavProvider(std::function<NavState()> provider);
 
+  // Orientation: set the mode on every picture, and wire the View toggle.
+  void SetOrientation(int o);
+  void SetOrientationControl(std::function<int()> get,
+                             std::function<void(int)> set);
+
  private:
   void OnClose(wxCloseEvent& event);
   // Widen the window by `extra` px to fit the controls, shifting it left/up if

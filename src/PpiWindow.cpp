@@ -138,6 +138,16 @@ void MayaraPpiWindow::SetNavProvider(std::function<NavState()> provider) {
   for (RadarDisplayPanel* p : m_radars) p->SetNavProvider(provider);
 }
 
+void MayaraPpiWindow::SetOrientation(int o) {
+  for (RadarDisplayPanel* p : m_radars) p->SetOrientation(o);
+}
+
+void MayaraPpiWindow::SetOrientationControl(std::function<int()> get,
+                                            std::function<void(int)> set) {
+  if (m_controls) m_controls->SetOrientationControl(std::move(get),
+                                                    std::move(set));
+}
+
 void MayaraPpiWindow::GrowForControls(int extra) {
   const wxSize cs = GetClientSize();
   SetClientSize(cs.x + extra, cs.y);
