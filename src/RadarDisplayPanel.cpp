@@ -322,17 +322,22 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
     const int rings = RingCount(report_m);
     dc.SetPen(wxPen(m_theme.dim_text, 1));
     dc.SetTextForeground(m_theme.dim_text);
+    const double k = 0.70710678;  // cos/sin 45 deg (top-right diagonal)
     for (int i = 1; i <= rings; ++i) {
       const double rr = radius * i / rings;
       dc.DrawCircle(c.x, c.y, static_cast<int>(rr));
-      dc.DrawText(FormatRange(report_m * i / rings, metric), c.x + 3,
-                  c.y - static_cast<int>(rr) - 2);
+      const wxString lbl = FormatRange(report_m * i / rings, metric);
+      wxCoord tw, th;
+      dc.GetTextExtent(lbl, &tw, &th);
+      // Text starts just outside the ring on the upper-right diagonal.
+      dc.DrawText(lbl, c.x + static_cast<int>((rr + 3) * k),
+                  c.y - static_cast<int>((rr + 3) * k) - th / 2);
     }
   }
 
   // Heading line: bow is straight up on the head-up picture.
   if (m_layers.heading_line) {
-    dc.SetPen(wxPen(m_theme.accent, 2));
+    dc.SetPen(wxPen(m_theme.accent, 1));
     dc.DrawLine(c.x, c.y, c.x, c.y - static_cast<int>(radius));
   }
 
