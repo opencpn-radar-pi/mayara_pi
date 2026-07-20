@@ -154,7 +154,7 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
   RadarControls* controls = m_client->ControlsAt(m_index);
   if (!controls) return;  // no radar connected yet
 
-  // --- Power lozenge (top-left) with a clickable power icon ---
+  // --- Power lozenge (top-left): radar name above the transmit state ---
   ControlValue pw = controls->Value("power");
   {
     const int p = pw.has_value ? static_cast<int>(pw.value) : 0;
@@ -162,15 +162,33 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
     const wxColour fg = tx ? m_theme.accent : m_theme.accent_dim;
     const wxString label =
         pw.has_value ? PowerLabel(controls, p) : wxString(_("Power"));
-    wxCoord tw, th;
-    dc.GetTextExtent(label, &tw, &th);
-    const int padx = 8, gap = 8, icon = 16;
-    const int h = std::max<int>(th, icon) + 12;
-    const int w = padx + icon + gap + tw + padx;
-    const int x = 10, y = 10;
-    LozengeBg(dc, wxRect(x, y, w, h), h / 2, m_theme);
 
-    // Power glyph: ring + top stem.
+    std::vector<std::string> names = m_client->RadarNames();
+    wxString name;
+    if (m_index >= 0 && m_index < static_cast<int>(names.size()))
+      name = wxString::FromUTF8(names[m_index].c_str());
+
+    const wxFont base = dc.GetFont();
+    wxFont small = base;
+    small.SetPointSize(std::max(8, base.GetPointSize() - 2));
+
+    wxCoord tw, th, nw = 0, nh = 0;
+    dc.GetTextExtent(label, &tw, &th);
+    if (!name.IsEmpty()) {
+      dc.SetFont(small);
+      dc.GetTextExtent(name, &nw, &nh);
+      dc.SetFont(base);
+    }
+
+    const int padx = 8, gap = 8, icon = 16, vgap = 1;
+    const int textW = std::max<int>(tw, nw);
+    const int textH = name.IsEmpty() ? th : nh + vgap + th;
+    const int h = std::max<int>(textH, icon) + 12;
+    const int w = padx + icon + gap + textW + padx;
+    const int x = 10, y = 10;
+    LozengeBg(dc, wxRect(x, y, w, h), std::min(h / 2, 12), m_theme);
+
+    // Power glyph: ring + top stem, vertically centred.
     const int ix = x + padx + icon / 2, iy = y + h / 2, r = icon / 2 - 1;
     dc.SetPen(wxPen(fg, 2));
     dc.SetBrush(*wxTRANSPARENT_BRUSH);
@@ -181,8 +199,19 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
     dc.SetPen(wxPen(fg, 2));
     dc.DrawLine(ix, iy - r - 2, ix, iy);
 
-    dc.SetTextForeground(fg);
-    dc.DrawText(label, x + padx + icon + gap, y + (h - th) / 2);
+    const int textX = x + padx + icon + gap;
+    const int textY = y + (h - textH) / 2;
+    if (!name.IsEmpty()) {
+      dc.SetFont(small);
+      dc.SetTextForeground(m_theme.text);
+      dc.DrawText(name, textX, textY);
+      dc.SetFont(base);
+      dc.SetTextForeground(fg);
+      dc.DrawText(label, textX, textY + nh + vgap);
+    } else {
+      dc.SetTextForeground(fg);
+      dc.DrawText(label, textX, textY);
+    }
     m_power_rect = wxRect(x, y, w, h);
   }
 
