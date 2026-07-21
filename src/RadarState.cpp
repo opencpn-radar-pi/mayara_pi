@@ -133,23 +133,24 @@ bool RadarState::RenderPPI(uint8_t* rgb, int w, int h, double zoom,
   if (!has_data_ || disc_size_ <= 0) return false;
   EnsureDisc();
 
-  // Nearest-neighbour sample the cached (bow-up) disc into a centred square.
-  // `zoom` magnifies about the centre; `rot_deg` rotates the picture clockwise.
-  // Samples outside the disc stay black.
-  const int side = std::min(w, h);
-  if (side <= 0) return true;
+  // Nearest-neighbour sample the cached (bow-up) disc over the WHOLE w*h
+  // rectangle (not clamped to a centred square), so the picture fills the
+  // window and the overzoom shows in the corners. The scale keeps the reported
+  // range at min(w,h)/2, so the range rings stay circular. `zoom` magnifies
+  // about the centre; `rot_deg` rotates the picture clockwise.
+  const int refside = std::min(w, h);
+  if (refside <= 0) return true;
   if (zoom <= 0.0) zoom = 1.0;
-  const int ox = (w - side) / 2;
-  const int oy = (h - side) / 2;
   const double dcenter = disc_size_ / 2.0;
-  const double step = (static_cast<double>(disc_size_) / side) / zoom;
+  const double step = (static_cast<double>(disc_size_) / refside) / zoom;
   const double th = rot_deg * 3.14159265358979323846 / 180.0;
   const double cs = std::cos(th), sn = std::sin(th);
-  for (int y = 0; y < side; ++y) {
-    const double fy = (y - side / 2.0) * step;
-    uint8_t* orow = rgb + (static_cast<size_t>(oy + y) * w + ox) * 3;
-    for (int x = 0; x < side; ++x) {
-      const double fx = (x - side / 2.0) * step;
+  const double ocx = w / 2.0, ocy = h / 2.0;
+  for (int y = 0; y < h; ++y) {
+    const double fy = (y - ocy) * step;
+    uint8_t* orow = rgb + static_cast<size_t>(y) * w * 3;
+    for (int x = 0; x < w; ++x) {
+      const double fx = (x - ocx) * step;
       const int sx = static_cast<int>(dcenter + fx * cs + fy * sn);
       const int sy = static_cast<int>(dcenter - fx * sn + fy * cs);
       if (sx < 0 || sx >= disc_size_ || sy < 0 || sy >= disc_size_) continue;

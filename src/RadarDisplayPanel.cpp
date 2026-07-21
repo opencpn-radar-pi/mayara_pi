@@ -155,7 +155,8 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
   dc.Clear();
 
   RadarState* state = m_client ? m_client->StateAt(m_index) : nullptr;
-  // Centre the picture in the space not covered by the open menu.
+  // The picture fills the visible rectangle (the part not covered by the open
+  // menu). Range rings use the smaller half-dimension so they stay circular.
   const int avail_w = std::max(16, sz.x - m_obscured_right);
   const int side = std::max(16, std::min(avail_w, sz.y));
   const wxPoint pctr(avail_w / 2, sz.y / 2);
@@ -174,11 +175,12 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
   ResolveOrientation(up_bearing, raster_rot, heading, has_heading);
 
   if (state) {
-    std::vector<uint8_t> rgb(static_cast<size_t>(side) * side * 3);
-    if (state->RenderPPI(rgb.data(), side, side, zoom, raster_rot)) {
-      wxImage img(side, side, rgb.data(), true);
+    const int rw = avail_w, rh = sz.y;
+    std::vector<uint8_t> rgb(static_cast<size_t>(rw) * rh * 3);
+    if (state->RenderPPI(rgb.data(), rw, rh, zoom, raster_rot)) {
+      wxImage img(rw, rh, rgb.data(), true);
       wxBitmap bmp(img);
-      dc.DrawBitmap(bmp, pctr.x - side / 2, pctr.y - side / 2, false);
+      dc.DrawBitmap(bmp, 0, 0, false);
     }
   }
 
