@@ -167,17 +167,23 @@ void MayaraPpiWindow::PositionControls(RadarDisplayPanel* focused,
                                        bool allow_grow) {
   if (!m_controls || !focused) return;
   const int ctrl_w = std::max(320, m_controls->GetEffectiveMinSize().x);
+  const int kMinPicture = 240;  // keep at least this much picture beside it
   // Right edge of the focused picture, in this window's client coordinates.
   wxPoint tr = focused->GetScreenPosition();
   tr.x += focused->GetSize().x;
   int x = ScreenToClient(tr).x;
   wxSize cs = GetClientSize();
   if (x + ctrl_w > cs.x) {
-    if (allow_grow) {
-      GrowForControls(x + ctrl_w - cs.x);
+    // No room to the right of the picture: dock the controls at the right edge
+    // (overlaying the picture). Only widen the window if that would leave too
+    // little picture -- so repeatedly opening the menu doesn't keep growing it.
+    x = cs.x - ctrl_w;
+    if (allow_grow && x < kMinPicture) {
+      GrowForControls(kMinPicture - x);
       cs = GetClientSize();
+      x = cs.x - ctrl_w;
     }
-    x = std::max(0, cs.x - ctrl_w);  // clamp so the panel stays visible
+    x = std::max(0, x);
   }
   m_controls->SetSize(x, 0, ctrl_w, cs.y);
   m_controls->Show(true);
