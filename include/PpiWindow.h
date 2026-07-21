@@ -55,6 +55,7 @@ class MayaraPpiWindow : public wxDialog {
   // Float the controls immediately to the right of `focused`, growing the
   // window only if needed (and allowed) to make room.
   void PositionControls(RadarDisplayPanel* focused, bool allow_grow = true);
+  void PositionControlsTopRight();     // small single-control popup
   int DesiredCols() const;             // columns from the window's aspect
   void BuildGrid();                    // show all pictures in a grid
   void SoloPicture(RadarDisplayPanel* only);  // show just one picture

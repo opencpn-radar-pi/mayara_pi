@@ -38,6 +38,9 @@ wxString RangeLabel(uint32_t m) {
   return wxString::Format("%u m", m);
 }
 
+// Defined further down; also used by the range/ring labels.
+wxString FormatRange(double m, bool metric);
+
 void LozengeBg(wxDC& dc, const wxRect& r, int radius, const MayaraTheme& t) {
   dc.SetBrush(wxBrush(t.lozenge_bg));
   dc.SetPen(wxPen(t.lozenge_border));
@@ -289,19 +292,21 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
     if (m_index >= 0 && m_index < static_cast<int>(names.size()))
       name = wxString::FromUTF8(names[m_index].c_str());
 
-    const wxFont base = dc.GetFont();
-    wxFont small = base;
-    small.SetPointSize(std::max(8, base.GetPointSize() - 2));
+    // One size larger than the range-ring labels (which use the panel font).
+    const wxFont base = GetFont();
+    wxFont big = base;
+    big.SetPointSize(base.GetPointSize() + 2);
+    const wxFont& small = base;  // name line == ring-label size
 
     wxCoord tw, th, nw = 0, nh = 0;
+    dc.SetFont(big);
     dc.GetTextExtent(label, &tw, &th);
     if (!name.IsEmpty()) {
       dc.SetFont(small);
       dc.GetTextExtent(name, &nw, &nh);
-      dc.SetFont(base);
     }
 
-    const int padx = 8, gap = 8, icon = 16, vgap = 1;
+    const int padx = 9, gap = 8, icon = th, vgap = 1;
     const int textW = std::max<int>(tw, nw);
     const int textH = name.IsEmpty() ? th : nh + vgap + th;
     const int h = std::max<int>(textH, icon) + 12;
@@ -326,13 +331,15 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
       dc.SetFont(small);
       dc.SetTextForeground(m_theme.text);
       dc.DrawText(name, textX, textY);
-      dc.SetFont(base);
+      dc.SetFont(big);
       dc.SetTextForeground(fg);
       dc.DrawText(label, textX, textY + nh + vgap);
     } else {
+      dc.SetFont(big);
       dc.SetTextForeground(fg);
       dc.DrawText(label, textX, textY);
     }
+    dc.SetFont(base);
     m_power_rect = wxRect(x, y, w, h);
   }
 
@@ -341,11 +348,18 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
   ControlValue rv = controls->Value("range");
   const double cur =
       rv.has_value ? rv.value : (state ? state->RangeMeters() : 0.0);
-  const wxString rlabel = RangeLabel(static_cast<uint32_t>(cur));
+  double report_m = cur;
+  bool metric = false;
+  EffectiveRange(report_m, metric);  // for the unit; report_m is the range value
+  const wxString rlabel =
+      cur > 0 ? FormatRange(cur, metric) : wxString();  // same as ring labels
   if (!rlabel.IsEmpty()) {
+    wxFont big = GetFont();
+    big.SetPointSize(big.GetPointSize() + 2);  // one size up from ring labels
+    dc.SetFont(big);
     wxCoord tw, th;
     dc.GetTextExtent(rlabel, &tw, &th);
-    const int w = std::max<int>(tw + 16, 56);
+    const int w = std::max<int>(tw + 18, 60);
     const int plus_h = 26, minus_h = 26, val_h = th + 12;
     const int h = plus_h + val_h + minus_h;
     const int x = 10, y = (sz.y - h) / 2;
@@ -364,6 +378,7 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
     // value (middle)
     dc.SetTextForeground(fg);
     dc.DrawText(rlabel, x + (w - tw) / 2, y + plus_h + (val_h - th) / 2);
+    dc.SetFont(GetFont());
 
     m_range_plus_rect = wxRect(x, y, w, plus_h);
     m_range_minus_rect = wxRect(x, y + plus_h + val_h, w, minus_h);
@@ -646,9 +661,12 @@ void RadarDisplayPanel::OnLeftDown(wxMouseEvent& event) {
   } else if (m_icon_ebl.Contains(p)) {
     m_ebl_on = !m_ebl_on;  // placeholder until EBL/VRM is implemented
     Refresh(false);
-  } else if (m_icon_gain.Contains(p) || m_icon_sea.Contains(p) ||
-             m_icon_rain.Contains(p)) {
-    if (m_on_menu) m_on_menu();  // open the controls to adjust (for now)
+  } else if (m_icon_gain.Contains(p)) {
+    if (m_on_control) m_on_control("gain");
+  } else if (m_icon_sea.Contains(p)) {
+    if (m_on_control) m_on_control("sea");
+  } else if (m_icon_rain.Contains(p)) {
+    if (m_on_control) m_on_control("rain");
   } else if (m_power_rect.Contains(p))
     TogglePower();
   else if (m_range_minus_rect.Contains(p))

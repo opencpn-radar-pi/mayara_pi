@@ -187,8 +187,16 @@ void ControlsPanel::SetRadarIndex(int index) {
 }
 
 void ControlsPanel::SetViewMode(bool view_only) {
-  if (view_only == m_view_only) return;
+  if (view_only == m_view_only && m_single_id.empty()) return;
   m_view_only = view_only;
+  m_single_id.clear();
+  if (m_built) Rebuild();
+}
+
+void ControlsPanel::SetSingleControl(const std::string& id) {
+  if (id == m_single_id && !m_view_only) return;
+  m_single_id = id;
+  m_view_only = false;
   if (m_built) Rebuild();
 }
 
@@ -248,6 +256,21 @@ void ControlsPanel::Rebuild() {
 
   auto* root = new wxBoxSizer(wxVERTICAL);
   root->Add(MakeCloseRow(), 0, wxEXPAND);
+
+  // Single-control mode: just one control (opened by a gauge icon).
+  if (!m_single_id.empty()) {
+    for (const auto& d : defs)
+      if (d.id == m_single_id) {
+        AddControl(root, d);
+        break;
+      }
+    SetSizer(root);
+    FitInside();
+    Layout();
+    ThemeChildren();
+    ApplyValues();
+    return;
+  }
 
   // View-only mode: just the View controls (opened by the View icon).
   if (m_view_only) {

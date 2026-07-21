@@ -83,6 +83,19 @@ MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client,
   for (RadarDisplayPanel* p : m_radars) {
     p->SetMenuCallback([open, p]() { open(p, /*view_only=*/false); });
     p->SetViewCallback([open, p]() { open(p, /*view_only=*/true); });
+    // A gauge icon opens just that one control as a small top-right popup.
+    p->SetControlCallback([this, controls, p](const std::string& id) {
+      if (controls->IsShown() && controls->SingleControl() == id &&
+          controls->RadarIndex() == p->RadarIndex()) {
+        controls->Hide();
+        if (m_solo) BuildGrid();
+        return;
+      }
+      if (m_solo) BuildGrid();  // the popup doesn't solo the picture
+      controls->SetRadarIndex(p->RadarIndex());
+      controls->SetSingleControl(id);
+      PositionControlsTopRight();
+    });
     // Clicking a picture re-homes the open controls next to it.
     p->SetFocusCallback([this, controls, p]() {
       if (controls->IsShown()) {
@@ -201,13 +214,27 @@ void MayaraPpiWindow::SoloPicture(RadarDisplayPanel* only) {
   m_grid->Layout();
 }
 
+void MayaraPpiWindow::PositionControlsTopRight() {
+  if (!m_controls) return;
+  const int w = 300, h = 120, barW = 52;  // clear of the icon bar
+  const wxSize cs = GetClientSize();
+  const int x = std::max(6, cs.x - barW - w);
+  m_controls->SetSize(x, 6, w, std::min(h, cs.y - 12));
+  m_controls->Show(true);
+  m_controls->Raise();
+}
+
 void MayaraPpiWindow::OnSize(wxSizeEvent& event) {
   event.Skip();
   // Re-flow the (non-soloed) grid when the window's aspect flips.
   if (!m_solo && m_radars.size() > 1 && DesiredCols() != m_grid_cols)
     BuildGrid();
-  if (m_controls && m_controls->IsShown())
-    PositionControls(FocusedPanel(), /*allow_grow=*/false);
+  if (m_controls && m_controls->IsShown()) {
+    if (!m_controls->SingleControl().empty())
+      PositionControlsTopRight();
+    else
+      PositionControls(FocusedPanel(), /*allow_grow=*/false);
+  }
 }
 
 void MayaraPpiWindow::SetOrientationHandlers(

@@ -8,6 +8,7 @@
 #define MAYARA_RADAR_DISPLAY_PANEL_H_
 
 #include <functional>
+#include <string>
 
 #include <wx/wx.h>
 #include <wx/timer.h>
@@ -35,6 +36,10 @@ class RadarDisplayPanel : public wxPanel {
 
   void SetMenuCallback(std::function<void()> cb) { m_on_menu = std::move(cb); }
   void SetViewCallback(std::function<void()> cb) { m_on_view = std::move(cb); }
+  // Open a single control (gauge icons): the callback gets the control id.
+  void SetControlCallback(std::function<void(const std::string&)> cb) {
+    m_on_control = std::move(cb);
+  }
   // Fired when the picture (not a lozenge) is clicked; the window uses it to
   // focus this radar's controls.
   void SetFocusCallback(std::function<void()> cb) {
@@ -75,6 +80,7 @@ class RadarDisplayPanel : public wxPanel {
   wxTimer m_timer;
   std::function<void()> m_on_menu;
   std::function<void()> m_on_view;
+  std::function<void(const std::string&)> m_on_control;
   std::function<void()> m_on_focus;
   std::function<NavState()> m_nav;  // own-ship nav provider (may be null)
   PpiLayers m_layers;
