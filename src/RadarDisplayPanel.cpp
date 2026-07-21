@@ -44,6 +44,63 @@ void LozengeBg(wxDC& dc, const wxRect& r, int radius, const MayaraTheme& t) {
   dc.DrawRoundedRectangle(r.x, r.y, r.width, r.height, radius);
 }
 
+// Fraction (0..1) of a 0..max control, or -1 if unknown. Sets is_auto.
+double GaugeFrac(RadarControls* c, const std::string& id, bool& is_auto) {
+  is_auto = false;
+  if (!c) return -1.0;
+  ControlValue v = c->Value(id);
+  if (!v.has_value) return -1.0;
+  is_auto = v.auto_;
+  double mn = 0, mx = 0;
+  bool has_max = false;
+  for (const auto& d : c->Schema())
+    if (d.id == id) {
+      mn = d.has_min ? d.minValue : 0.0;
+      if (d.has_max) {
+        mx = d.maxValue;
+        has_max = true;
+      }
+      break;
+    }
+  if (!has_max || mx <= mn) return -1.0;
+  const double f = (v.value - mn) / (mx - mn);
+  return f < 0 ? 0 : (f > 1 ? 1 : f);
+}
+
+// A small hand-drawn semicircle gauge with a value arc and a letter beneath.
+void DrawGauge(wxDC& dc, wxPoint c, const wxString& letter, double frac,
+               bool is_auto, const wxColour& ink, const wxColour& accent) {
+  const int R = 11, SEG = 16, yoff = 2;
+  auto pt = [&](double a) {
+    return wxPoint(c.x + static_cast<int>(std::lround(R * std::cos(a))),
+                   c.y - static_cast<int>(std::lround(R * std::sin(a))) + yoff);
+  };
+  dc.SetPen(wxPen(wxColour(90, 90, 96), 2));  // background arc 180 -> 0
+  wxPoint prev = pt(M_PI);
+  for (int i = 1; i <= SEG; ++i) {
+    wxPoint q = pt(M_PI - M_PI * i / SEG);
+    dc.DrawLine(prev, q);
+    prev = q;
+  }
+  if (frac >= 0) {
+    dc.SetPen(wxPen(is_auto ? wxColour(0, 200, 255) : accent, 2));
+    const int segN = static_cast<int>(std::lround(SEG * frac));
+    prev = pt(M_PI);
+    for (int i = 1; i <= segN; ++i) {
+      wxPoint q = pt(M_PI - M_PI * i / SEG);
+      dc.DrawLine(prev, q);
+      prev = q;
+    }
+  }
+  wxFont f = dc.GetFont();
+  f.SetPointSize(8);
+  dc.SetFont(f);
+  dc.SetTextForeground(ink);
+  wxCoord tw, th;
+  dc.GetTextExtent(letter, &tw, &th);
+  dc.DrawText(letter, c.x - tw / 2, c.y + yoff + 3);
+}
+
 // Sorted settable ranges for the "range" control.
 std::vector<int> RangeValues(RadarControls* c) {
   std::vector<int> vals;
@@ -132,23 +189,87 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
   dc.DrawText(status, 8, sz.y - 20);
 }
 
+void RadarDisplayPanel::DrawIconBar(wxDC& dc, const wxSize& sz) {
+  RadarControls* controls = m_client ? m_client->ControlsAt(m_index) : nullptr;
+  const int cell = 40, bw = 40;
+  const int bx = sz.x - bw - 6, by = 6, barH = 7 * cell;
+
+  // Very dark grey rounded background.
+  dc.SetBrush(wxBrush(wxColour(22, 22, 24)));
+  dc.SetPen(*wxTRANSPARENT_PEN);
+  dc.DrawRoundedRectangle(bx, by, bw, barH, 8);
+
+  const wxColour ink(220, 220, 225), dim(115, 115, 122);
+  auto cellRect = [&](int i) { return wxRect(bx, by + i * cell, bw, cell); };
+  auto ctr = [&](int i) {
+    return wxPoint(bx + bw / 2, by + i * cell + cell / 2);
+  };
+
+  // 0: Menu (hamburger).
+  {
+    wxPoint c = ctr(0);
+    dc.SetPen(wxPen(ink, 2));
+    for (int k = -1; k <= 1; ++k)
+      dc.DrawLine(c.x - 9, c.y + k * 5, c.x + 9, c.y + k * 5);
+    m_menu_rect = cellRect(0);
+  }
+  // 1: AIS on/off (filled triangle when on).
+  {
+    wxPoint c = ctr(1);
+    const wxColour col = m_layers.ais ? wxColour(0, 220, 120) : dim;
+    dc.SetPen(wxPen(col, 2));
+    dc.SetBrush(m_layers.ais ? wxBrush(col) : *wxTRANSPARENT_BRUSH);
+    wxPoint tri[3] = {wxPoint(c.x, c.y - 9), wxPoint(c.x - 7, c.y + 8),
+                      wxPoint(c.x + 7, c.y + 8)};
+    dc.DrawPolygon(3, tri);
+    m_icon_ais = cellRect(1);
+  }
+  // 2,3,4: Gain / Sea / Rain gauges.
+  {
+    bool a = false;
+    DrawGauge(dc, ctr(2), "G", GaugeFrac(controls, "gain", a), a, ink,
+              m_theme.accent);
+    m_icon_gain = cellRect(2);
+    DrawGauge(dc, ctr(3), "S", GaugeFrac(controls, "sea", a), a, ink,
+              m_theme.accent);
+    m_icon_sea = cellRect(3);
+    DrawGauge(dc, ctr(4), "R", GaugeFrac(controls, "rain", a), a, ink,
+              m_theme.accent);
+    m_icon_rain = cellRect(4);
+  }
+  // 5: EBL/VRM (ring + radial). Placeholder toggle.
+  {
+    wxPoint c = ctr(5);
+    const wxColour col = m_ebl_on ? m_theme.accent : dim;
+    dc.SetBrush(*wxTRANSPARENT_BRUSH);
+    dc.SetPen(wxPen(col, 2));
+    dc.DrawCircle(c.x, c.y, 9);
+    dc.DrawLine(c.x, c.y, c.x + 8, c.y - 5);
+    m_icon_ebl = cellRect(5);
+  }
+  // 6: View (mini hamburger over an eye).
+  {
+    wxPoint c = ctr(6);
+    dc.SetPen(wxPen(ink, 2));
+    for (int k = 0; k < 2; ++k)
+      dc.DrawLine(c.x - 8, c.y - 11 + k * 4, c.x + 8, c.y - 11 + k * 4);
+    dc.SetBrush(*wxTRANSPARENT_BRUSH);
+    dc.DrawEllipse(c.x - 9, c.y - 1, 18, 12);
+    dc.SetBrush(wxBrush(ink));
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    dc.DrawCircle(c.x, c.y + 5, 2);
+    m_icon_view = cellRect(6);
+  }
+}
+
 void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
-  m_menu_rect = wxRect();
+  m_menu_rect = m_icon_ais = m_icon_gain = m_icon_sea = m_icon_rain =
+      m_icon_ebl = m_icon_view = wxRect();
   m_power_rect = wxRect();
   m_range_minus_rect = wxRect();
   m_range_plus_rect = wxRect();
 
-  // Hamburger button (top-right), painted so it themes.
-  {
-    const int bw = 32, bh = 26, x = sz.x - bw - 8, y = 8;
-    LozengeBg(dc, wxRect(x, y, bw, bh), 5, m_theme);
-    dc.SetPen(wxPen(m_theme.text, 2));
-    const int lx0 = x + 8, lx1 = x + bw - 8, cy = y + bh / 2;
-    dc.DrawLine(lx0, cy - 5, lx1, cy - 5);
-    dc.DrawLine(lx0, cy, lx1, cy);
-    dc.DrawLine(lx0, cy + 5, lx1, cy + 5);
-    m_menu_rect = wxRect(x, y, bw, bh);
-  }
+  DrawIconBar(dc, sz);
 
   if (!m_client) return;
   RadarControls* controls = m_client->ControlsAt(m_index);
@@ -517,6 +638,17 @@ void RadarDisplayPanel::OnLeftDown(wxMouseEvent& event) {
   const wxPoint p = event.GetPosition();
   if (m_menu_rect.Contains(p)) {
     if (m_on_menu) m_on_menu();
+  } else if (m_icon_view.Contains(p)) {
+    if (m_on_view) m_on_view();
+  } else if (m_icon_ais.Contains(p)) {
+    m_layers.ais = !m_layers.ais;
+    Refresh(false);
+  } else if (m_icon_ebl.Contains(p)) {
+    m_ebl_on = !m_ebl_on;  // placeholder until EBL/VRM is implemented
+    Refresh(false);
+  } else if (m_icon_gain.Contains(p) || m_icon_sea.Contains(p) ||
+             m_icon_rain.Contains(p)) {
+    if (m_on_menu) m_on_menu();  // open the controls to adjust (for now)
   } else if (m_power_rect.Contains(p))
     TogglePower();
   else if (m_range_minus_rect.Contains(p))

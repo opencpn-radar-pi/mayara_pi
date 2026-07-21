@@ -186,6 +186,12 @@ void ControlsPanel::SetRadarIndex(int index) {
   if (m_built) Rebuild();
 }
 
+void ControlsPanel::SetViewMode(bool view_only) {
+  if (view_only == m_view_only) return;
+  m_view_only = view_only;
+  if (m_built) Rebuild();
+}
+
 void ControlsPanel::ApplyTheme(const MayaraTheme& theme) {
   m_theme = theme;
   if (m_built)
@@ -243,6 +249,19 @@ void ControlsPanel::Rebuild() {
   auto* root = new wxBoxSizer(wxVERTICAL);
   root->Add(MakeCloseRow(), 0, wxEXPAND);
 
+  // View-only mode: just the View controls (opened by the View icon).
+  if (m_view_only) {
+    auto* content = new wxBoxSizer(wxVERTICAL);
+    FillViewSection(content);
+    root->Add(content, 0, wxEXPAND | wxLEFT | wxRIGHT, 6);
+    SetSizer(root);
+    FitInside();
+    Layout();
+    ThemeChildren();
+    ApplyValues();
+    return;
+  }
+
   // Radar selector: switches which of this window's radars these controls
   // drive. Shown only when the window hosts more than one radar.
   if (m_radar_list.size() > 1) {
@@ -274,10 +293,7 @@ void ControlsPanel::Rebuild() {
     AddEnum(root, *by_id["rangeUnits"], /*buttons=*/true);
   root->Add(new wxStaticLine(this), 0, wxEXPAND | wxALL, 4);
 
-  // View section (plugin/window toggles), placed before Base.
-  AddCollapsibleSection(root, _("View"), "view",
-                        [this](wxSizer* c) { FillViewSection(c); });
-
+  // (The View controls live in their own menu now, opened by the View icon.)
   const std::set<std::string> quick = {"power", "range", "rangeUnits"};
   const char* categories[] = {"base",         "targets",      "trails",
                               "advanced",     "installation", "info"};

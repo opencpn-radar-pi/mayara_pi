@@ -34,6 +34,7 @@ class RadarDisplayPanel : public wxPanel {
   RadarDisplayPanel(wxWindow* parent, MayaraClient* client, int radar_index = 0);
 
   void SetMenuCallback(std::function<void()> cb) { m_on_menu = std::move(cb); }
+  void SetViewCallback(std::function<void()> cb) { m_on_view = std::move(cb); }
   // Fired when the picture (not a lozenge) is clicked; the window uses it to
   // focus this radar's controls.
   void SetFocusCallback(std::function<void()> cb) {
@@ -54,6 +55,7 @@ class RadarDisplayPanel : public wxPanel {
   void OnSize(wxSizeEvent& event);
   void OnLeftDown(wxMouseEvent& event);
   void DrawLozenges(wxDC& dc, const wxSize& sz);
+  void DrawIconBar(wxDC& dc, const wxSize& sz);  // vertical hand-drawn toolbar
   // Paint the extra layers over the picture. `center` is the sweep origin,
   // `radius` the pixel radius of the reported range `report_m`.
   void DrawLayers(wxDC& dc, wxPoint center, double radius, double report_m,
@@ -72,14 +74,22 @@ class RadarDisplayPanel : public wxPanel {
   int m_index = 0;         // which radar this panel shows
   wxTimer m_timer;
   std::function<void()> m_on_menu;
+  std::function<void()> m_on_view;
   std::function<void()> m_on_focus;
   std::function<NavState()> m_nav;  // own-ship nav provider (may be null)
   PpiLayers m_layers;
   int m_orientation = kHeadUp;
+  bool m_ebl_on = false;  // EBL/VRM toggle (placeholder until implemented)
   MayaraTheme m_theme;
 
   // Clickable overlay regions, updated each paint.
-  wxRect m_menu_rect;
+  wxRect m_menu_rect;    // icon-bar: Menu (hamburger)
+  wxRect m_icon_ais;     // icon-bar: AIS on/off
+  wxRect m_icon_gain;    // icon-bar: Gain gauge
+  wxRect m_icon_sea;     // icon-bar: Sea gauge
+  wxRect m_icon_rain;    // icon-bar: Rain gauge
+  wxRect m_icon_ebl;     // icon-bar: EBL/VRM
+  wxRect m_icon_view;    // icon-bar: View menu
   wxRect m_power_rect;
   wxRect m_range_minus_rect;
   wxRect m_range_plus_rect;
