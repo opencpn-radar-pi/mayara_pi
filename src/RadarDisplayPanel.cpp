@@ -155,7 +155,10 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
   dc.Clear();
 
   RadarState* state = m_client ? m_client->StateAt(m_index) : nullptr;
-  const int side = std::max(16, std::min(sz.x, sz.y));
+  // Centre the picture in the space not covered by the open menu.
+  const int avail_w = std::max(16, sz.x - m_obscured_right);
+  const int side = std::max(16, std::min(avail_w, sz.y));
+  const wxPoint pctr(avail_w / 2, sz.y / 2);
 
   // The reported (nominal, round) range fills the window; the larger spoke
   // range spills past the edge as overzoom (zoom = spoke / report).
@@ -175,13 +178,13 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
     if (state->RenderPPI(rgb.data(), side, side, zoom, raster_rot)) {
       wxImage img(side, side, rgb.data(), true);
       wxBitmap bmp(img);
-      dc.DrawBitmap(bmp, (sz.x - side) / 2, (sz.y - side) / 2, false);
+      dc.DrawBitmap(bmp, pctr.x - side / 2, pctr.y - side / 2, false);
     }
   }
 
   // Extra layers over the picture. Radius maps to the reported range; layers
   // are placed relative to whatever bearing is shown at screen-up.
-  DrawLayers(dc, wxPoint(sz.x / 2, sz.y / 2), side / 2.0, report_m, metric);
+  DrawLayers(dc, pctr, side / 2.0, report_m, metric);
 
   DrawLozenges(dc, sz);
 

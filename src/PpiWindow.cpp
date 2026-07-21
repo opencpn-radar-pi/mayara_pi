@@ -70,9 +70,8 @@ MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client,
   // mode. In a multi-radar window the picture is soloed while its menu is open.
   auto open = [this, controls](RadarDisplayPanel* p, bool view_only) {
     if (controls->IsShown() && controls->RadarIndex() == p->RadarIndex() &&
-        controls->IsViewMode() == view_only) {
-      controls->Hide();
-      if (m_solo) BuildGrid();
+        controls->IsViewMode() == view_only && controls->SingleControl().empty()) {
+      HideControls();
       return;
     }
     controls->SetViewMode(view_only);
@@ -87,8 +86,7 @@ MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client,
     p->SetControlCallback([this, controls, p](const std::string& id) {
       if (controls->IsShown() && controls->SingleControl() == id &&
           controls->RadarIndex() == p->RadarIndex()) {
-        controls->Hide();
-        if (m_solo) BuildGrid();
+        HideControls();
         return;
       }
       if (m_solo) BuildGrid();  // the popup doesn't solo the picture
@@ -104,9 +102,8 @@ MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client,
       }
     });
   }
-  controls->SetCloseCallback([this, controls]() {
-    controls->Hide();
-    if (m_solo) BuildGrid();  // restore the other pictures
+  controls->SetCloseCallback([this]() {
+    HideControls();
     Layout();
   });
 }
@@ -188,6 +185,15 @@ void MayaraPpiWindow::PositionControls(RadarDisplayPanel* focused,
   m_controls->SetSize(x, 0, ctrl_w, cs.y);
   m_controls->Show(true);
   m_controls->Raise();
+  // Re-centre the picture in the space the menu doesn't cover.
+  for (RadarDisplayPanel* q : m_radars)
+    q->SetObscuredRight(q == focused ? cs.x - x : 0);
+}
+
+void MayaraPpiWindow::HideControls() {
+  if (m_controls) m_controls->Hide();
+  for (RadarDisplayPanel* p : m_radars) p->SetObscuredRight(0);
+  if (m_solo) BuildGrid();
 }
 
 int MayaraPpiWindow::DesiredCols() const {

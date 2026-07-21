@@ -52,6 +52,14 @@ class RadarDisplayPanel : public wxPanel {
   const PpiLayers& Layers() const { return m_layers; }
   void SetOrientation(int o) { m_orientation = o; Refresh(false); }
   int Orientation() const { return m_orientation; }
+  // Pixels obscured on the right by the open menu, so the picture re-centres in
+  // the remaining space.
+  void SetObscuredRight(int px) {
+    if (px != m_obscured_right) {
+      m_obscured_right = px;
+      Refresh(false);
+    }
+  }
   void ApplyTheme(const MayaraTheme& theme);
 
  private:
@@ -85,6 +93,7 @@ class RadarDisplayPanel : public wxPanel {
   std::function<NavState()> m_nav;  // own-ship nav provider (may be null)
   PpiLayers m_layers;
   int m_orientation = kHeadUp;
+  int m_obscured_right = 0;  // px covered on the right by the open menu
   bool m_ebl_on = false;  // EBL/VRM toggle (placeholder until implemented)
   MayaraTheme m_theme;
 
