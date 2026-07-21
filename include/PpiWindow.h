@@ -66,6 +66,8 @@ class MayaraPpiWindow : public wxDialog {
   std::vector<RadarDisplayPanel*> m_radars;
   int m_grid_cols = 0;      // current grid column count (-1 while soloed)
   bool m_solo = false;      // a single picture is shown for its open menu
+  bool m_grew = false;      // the menu widened the window
+  wxRect m_pre_grow;        // window geometry before it was widened
   ControlsPanel* m_controls = nullptr;
   std::function<int(const std::string&)> m_orient_get;
   std::function<void(const std::string&, int)> m_orient_set;

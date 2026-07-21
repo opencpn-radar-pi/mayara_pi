@@ -188,11 +188,14 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
 
   DrawLozenges(dc, sz);
 
-  wxString status =
-      m_client ? wxString::FromUTF8(m_client->StatusLine().c_str())
-               : wxString("no client");
-  dc.SetTextForeground(m_theme.text);
-  dc.DrawText(status, 8, sz.y - 20);
+  // Connection status only until a radar is up (no "streaming N radar(s)").
+  if (!m_client || !m_client->ControlsAt(m_index)) {
+    const wxString status =
+        m_client ? wxString::FromUTF8(m_client->StatusLine().c_str())
+                 : wxString("no client");
+    dc.SetTextForeground(m_theme.text);
+    dc.DrawText(status, 8, sz.y - 20);
+  }
 }
 
 void RadarDisplayPanel::DrawIconBar(wxDC& dc, const wxSize& sz) {

@@ -176,6 +176,10 @@ void MayaraPpiWindow::PositionControls(RadarDisplayPanel* focused,
     // little picture -- so repeatedly opening the menu doesn't keep growing it.
     x = cs.x - ctrl_w;
     if (allow_grow && x < kMinPicture) {
+      if (!m_grew) {  // remember the size so we can restore it on close
+        m_pre_grow = GetScreenRect();
+        m_grew = true;
+      }
       GrowForControls(kMinPicture - x);
       cs = GetClientSize();
       x = cs.x - ctrl_w;
@@ -194,6 +198,10 @@ void MayaraPpiWindow::HideControls() {
   if (m_controls) m_controls->Hide();
   for (RadarDisplayPanel* p : m_radars) p->SetObscuredRight(0);
   if (m_solo) BuildGrid();
+  if (m_grew) {  // undo any widening the menu caused
+    SetSize(m_pre_grow);
+    m_grew = false;
+  }
 }
 
 int MayaraPpiWindow::DesiredCols() const {
