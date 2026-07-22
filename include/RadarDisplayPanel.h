@@ -53,6 +53,10 @@ class RadarDisplayPanel : public wxPanel {
   const PpiLayers& Layers() const { return m_layers; }
   void SetOrientation(int o) { m_orientation = o; Refresh(false); }
   int Orientation() const { return m_orientation; }
+  // Display echo threshold (0 all, 1 hide weak, 2 only strong). Applied to the
+  // shared radar state so the disc re-maps.
+  void SetThreshold(int level);
+  int Threshold() const { return m_threshold; }
   // Pixels obscured on the right by the open menu, so the picture re-centres in
   // the remaining space.
   void SetObscuredRight(int px) {
@@ -100,6 +104,7 @@ class RadarDisplayPanel : public wxPanel {
   std::function<NavState()> m_nav;  // own-ship nav provider (may be null)
   PpiLayers m_layers;
   int m_orientation = kHeadUp;
+  int m_threshold = 0;          // display echo threshold (0 all/1 weak/2 strong)
   double m_display_zoom = 1.0;  // free PPI magnification (0.5x - 5x), transient
   int m_obscured_right = 0;  // px covered on the right by the open menu
   bool m_ebl_on = false;  // EBL/VRM toggle (placeholder until implemented)

@@ -88,6 +88,8 @@ class mayara_pi : public opencpn_plugin_121 {
   wxString SavedPaneInfo(int index) const;  // saved AUI pane layout, or empty
   int OrientationFor(const std::string& radar_id) const;   // per-radar mode
   void SetOrientationFor(const std::string& radar_id, int mode);
+  int ThresholdFor(const std::string& radar_id) const;     // per-radar echo cut
+  void SetThresholdFor(const std::string& radar_id, int level);
 
   wxWindow* m_parent_window = nullptr;
   wxBitmap m_panel_bitmap;   // shown in the plugin manager
@@ -112,6 +114,9 @@ class mayara_pi : public opencpn_plugin_121 {
   // Per-radar orientation (0 head-up, 1 north-up, 2 course-up), keyed by radar
   // id. Persisted.
   std::map<std::string, int> m_orient;
+  // Per-radar display echo threshold (0 all, 1 hide weak, 2 only strong),
+  // keyed by radar id. Persisted.
+  std::map<std::string, int> m_threshold;
   std::vector<wxRect> m_geom_cache;  // last live snapshot of window geometry
   std::vector<wxString> m_persp_cache;  // last live snapshot of AUI pane info
   bool m_docked = false;             // radar windows docked into OpenCPN (AUI)

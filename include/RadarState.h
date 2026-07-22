@@ -83,6 +83,14 @@ class RadarState {
   // Echo brightness scale (1.0 = full; lower dims the PPI at dusk/night).
   void SetIntensity(float f);
 
+  // Legend intensity-band boundaries (from the server legend: lowReturn /
+  // mediumReturn / strongReturn indices), used by the display threshold.
+  void SetLegendBands(int low, int medium, int strong);
+  // Display echo threshold: 0 = show all returns, 1 = hide weak (below the
+  // medium band), 2 = only strong. Doppler/history colours are never hidden.
+  void SetThreshold(int level);
+  int Threshold() const;
+
   uint32_t RangeMeters() const;
   uint64_t Generation() const;
   bool Configured() const;
@@ -106,6 +114,9 @@ class RadarState {
   double heading_deg_ = 0.0;
   bool has_heading_ = false;
   float intensity_ = 1.0f;
+  int band_medium_ = 0;     // legend index where the medium return starts
+  int band_strong_ = 0;     // legend index where the strong return starts
+  int threshold_level_ = 0; // 0 all, 1 hide weak, 2 only strong
 
   // Cartesian render cache.
   int disc_size_ = 0;

@@ -73,6 +73,11 @@ class MayaraPpiWindow : public wxPanel {
       std::function<int(const std::string&)> get_mode,
       std::function<void(const std::string&, int)> set_mode);
 
+  // Per-radar display echo threshold, wired like the orientation handlers.
+  void SetThresholdHandlers(
+      std::function<int(const std::string&)> get_level,
+      std::function<void(const std::string&, int)> set_level);
+
  private:
   void OnSize(wxSizeEvent& event);
   // Widen the (floating) window by `extra` px to fit the controls, shifting it
@@ -99,6 +104,8 @@ class MayaraPpiWindow : public wxPanel {
   ControlsPanel* m_controls = nullptr;
   std::function<int(const std::string&)> m_orient_get;
   std::function<void(const std::string&, int)> m_orient_set;
+  std::function<int(const std::string&)> m_thresh_get;
+  std::function<void(const std::string&, int)> m_thresh_set;
   int m_grid_cols = 0;      // current grid column count (-1 while soloed)
   bool m_solo = false;      // a single picture is shown for its open menu
   bool m_grew = false;      // the menu widened the window

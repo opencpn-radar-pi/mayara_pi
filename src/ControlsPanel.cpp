@@ -433,6 +433,29 @@ void ControlsPanel::FillViewSection(wxSizer* content) {
         (*btns)[j]->SetValue(static_cast<int>(j) == o);
     });
   }
+  if (m_get_threshold && m_set_threshold) {
+    content->Add(new wxStaticText(this, wxID_ANY, _("Echo threshold")), 0,
+                 wxLEFT | wxTOP, 4);
+    auto* row = new wxBoxSizer(wxHORIZONTAL);
+    const wxString labels[3] = {_("All"), _("Medium"), _("Strong")};
+    auto btns = std::make_shared<std::vector<ThemedButton*>>();
+    for (int i = 0; i < 3; ++i) {
+      auto* b = new ThemedButton(this, labels[i], m_theme, /*toggle=*/false);
+      row->Add(b, 1, wxALL, 2);
+      btns->push_back(b);
+      b->Bind(wxEVT_BUTTON, [this, i, btns](wxCommandEvent&) {
+        if (m_set_threshold) m_set_threshold(i);
+        for (size_t j = 0; j < btns->size(); ++j)
+          (*btns)[j]->SetValue(static_cast<int>(j) == i);
+      });
+    }
+    content->Add(row, 0, wxEXPAND | wxLEFT | wxRIGHT, 2);
+    m_updaters.push_back([this, btns]() {
+      const int t = m_get_threshold ? m_get_threshold() : 0;
+      for (size_t j = 0; j < btns->size(); ++j)
+        (*btns)[j]->SetValue(static_cast<int>(j) == t);
+    });
+  }
   if (m_on_autolayout) {
     auto* b = new ThemedButton(this, _("Auto layout windows"), m_theme,
                                /*toggle=*/false);
@@ -457,6 +480,13 @@ void ControlsPanel::SetOrientationControl(std::function<int()> get,
                                           std::function<void(int)> set) {
   m_get_orientation = std::move(get);
   m_set_orientation = std::move(set);
+  if (m_built) Rebuild();
+}
+
+void ControlsPanel::SetThresholdControl(std::function<int()> get,
+                                        std::function<void(int)> set) {
+  m_get_threshold = std::move(get);
+  m_set_threshold = std::move(set);
   if (m_built) Rebuild();
 }
 

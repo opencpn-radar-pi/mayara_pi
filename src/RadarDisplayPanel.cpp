@@ -927,6 +927,15 @@ void RadarDisplayPanel::OnMouseWheel(wxMouseEvent& event) {
   }
 }
 
+void RadarDisplayPanel::SetThreshold(int level) {
+  if (level < 0) level = 0;
+  if (level > 2) level = 2;
+  m_threshold = level;
+  if (RadarState* s = m_client ? m_client->StateAt(m_index) : nullptr)
+    s->SetThreshold(level);
+  Refresh(false);
+}
+
 void RadarDisplayPanel::TogglePower() {
   RadarControls* c = m_client ? m_client->ControlsAt(m_index) : nullptr;
   if (!c) return;

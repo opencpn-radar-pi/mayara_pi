@@ -345,6 +345,33 @@ void MayaraPpiWindow::SetOrientationHandlers(
         });
 }
 
+void MayaraPpiWindow::SetThresholdHandlers(
+    std::function<int(const std::string&)> get_level,
+    std::function<void(const std::string&, int)> set_level) {
+  m_thresh_get = std::move(get_level);
+  m_thresh_set = std::move(set_level);
+  // Initialise each picture from its radar's persisted threshold.
+  for (RadarDisplayPanel* p : m_radars) {
+    const std::string id = m_client ? m_client->RadarId(p->RadarIndex()) : "";
+    p->SetThreshold(m_thresh_get ? m_thresh_get(id) : 0);
+  }
+  // Drive the View toggle from/into the focused radar's picture.
+  if (m_controls)
+    m_controls->SetThresholdControl(
+        [this]() {
+          RadarDisplayPanel* p = FocusedPanel();
+          return p ? p->Threshold() : 0;
+        },
+        [this](int level) {
+          RadarDisplayPanel* p = FocusedPanel();
+          if (!p) return;
+          p->SetThreshold(level);
+          const std::string id =
+              m_client ? m_client->RadarId(p->RadarIndex()) : "";
+          if (m_thresh_set) m_thresh_set(id, level);
+        });
+}
+
 void MayaraPpiWindow::GrowForControls(int extra) {
   if (m_docked || !m_frame) return;  // can't grow a docked pane
   const wxSize cs = m_frame->GetClientSize();

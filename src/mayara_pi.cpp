@@ -256,6 +256,20 @@ void mayara_pi::LoadConfig() {
         m_orient[std::string(pair.Left(eq).mb_str())] = static_cast<int>(m);
     }
   }
+  // Per-radar echo threshold: "id=level;id=level;..."
+  m_threshold.clear();
+  wxString thresh;
+  if (cfg->Read("Thresholds", &thresh) && !thresh.IsEmpty()) {
+    wxStringTokenizer tok(thresh, ";");
+    while (tok.HasMoreTokens()) {
+      const wxString pair = tok.GetNextToken();
+      const int eq = pair.Find('=');
+      if (eq == wxNOT_FOUND) continue;
+      long m = 0;
+      if (pair.Mid(eq + 1).ToLong(&m) && m >= 0 && m <= 2)
+        m_threshold[std::string(pair.Left(eq).mb_str())] = static_cast<int>(m);
+    }
+  }
   bool shown = false;
   cfg->Read("WindowsVisible", &shown, false);
   m_windows_visible = shown;  // restored on the next fix (see SetPositionFixEx)
@@ -274,6 +288,16 @@ int mayara_pi::OrientationFor(const std::string& radar_id) const {
 
 void mayara_pi::SetOrientationFor(const std::string& radar_id, int mode) {
   m_orient[radar_id] = mode;
+  SaveConfig();
+}
+
+int mayara_pi::ThresholdFor(const std::string& radar_id) const {
+  auto it = m_threshold.find(radar_id);
+  return it != m_threshold.end() ? it->second : 0;
+}
+
+void mayara_pi::SetThresholdFor(const std::string& radar_id, int level) {
+  m_threshold[radar_id] = level;
   SaveConfig();
 }
 
@@ -362,6 +386,10 @@ void mayara_pi::SaveConfig() {
   for (const auto& kv : m_orient)
     orient += wxString::Format("%s=%d;", kv.first.c_str(), kv.second);
   cfg->Write("Orientations", orient);
+  wxString thresh;
+  for (const auto& kv : m_threshold)
+    thresh += wxString::Format("%s=%d;", kv.first.c_str(), kv.second);
+  cfg->Write("Thresholds", thresh);
   cfg->Write("Docked", m_docked);
   cfg->Write("ServerUrl", wxString::FromUTF8(m_saved_server_url.c_str()));
   cfg->Flush();
@@ -668,6 +696,9 @@ void mayara_pi::RebuildWindows() {
     win->SetOrientationHandlers(
         [this](const std::string& id) { return OrientationFor(id); },
         [this](const std::string& id, int o) { SetOrientationFor(id, o); });
+    win->SetThresholdHandlers(
+        [this](const std::string& id) { return ThresholdFor(id); },
+        [this](const std::string& id, int l) { SetThresholdFor(id, l); });
     win->ShowWindow(m_windows_visible);
     m_windows.push_back(win);
   }

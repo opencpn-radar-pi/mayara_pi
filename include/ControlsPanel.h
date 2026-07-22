@@ -63,6 +63,11 @@ class ControlsPanel : public wxScrolledWindow {
   void SetOrientationControl(std::function<int()> get,
                              std::function<void(int)> set);
 
+  // Display echo threshold (0 all, 1 hide weak, 2 only strong) for the View
+  // section.
+  void SetThresholdControl(std::function<int()> get,
+                           std::function<void(int)> set);
+
   // "Dock in OpenCPN" toggle for the View section.
   void SetDockControl(std::function<bool()> get, std::function<void(bool)> set);
 
@@ -117,6 +122,8 @@ class ControlsPanel : public wxScrolledWindow {
   std::function<void(bool)> m_set_ppi;
   std::function<int()> m_get_orientation;
   std::function<void(int)> m_set_orientation;
+  std::function<int()> m_get_threshold;
+  std::function<void(int)> m_set_threshold;
   std::function<bool()> m_get_dock;
   std::function<void(bool)> m_set_dock;
 

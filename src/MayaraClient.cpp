@@ -445,6 +445,12 @@ bool MayaraClient::FetchCapabilities(Radar* radar) {
         legend.push_back(c);
       }
     radar->state.Configure(spokes, maxlen, std::move(legend));
+    if (j.contains("legend") && j["legend"].is_object()) {
+      const auto& lg = j["legend"];
+      radar->state.SetLegendBands(lg.value("lowReturn", 0),
+                                  lg.value("mediumReturn", 0),
+                                  lg.value("strongReturn", 0));
+    }
     radar->state.SetIntensity(m_intensity);
 
     std::vector<ControlDef> defs;

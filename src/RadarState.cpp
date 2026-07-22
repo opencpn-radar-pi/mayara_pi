@@ -85,6 +85,12 @@ void RadarState::WriteSpoke(uint32_t angle, const uint8_t* data, size_t len,
 void RadarState::EnsureDisc() {
   if (disc_gen_ == generation_ || disc_size_ <= 0) return;
   const int legend_n = static_cast<int>(legend_.size());
+  // Display threshold: hide normal returns below the chosen band. The floor
+  // never exceeds the strong-return index, so Doppler/history colours (higher
+  // indices) always pass through.
+  const int floor_idx = threshold_level_ == 1   ? band_medium_
+                        : threshold_level_ == 2 ? band_strong_
+                                                : 0;
   for (size_t i = 0; i < lut_.size(); ++i) {
     uint8_t* d = &disc_[i * 4];
     const uint32_t e = lut_[i];
@@ -106,6 +112,10 @@ void RadarState::EnsureDisc() {
     }
     const uint8_t idx = raster_[static_cast<size_t>(spoke) * maxlen_ + cell];
     if (idx == 0 || idx >= legend_n) {
+      d[3] = 0;
+      continue;
+    }
+    if (floor_idx > 0 && idx < floor_idx) {  // below the display threshold
       d[3] = 0;
       continue;
     }
@@ -171,6 +181,28 @@ bool RadarState::RenderPPI(uint8_t* rgb, int w, int h, double zoom,
 void RadarState::SetIntensity(float f) {
   std::lock_guard<std::mutex> lock(m_);
   intensity_ = f;
+}
+
+void RadarState::SetLegendBands(int low, int medium, int strong) {
+  std::lock_guard<std::mutex> lock(m_);
+  (void)low;
+  band_medium_ = medium;
+  band_strong_ = strong;
+  disc_gen_ = ~0ull;  // re-map colours next EnsureDisc
+}
+
+void RadarState::SetThreshold(int level) {
+  std::lock_guard<std::mutex> lock(m_);
+  if (level < 0) level = 0;
+  if (level > 2) level = 2;
+  if (level == threshold_level_) return;
+  threshold_level_ = level;
+  disc_gen_ = ~0ull;  // force the disc to re-map with the new floor
+}
+
+int RadarState::Threshold() const {
+  std::lock_guard<std::mutex> lock(m_);
+  return threshold_level_;
 }
 
 void RadarState::Clear() {
