@@ -151,7 +151,15 @@ int mayara_pi::Init() {
       RebuildWindows();
       if (m_tool_id != -1) SetToolbarItemState(m_tool_id, true);
     }
-    if (AnyWindowShown()) CaptureWindowState();
+    // Follow OpenCPN in/out of full screen.
+    const bool fs = GetFullScreen();
+    if (fs != m_ocpn_fullscreen) {
+      m_ocpn_fullscreen = fs;
+      SyncRadarFullScreen(fs);
+    }
+    // Snapshot geometry for persistence, but not while full-screen (that would
+    // save the full-screen rects).
+    if (AnyWindowShown() && !m_ocpn_fullscreen) CaptureWindowState();
   });
   m_heartbeat->Start(1000);
 
@@ -620,6 +628,50 @@ void mayara_pi::AutoLayoutWindows(bool reflow_ocpn) {
   TileInArea(m_windows,
              wxRect(area.x + area.width - radar_w, area.y, radar_w,
                     area.height));
+}
+
+void mayara_pi::SyncRadarFullScreen(bool on) {
+  if (m_docked) return;  // docked panes ride OpenCPN's own full screen
+  if (!on) {
+    for (MayaraPpiWindow* w : m_windows)
+      if (w) w->LeaveFullScreen();
+    return;
+  }
+  wxWindow* frame =
+      m_parent_window ? wxGetTopLevelParent(m_parent_window) : nullptr;
+  const int ocpn_disp = frame ? wxDisplay::GetFromWindow(frame) : wxNOT_FOUND;
+  const unsigned nd = wxDisplay::GetCount();
+  for (unsigned d = 0; d < nd; ++d) {
+    if (static_cast<int>(d) == ocpn_disp) continue;  // leave OpenCPN's screen
+    // Which shown radar windows currently live on display d.
+    std::vector<MayaraPpiWindow*> on_d;
+    for (MayaraPpiWindow* w : m_windows) {
+      if (!w || !w->IsWindowShown()) continue;
+      const wxRect r = w->WindowRect();
+      const wxPoint mid(r.x + r.width / 2, r.y + r.height / 2);
+      if (static_cast<unsigned>(wxDisplay::GetFromPoint(mid)) == d)
+        on_d.push_back(w);
+    }
+    if (on_d.empty()) continue;
+    const wxRect area = wxDisplay(d).GetGeometry();  // whole screen
+    const int k = static_cast<int>(on_d.size());
+    if (k == 1) {
+      on_d[0]->EnterFullScreen(area, /*solo=*/true);
+      continue;
+    }
+    // Two or more share the screen: split it (aspect decides the direction).
+    const bool portrait = area.height > area.width;
+    const int cols =
+        portrait ? 1 : std::max(1, static_cast<int>(std::ceil(std::sqrt((double)k))));
+    const int rows = (k + cols - 1) / cols;
+    for (int i = 0; i < k; ++i) {
+      const int c = i % cols, r = i / cols;
+      const wxRect t(area.x + area.width * c / cols,
+                     area.y + area.height * r / rows, area.width / cols,
+                     area.height / rows);
+      on_d[i]->EnterFullScreen(t, /*solo=*/false);
+    }
+  }
 }
 
 void mayara_pi::TogglePpiWindow() {

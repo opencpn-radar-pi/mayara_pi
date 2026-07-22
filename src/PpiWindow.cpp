@@ -136,6 +136,32 @@ void MayaraPpiWindow::SetWindowRect(const wxRect& r) {
   if (m_frame) m_frame->SetSize(r);
 }
 
+void MayaraPpiWindow::EnterFullScreen(const wxRect& target, bool solo) {
+  if (m_docked || !m_frame || m_fs) return;
+  m_fs = true;
+  m_fs_solo = solo;
+  m_fs_saved = m_frame->GetScreenRect();
+  if (solo) {
+    m_frame->ShowFullScreen(true, wxFULLSCREEN_ALL);
+  } else {
+    m_fs_style = m_frame->GetWindowStyleFlag();
+    m_frame->SetWindowStyleFlag(wxBORDER_NONE);
+    m_frame->SetSize(target);
+    m_frame->Raise();
+  }
+}
+
+void MayaraPpiWindow::LeaveFullScreen() {
+  if (!m_fs || !m_frame) return;
+  m_fs = false;
+  if (m_fs_solo) {
+    m_frame->ShowFullScreen(false);
+  } else {
+    m_frame->SetWindowStyleFlag(m_fs_style);
+  }
+  m_frame->SetSize(m_fs_saved);
+}
+
 void MayaraPpiWindow::ApplyTheme(const MayaraTheme& theme) {
   SetBackgroundColour(theme.panel_bg);
   for (RadarDisplayPanel* p : m_radars) p->ApplyTheme(theme);

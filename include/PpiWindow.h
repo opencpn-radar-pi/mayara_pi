@@ -42,6 +42,12 @@ class MayaraPpiWindow : public wxPanel {
   bool IsWindowShown();
   wxRect WindowRect();
   void SetWindowRect(const wxRect& r);  // floating only
+  // Borderless full-screen for the floating frame. solo=true fills the display
+  // it is on (ShowFullScreen); otherwise it fills the given `target` rect
+  // borderless (for two windows sharing a display).
+  void EnterFullScreen(const wxRect& target, bool solo);
+  void LeaveFullScreen();
+  bool IsFullScreen() const { return m_fs; }
 
   void ApplyTheme(const MayaraTheme& theme);
 
@@ -97,6 +103,10 @@ class MayaraPpiWindow : public wxPanel {
   bool m_solo = false;      // a single picture is shown for its open menu
   bool m_grew = false;      // the menu widened the window
   wxRect m_pre_grow;        // window geometry before it was widened
+  bool m_fs = false;        // frame is in radar full-screen
+  bool m_fs_solo = false;   // used ShowFullScreen (vs borderless tile)
+  wxRect m_fs_saved;        // frame geometry before full-screen
+  long m_fs_style = 0;      // frame style before borderless
 
   wxDECLARE_EVENT_TABLE();
 };
