@@ -9,6 +9,7 @@
 #define MAYARA_CLIENT_H_
 
 #include <atomic>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -33,6 +34,9 @@ struct Radar {
   std::unique_ptr<ix::WebSocket> spoke_ws;
   std::atomic<bool> streaming{false};
   std::atomic<bool> ws_error{false};
+  // Server-tracked ARPA targets, keyed by target id. Guarded by the client's
+  // m_radars_mutex (membership is stable once up).
+  std::map<uint64_t, RadarTarget> targets;
 };
 
 class MayaraClient {
@@ -78,6 +82,12 @@ class MayaraClient {
   RadarState* StateAt(int index);
   RadarControls* ControlsAt(int index);
   std::string RadarId(int index);
+  // Snapshot of the server-tracked ARPA targets for a radar (empty if none or
+  // out of range). Safe to call from the UI thread.
+  std::vector<RadarTarget> TargetsAt(int index);
+  // Acquire a target at a true bearing (deg) and distance (m) from the radar.
+  // POSTs to the server; the tracker confirms it via the target stream.
+  void AcquireTargetAt(int index, double bearing_deg, double distance_m);
 
   // Radars currently composited on the chart overlay. Defaults to all radars.
   std::vector<int> ShownRadars();

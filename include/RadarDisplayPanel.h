@@ -28,6 +28,7 @@ struct PpiLayers {
   bool cog_line = true;
   bool north_marker = true;
   bool ais = true;
+  bool arpa = true;  // server-tracked radar targets
 };
 
 class RadarDisplayPanel : public wxPanel {

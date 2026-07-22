@@ -21,6 +21,25 @@ struct Rgba {
   uint8_t r = 0, g = 0, b = 0, a = 0;
 };
 
+// One server-tracked ARPA/MARPA target (the server owns tracking; the plugin
+// only renders what it streams). Position is polar from the radar: bearing is
+// true, distance in metres. Motion/danger are optional.
+struct RadarTarget {
+  enum Status { kAcquiring = 0, kTracking = 1, kLost = 2 };
+  uint64_t id = 0;
+  int status = kAcquiring;
+  double bearing_deg = 0.0;   // true bearing from radar
+  double distance_m = 0.0;
+  bool has_motion = false;
+  double course_deg = 0.0;    // true COG
+  double speed_kn = 0.0;
+  bool has_danger = false;
+  double cpa_m = 0.0;
+  double tcpa_s = 0.0;
+  bool is_dangerous = false;
+  bool manual = false;        // acquisition == "manual"
+};
+
 class RadarState {
  public:
   // Set geometry + legend (byte value -> colour). Clears the raster and

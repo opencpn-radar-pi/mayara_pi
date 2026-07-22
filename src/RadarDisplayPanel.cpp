@@ -690,6 +690,93 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
       delete arr;
     }
   }
+
+  // ARPA targets: the server tracks them (guard-zone auto-acquire or manual);
+  // the plugin just renders what it streams, placed by true bearing/distance
+  // from the radar. A distinct look from AIS: a ringed marker with a velocity
+  // vector along COG.
+  if (m_layers.arpa && m_client && report_m > 0) {
+    std::vector<RadarTarget> targets = m_client->TargetsAt(m_index);
+    if (!targets.empty()) {
+      wxFont label_font = dc.GetFont();
+      label_font.SetPointSize(std::max(7, label_font.GetPointSize() - 2));
+      dc.SetFont(label_font);
+      auto gcol = [](const char* name, const wxColour& fallback) {
+        wxColour col;
+        if (GetGlobalColor(wxString::FromUTF8(name), &col) && col.IsOk())
+          return col;
+        return fallback;
+      };
+      const wxColour col_track = gcol("UGREN", wxColour(0, 230, 0));
+      const wxColour col_danger = gcol("URED", wxColour(210, 0, 0));
+      const wxColour col_acq = gcol("CHYLW", wxColour(255, 210, 0));
+      const wxColour col_lost = gcol("UGRY1", wxColour(140, 140, 140));
+      for (const RadarTarget& t : targets) {
+        if (t.distance_m <= 0 || t.distance_m > report_m * 1.45) continue;
+        const double r = radius * t.distance_m / report_m;
+        const wxPoint p = PolarPoint(c, r, t.bearing_deg, up_bearing);
+        const bool dangerous = t.has_danger && t.is_dangerous;
+        const wxColour col = t.status == RadarTarget::kLost ? col_lost
+                             : dangerous                    ? col_danger
+                             : t.status == RadarTarget::kAcquiring ? col_acq
+                                                    : col_track;
+
+        // Velocity vector (6 min), along true COG.
+        if (t.has_motion && t.speed_kn >= 0.2 &&
+            t.status == RadarTarget::kTracking) {
+          const double pred_nm = t.speed_kn * (6.0 / 60.0);
+          const double pred_px = radius * (pred_nm * 1852.0) / report_m;
+          const double a = (t.course_deg - up_bearing) * M_PI / 180.0;
+          const wxPoint e(p.x + static_cast<int>(std::lround(pred_px * std::sin(a))),
+                          p.y - static_cast<int>(std::lround(pred_px * std::cos(a))));
+          dc.SetPen(wxPen(col, 2));
+          dc.DrawLine(p.x, p.y, e.x, e.y);
+        }
+
+        // Marker: solid ring when tracking, dashed while acquiring, an X when
+        // lost. A manually acquired target gets a small centre dot.
+        dc.SetBrush(*wxTRANSPARENT_BRUSH);
+        if (t.status == RadarTarget::kLost) {
+          dc.SetPen(wxPen(col, 2));
+          dc.DrawLine(p.x - 6, p.y - 6, p.x + 6, p.y + 6);
+          dc.DrawLine(p.x - 6, p.y + 6, p.x + 6, p.y - 6);
+        } else {
+          const int style = t.status == RadarTarget::kAcquiring
+                                ? wxPENSTYLE_SHORT_DASH
+                                : wxPENSTYLE_SOLID;
+          dc.SetPen(wxPen(col, 2, style));
+          dc.DrawCircle(p, 8);
+          if (t.manual) {
+            dc.SetBrush(wxBrush(col));
+            dc.SetPen(wxPen(col, 1));
+            dc.DrawCircle(p, 2);
+            dc.SetBrush(*wxTRANSPARENT_BRUSH);
+          }
+        }
+
+        // Label: id, then COG/SOG, then CPA/TCPA when in danger.
+        dc.SetTextForeground(col);
+        int ty = p.y + 10;
+        const int lh = label_font.GetPixelSize().y + 1;
+        dc.DrawText(wxString::Format("T%llu", (unsigned long long)t.id),
+                    p.x + 10, ty);
+        ty += lh;
+        if (t.has_motion && t.speed_kn >= 0.2) {
+          double cog = t.course_deg;
+          while (cog < 0) cog += 360;
+          while (cog >= 360) cog -= 360;
+          dc.DrawText(wxString::Format("%03.0f° %.1fkn", cog, t.speed_kn),
+                      p.x + 10, ty);
+          ty += lh;
+        }
+        if (dangerous) {
+          const wxString cpa = FormatRange(t.cpa_m, metric);
+          dc.DrawText(wxString::Format("CPA %s %.0fmin", cpa, t.tcpa_s / 60.0),
+                      p.x + 10, ty);
+        }
+      }
+    }
+  }
 }
 
 void RadarDisplayPanel::OnLeftDown(wxMouseEvent& event) {

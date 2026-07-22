@@ -4,7 +4,12 @@
 #include "MayaraClient.h"
 
 #include <chrono>
+#include <cmath>
 #include <cstdint>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 #include <ixwebsocket/IXHttpClient.h>
 #include <ixwebsocket/IXNetSystem.h>
@@ -229,6 +234,15 @@ std::string MayaraClient::RadarId(int index) {
   std::lock_guard<std::mutex> lock(m_radars_mutex);
   if (index < 0 || index >= static_cast<int>(m_radars.size())) return {};
   return m_radars[index]->id;
+}
+
+std::vector<RadarTarget> MayaraClient::TargetsAt(int index) {
+  std::lock_guard<std::mutex> lock(m_radars_mutex);
+  if (index < 0 || index >= static_cast<int>(m_radars.size())) return {};
+  std::vector<RadarTarget> out;
+  out.reserve(m_radars[index]->targets.size());
+  for (const auto& kv : m_radars[index]->targets) out.push_back(kv.second);
+  return out;
 }
 
 std::vector<int> MayaraClient::ShownRadars() {
@@ -533,7 +547,9 @@ void MayaraClient::ConnectControlStream() {
                                          const ix::WebSocketMessagePtr& msg) {
     if (msg->type == ix::WebSocketMessageType::Open) {
       m_control_ws->send(
-          "{\"subscribe\":[{\"path\":\"radars.*.controls.*\",\"period\":1000}]}");
+          "{\"subscribe\":["
+          "{\"path\":\"radars.*.controls.*\",\"period\":1000},"
+          "{\"path\":\"radars.*.targets.*\",\"policy\":\"instant\"}]}");
       return;
     }
     if (msg->type != ix::WebSocketMessageType::Message || msg->binary) return;
@@ -566,14 +582,73 @@ void MayaraClient::ConnectControlStream() {
               return;
             }
         };
+        // Apply a `radars.{id}.targets.{tid}` delta: parse+upsert the target,
+        // or a null value removes it.
+        auto route_target = [&](const std::string& path, const json& value) {
+          const std::string kPre = "radars.";
+          const std::string kMid = ".targets.";
+          if (path.rfind(kPre, 0) != 0) return;
+          const size_t mid = path.find(kMid, kPre.size());
+          if (mid == std::string::npos) return;
+          const std::string rid = path.substr(kPre.size(), mid - kPre.size());
+          const std::string tid_s = path.substr(mid + kMid.size());
+          uint64_t tid = 0;
+          try {
+            tid = std::stoull(tid_s);
+          } catch (...) {
+            return;
+          }
+          std::lock_guard<std::mutex> lock(m_radars_mutex);
+          for (auto& r : m_radars) {
+            if (r->id != rid) continue;
+            if (value.is_null()) {  // target lost / removed
+              r->targets.erase(tid);
+              return;
+            }
+            if (!value.is_object()) return;
+            RadarTarget t;
+            t.id = tid;
+            const std::string st = value.value("status", std::string());
+            t.status = st == "tracking"   ? RadarTarget::kTracking
+                       : st == "lost"     ? RadarTarget::kLost
+                                          : RadarTarget::kAcquiring;
+            t.manual = value.value("acquisition", std::string()) == "manual";
+            if (value.contains("position") && value["position"].is_object()) {
+              const auto& p = value["position"];
+              t.bearing_deg = p.value("bearing", 0.0) * 180.0 / M_PI;
+              t.distance_m = p.value("distance", 0.0);
+            }
+            if (value.contains("motion") && value["motion"].is_object()) {
+              const auto& m = value["motion"];
+              t.has_motion = true;
+              t.course_deg = m.value("course", 0.0) * 180.0 / M_PI;
+              t.speed_kn = m.value("speed", 0.0) * 1.9438445;  // m/s -> kn
+            }
+            if (value.contains("danger") && value["danger"].is_object()) {
+              const auto& d = value["danger"];
+              t.has_danger = true;
+              t.cpa_m = d.value("cpa", 0.0);
+              t.tcpa_s = d.value("tcpa", 0.0);
+              t.is_dangerous = d.value("isDangerous", false);
+            }
+            r->targets[tid] = t;
+            return;
+          }
+        };
+
         if (upd.contains("meta"))
           for (const auto& mv : upd["meta"])
             if (mv.contains("value") && mv["value"].is_object())
               route(mv.value("path", std::string()), mv["value"], true);
         if (upd.contains("values"))
-          for (const auto& v : upd["values"])
-            if (v.contains("value") && v["value"].is_object())
-              route(v.value("path", std::string()), v["value"], false);
+          for (const auto& v : upd["values"]) {
+            if (!v.contains("path")) continue;
+            const std::string path = v.value("path", std::string());
+            if (path.find(".targets.") != std::string::npos)
+              route_target(path, v.contains("value") ? v["value"] : json());
+            else if (v.contains("value") && v["value"].is_object())
+              route(path, v["value"], false);
+          }
       }
     } catch (const std::exception& e) {
       JsonError("control stream", e.what());
@@ -605,5 +680,31 @@ void MayaraClient::SetControlAt(int index, const std::string& control_id,
     const std::string url = base + "/signalk/v2/api/vessels/self/radars/" +
                             radar_id + "/controls/" + control_id;
     http.put(url, json_body, args);
+  }).detach();
+}
+
+void MayaraClient::AcquireTargetAt(int index, double bearing_deg,
+                                   double distance_m) {
+  std::string radar_id;
+  {
+    std::lock_guard<std::mutex> lock(m_radars_mutex);
+    if (index < 0 || index >= static_cast<int>(m_radars.size())) return;
+    radar_id = m_radars[index]->id;
+  }
+  double bearing_rad = bearing_deg * M_PI / 180.0;
+  while (bearing_rad < 0) bearing_rad += 2 * M_PI;
+  while (bearing_rad >= 2 * M_PI) bearing_rad -= 2 * M_PI;
+  json body = {{"bearing", bearing_rad}, {"distance", distance_m}};
+  const std::string json_body = body.dump();
+  const std::string base = m_base_url;
+  std::thread([base, radar_id, json_body] {
+    ix::HttpClient http(/*async=*/false);
+    auto args = http.createRequest();
+    args->connectTimeout = 5;
+    args->transferTimeout = 5;
+    args->extraHeaders["Content-Type"] = "application/json";
+    const std::string url = base + "/signalk/v2/api/vessels/self/radars/" +
+                            radar_id + "/targets";
+    http.post(url, json_body, args);
   }).detach();
 }
