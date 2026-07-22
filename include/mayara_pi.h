@@ -79,6 +79,7 @@ class mayara_pi : public opencpn_plugin_121 {
   // display fill that display (splitting it if several share it).
   void SyncRadarFullScreen(bool on);
   void ShowSettings(wxWindow* parent);
+  void ShowSearchDialog();  // "looking for a server" + manual entry
   void LoadConfig();
   void SaveConfig();
   void SaveWindowState();          // visibility + geometry of the PPI windows
@@ -116,6 +117,10 @@ class mayara_pi : public opencpn_plugin_121 {
   bool m_docked = false;             // radar windows docked into OpenCPN (AUI)
   wxAuiManager* m_aui = nullptr;     // OpenCPN main-frame AUI manager
   bool m_ocpn_fullscreen = false;    // last-seen OpenCPN full-screen state
+  std::string m_saved_server_url;    // last-known-good server, persisted
+  wxDialog* m_search_dialog = nullptr;  // "looking for a server" dialog
+  int m_no_radar_ticks = 0;          // heartbeat ticks with no radar
+  bool m_search_dismissed = false;   // user closed the search dialog
 
   // GL chart-overlay: each radar's cached disc uploaded as a texture and drawn
   // as a rotated/scaled quad, re-uploaded only when its disc changes. Radars

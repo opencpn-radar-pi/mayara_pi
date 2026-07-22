@@ -247,23 +247,54 @@ void MayaraClient::SetShown(std::vector<int> indices) {
   m_shown = std::move(indices);
 }
 
+void MayaraClient::SetRememberedUrl(std::string url) {
+  StripTrailingSlash(url);
+  m_remembered = std::move(url);
+}
+
+void MayaraClient::SetServerUrl(std::string url) {
+  StripTrailingSlash(url);
+  std::lock_guard<std::mutex> lock(m_status_mutex);
+  m_manual = std::move(url);
+}
+
+std::string MayaraClient::ConnectedUrl() {
+  std::lock_guard<std::mutex> lock(m_status_mutex);
+  return m_connected_url;
+}
+
+bool MayaraClient::Connected() { return RadarCount() > 0; }
+
 void MayaraClient::Run() {
   while (!m_stop) {
+    std::string manual;
+    {
+      std::lock_guard<std::mutex> lock(m_status_mutex);
+      manual = m_manual;
+    }
     std::vector<std::string> candidates;
-    if (!m_explicit.empty()) {
+    if (!manual.empty()) {
+      candidates.push_back(manual);  // user-entered server wins
+    } else if (!m_explicit.empty()) {
       candidates.push_back(m_explicit);
     } else {
-      SetStatus("searching for mayara-server (mDNS)…");
+      // Try the last-known-good server first (fast reconnect), then discover.
+      if (!m_remembered.empty()) candidates.push_back(m_remembered);
+      SetStatus("searching for a Signal K server with mayara…");
       std::string found = MayaraDiscovery::FindSignalK(2000);
-      if (!found.empty()) candidates.push_back(found);
-      if (!m_fallback.empty() && m_fallback != found)
+      if (!found.empty() && found != m_remembered) candidates.push_back(found);
+      if (!m_fallback.empty() && m_fallback != m_remembered)
         candidates.push_back(m_fallback);
     }
     for (auto& base : candidates) {
       if (m_stop) return;
       m_base_url = base;
       StripTrailingSlash(m_base_url);
-      if (DiscoverAndConnect()) return;
+      if (DiscoverAndConnect()) {
+        std::lock_guard<std::mutex> lock(m_status_mutex);
+        m_connected_url = m_base_url;
+        return;
+      }
     }
     for (int i = 0; i < 30 && !m_stop; ++i)
       std::this_thread::sleep_for(std::chrono::milliseconds(100));

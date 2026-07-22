@@ -48,6 +48,17 @@ class MayaraClient {
   void Start();
   void Stop();
 
+  // Last-known-good server base URL, tried first (before mDNS) for a fast
+  // reconnect. Set before Start().
+  void SetRememberedUrl(std::string url);
+  // A server URL the user entered manually (Signal K :3000 or Mayara :6502);
+  // tried in preference to discovery. Thread-safe; takes effect on the next
+  // discovery attempt.
+  void SetServerUrl(std::string url);
+  // The base URL currently streaming (empty until connected), for persisting.
+  std::string ConnectedUrl();
+  bool Connected();  // at least one radar is streaming
+
   std::string StatusLine();
   // Radar API version handshake. ServerApiVersion is empty until GET /radars is
   // read; ApiVersionMismatch is true once it is known and differs from ours.
@@ -100,6 +111,9 @@ class MayaraClient {
   std::mutex m_status_mutex;
   std::string m_status{"not connected"};
   std::string m_server_api_version;  // from GET /radars `version`, if present
+  std::string m_manual;              // user-entered server URL (guarded)
+  std::string m_connected_url;       // base URL that connected (guarded)
+  std::string m_remembered;          // last-known-good URL (set before Start)
 
   std::mutex m_radars_mutex;  // guards m_radars membership (stable once up)
   std::vector<std::unique_ptr<Radar>> m_radars;

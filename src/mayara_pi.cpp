@@ -13,6 +13,7 @@
 #include <wx/display.h>
 #include <wx/fileconf.h>
 #include <wx/frame.h>
+#include <wx/radiobox.h>
 #include <wx/spinctrl.h>
 #include <wx/tokenzr.h>
 #include <wx/toplevel.h>
@@ -146,6 +147,8 @@ int mayara_pi::Init() {
 
   m_client = std::make_unique<MayaraClient>(MayaraExplicitUrl(),
                                             kMayaraServerFallback);
+  if (!m_saved_server_url.empty())
+    m_client->SetRememberedUrl(m_saved_server_url);  // fast reconnect
   m_client->Start();
 
   // 1 Hz heartbeat: re-open windows persisted as shown once radars appear, and
@@ -165,6 +168,24 @@ int mayara_pi::Init() {
     // Snapshot geometry for persistence, but not while full-screen (that would
     // save the full-screen rects).
     if (AnyWindowShown() && !m_ocpn_fullscreen) CaptureWindowState();
+
+    // Remember the server we connected to (fast reconnect next boot); when the
+    // radar can't be found, offer the search/manual-entry dialog.
+    if (m_client && m_client->Connected()) {
+      m_no_radar_ticks = 0;
+      const std::string url = m_client->ConnectedUrl();
+      if (!url.empty() && url != m_saved_server_url) {
+        m_saved_server_url = url;
+        SaveConfig();
+      }
+      if (m_search_dialog) {
+        m_search_dialog->Destroy();
+        m_search_dialog = nullptr;
+      }
+    } else if (m_client) {
+      if (++m_no_radar_ticks >= 10 && !m_search_dialog && !m_search_dismissed)
+        ShowSearchDialog();
+    }
   });
   m_heartbeat->Start(1000);
 
@@ -181,6 +202,10 @@ bool mayara_pi::DeInit() {
   if (m_heartbeat) {
     m_heartbeat->Stop();
     m_heartbeat.reset();
+  }
+  if (m_search_dialog) {
+    m_search_dialog->Destroy();
+    m_search_dialog = nullptr;
   }
   SaveWindowState();  // remember visibility + positions before tearing down
   DestroyWindows(/*sync=*/true);
@@ -237,6 +262,9 @@ void mayara_pi::LoadConfig() {
   bool docked = false;
   cfg->Read("Docked", &docked, false);
   m_docked = docked;
+  wxString url;
+  cfg->Read("ServerUrl", &url);
+  m_saved_server_url = std::string(url.mb_str());
 }
 
 int mayara_pi::OrientationFor(const std::string& radar_id) const {
@@ -335,7 +363,76 @@ void mayara_pi::SaveConfig() {
     orient += wxString::Format("%s=%d;", kv.first.c_str(), kv.second);
   cfg->Write("Orientations", orient);
   cfg->Write("Docked", m_docked);
+  cfg->Write("ServerUrl", wxString::FromUTF8(m_saved_server_url.c_str()));
   cfg->Flush();
+}
+
+// Shown when no radar is found (first boot or after ~10 s): explain the search
+// and let the user point us at a Signal K (:3000) or Mayara (:6502) server.
+void mayara_pi::ShowSearchDialog() {
+  if (m_search_dialog) return;
+  auto* dlg = new wxDialog(m_parent_window, wxID_ANY,
+                           _("Mayara Radar — no radar found yet"),
+                           wxDefaultPosition, wxDefaultSize,
+                           wxDEFAULT_DIALOG_STYLE);
+  m_search_dialog = dlg;
+  auto* top = new wxBoxSizer(wxVERTICAL);
+  auto* intro = new wxStaticText(
+      dlg, wxID_ANY,
+      _("Looking for a Signal K server with mayara-server on the network…\n\n"
+        "If it isn't found automatically, enter the address of your Signal K "
+        "server or a Mayara server below."));
+  intro->Wrap(400);
+  top->Add(intro, 0, wxALL, 12);
+
+  auto* row = new wxBoxSizer(wxHORIZONTAL);
+  row->Add(new wxStaticText(dlg, wxID_ANY, _("Host / IP:")), 0,
+           wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+  auto* host = new wxTextCtrl(dlg, wxID_ANY, wxEmptyString, wxDefaultPosition,
+                              wxSize(220, -1));
+  row->Add(host, 1, wxALIGN_CENTER_VERTICAL);
+  top->Add(row, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12);
+
+  wxString types[2] = {_("Signal K server (port 3000)"),
+                       _("Mayara server (port 6502)")};
+  auto* type = new wxRadioBox(dlg, wxID_ANY, _("Server type"),
+                              wxDefaultPosition, wxDefaultSize, 2, types, 1,
+                              wxRA_SPECIFY_COLS);
+  top->Add(type, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
+
+  auto* status = new wxStaticText(dlg, wxID_ANY, _("Still searching…"));
+  top->Add(status, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12);
+
+  auto* btns = new wxBoxSizer(wxHORIZONTAL);
+  auto* connect = new wxButton(dlg, wxID_ANY, _("Connect"));
+  auto* keep = new wxButton(dlg, wxID_ANY, _("Keep searching"));
+  btns->AddStretchSpacer();
+  btns->Add(keep, 0, wxRIGHT, 8);
+  btns->Add(connect, 0);
+  top->Add(btns, 0, wxEXPAND | wxALL, 12);
+  dlg->SetSizerAndFit(top);
+
+  connect->Bind(wxEVT_BUTTON, [this, host, type, status](wxCommandEvent&) {
+    wxString h = host->GetValue().Trim().Trim(false);
+    if (h.IsEmpty()) {
+      status->SetLabel(_("Please enter a host name or IP address."));
+      return;
+    }
+    const int port = type->GetSelection() == 1 ? 6502 : 3000;
+    const wxString url = wxString::Format("http://%s:%d", h, port);
+    if (m_client) m_client->SetServerUrl(std::string(url.mb_str()));
+    status->SetLabel(wxString::Format(_("Connecting to %s…"), url));
+  });
+  auto close = [this](wxEvent&) {
+    m_search_dismissed = true;
+    if (m_search_dialog) {
+      m_search_dialog->Destroy();
+      m_search_dialog = nullptr;
+    }
+  };
+  keep->Bind(wxEVT_BUTTON, close);
+  dlg->Bind(wxEVT_CLOSE_WINDOW, close);
+  dlg->Show();
 }
 
 // OpenCPN's "Preferences" button in the plugin manager routes here; our own
