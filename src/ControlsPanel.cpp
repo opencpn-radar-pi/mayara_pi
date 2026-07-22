@@ -441,12 +441,29 @@ void ControlsPanel::FillViewSection(wxSizer* content) {
       if (m_on_autolayout) m_on_autolayout();
     });
   }
+  if (m_get_dock && m_set_dock) {
+    auto* cb = new ThemedButton(this, _("Dock in OpenCPN"), m_theme, true);
+    content->Add(cb, 0, wxEXPAND | wxALL, 4);
+    cb->Bind(wxEVT_TOGGLEBUTTON, [this, cb](wxCommandEvent&) {
+      if (m_set_dock) m_set_dock(cb->GetValue());
+    });
+    m_updaters.push_back([this, cb]() {
+      if (m_get_dock) cb->SetValue(m_get_dock());
+    });
+  }
 }
 
 void ControlsPanel::SetOrientationControl(std::function<int()> get,
                                           std::function<void(int)> set) {
   m_get_orientation = std::move(get);
   m_set_orientation = std::move(set);
+  if (m_built) Rebuild();
+}
+
+void ControlsPanel::SetDockControl(std::function<bool()> get,
+                                   std::function<void(bool)> set) {
+  m_get_dock = std::move(get);
+  m_set_dock = std::move(set);
   if (m_built) Rebuild();
 }
 

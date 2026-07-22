@@ -23,6 +23,7 @@
 // Forward declarations keep implementation types out of this header.
 class MayaraPpiWindow;
 class MayaraClient;
+class wxAuiManager;
 
 class mayara_pi : public opencpn_plugin_121 {
  public:
@@ -107,6 +108,8 @@ class mayara_pi : public opencpn_plugin_121 {
   // id. Persisted.
   std::map<std::string, int> m_orient;
   std::vector<wxRect> m_geom_cache;  // last live snapshot of window geometry
+  bool m_docked = false;             // radar windows docked into OpenCPN (AUI)
+  wxAuiManager* m_aui = nullptr;     // OpenCPN main-frame AUI manager
 
   // GL chart-overlay: each radar's cached disc uploaded as a texture and drawn
   // as a rotated/scaled quad, re-uploaded only when its disc changes. Radars

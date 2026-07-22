@@ -1,5 +1,6 @@
 /******************************************************************************
- * mayara_pi - radar window (a grid of radar pictures + a shared control panel).
+ * mayara_pi - radar window content (a grid of radar pictures + a shared
+ * control panel), hosted either by a floating frame or a docked AUI pane.
  *****************************************************************************/
 #include "PpiWindow.h"
 
@@ -17,7 +18,8 @@
 namespace {
 // "Mayara radar Halo A" / "Mayara radars Halo A + Halo B".
 wxString WindowTitle(MayaraClient* client, const std::vector<int>& idx) {
-  std::vector<std::string> names = client ? client->RadarNames() : std::vector<std::string>();
+  std::vector<std::string> names =
+      client ? client->RadarNames() : std::vector<std::string>();
   wxString joined;
   for (size_t i = 0; i < idx.size(); ++i) {
     const int ri = idx[i];
@@ -33,19 +35,17 @@ wxString WindowTitle(MayaraClient* client, const std::vector<int>& idx) {
 }
 }  // namespace
 
-wxBEGIN_EVENT_TABLE(MayaraPpiWindow, wxDialog)
-    EVT_CLOSE(MayaraPpiWindow::OnClose)
+wxBEGIN_EVENT_TABLE(MayaraPpiWindow, wxPanel)
     EVT_SIZE(MayaraPpiWindow::OnSize)
 wxEND_EVENT_TABLE()
 
 MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client,
                                  std::vector<int> radar_indices)
-    : wxDialog(parent, wxID_ANY, _("Mayara Radar"), wxDefaultPosition,
-               wxSize(880, 560), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER) {
+    : wxPanel(parent, wxID_ANY) {
   SetMinSize(wxSize(480, 320));
   if (radar_indices.empty()) radar_indices.push_back(0);
   m_client = client;
-  SetTitle(WindowTitle(client, radar_indices));
+  m_title = WindowTitle(client, radar_indices);
 
   // The radar pictures live in m_grid; BuildGrid() arranges them by the
   // window's aspect (see DesiredCols).
@@ -70,7 +70,8 @@ MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client,
   // mode. In a multi-radar window the picture is soloed while its menu is open.
   auto open = [this, controls](RadarDisplayPanel* p, bool view_only) {
     if (controls->IsShown() && controls->RadarIndex() == p->RadarIndex() &&
-        controls->IsViewMode() == view_only && controls->SingleControl().empty()) {
+        controls->IsViewMode() == view_only &&
+        controls->SingleControl().empty()) {
       HideControls();
       return;
     }
@@ -108,6 +109,33 @@ MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client,
   });
 }
 
+wxWindow* MayaraPpiWindow::HostWindow() {
+  return m_frame ? static_cast<wxWindow*>(m_frame) : this;
+}
+
+void MayaraPpiWindow::ShowWindow(bool show) {
+  if (m_frame) {
+    m_frame->Show(show);
+  } else if (m_aui) {
+    m_aui->GetPane(this).Show(show);
+    m_aui->Update();
+  }
+}
+
+bool MayaraPpiWindow::IsWindowShown() {
+  if (m_frame) return m_frame->IsShown();
+  if (m_aui) return m_aui->GetPane(this).IsShown();
+  return false;
+}
+
+wxRect MayaraPpiWindow::WindowRect() {
+  return m_frame ? m_frame->GetScreenRect() : GetScreenRect();
+}
+
+void MayaraPpiWindow::SetWindowRect(const wxRect& r) {
+  if (m_frame) m_frame->SetSize(r);
+}
+
 void MayaraPpiWindow::ApplyTheme(const MayaraTheme& theme) {
   SetBackgroundColour(theme.panel_bg);
   for (RadarDisplayPanel* p : m_radars) p->ApplyTheme(theme);
@@ -123,16 +151,18 @@ void MayaraPpiWindow::SetOverlayControl(std::function<bool()> get,
       [this]() { return m_grid && m_grid->IsShown(); },
       [this](bool show) {
         if (m_grid) m_grid->Show(show);
-        const int h = GetSize().y;
         if (show) {
           Layout();
-          SetSize(wxSize(std::max(GetSize().x, 820), h));
+          if (m_frame) {
+            const int h = m_frame->GetSize().y;
+            m_frame->SetSize(wxSize(std::max(m_frame->GetSize().x, 820), h));
+          }
         } else if (m_controls) {
           // Show only the menu: dock the floating controls to fill a narrow
-          // window.
+          // window (floating only; a docked pane keeps its size).
           const int ctrl_w =
               std::max(320, m_controls->GetEffectiveMinSize().x);
-          SetClientSize(ctrl_w, GetClientSize().y);
+          if (m_frame) m_frame->SetClientSize(ctrl_w, m_frame->GetClientSize().y);
           m_controls->SetSize(0, 0, ctrl_w, GetClientSize().y);
           m_controls->Show(true);
           m_controls->Raise();
@@ -146,6 +176,11 @@ void MayaraPpiWindow::SetSettingsControl(std::function<void()> open) {
 
 void MayaraPpiWindow::SetAutoLayoutControl(std::function<void()> cb) {
   if (m_controls) m_controls->SetAutoLayoutCallback(std::move(cb));
+}
+
+void MayaraPpiWindow::SetDockControl(std::function<bool()> get,
+                                     std::function<void(bool)> set) {
+  if (m_controls) m_controls->SetDockControl(std::move(get), std::move(set));
 }
 
 void MayaraPpiWindow::SetNavProvider(std::function<NavState()> provider) {
@@ -165,7 +200,7 @@ void MayaraPpiWindow::PositionControls(RadarDisplayPanel* focused,
   if (!m_controls || !focused) return;
   const int ctrl_w = std::max(320, m_controls->GetEffectiveMinSize().x);
   const int kMinPicture = 240;  // keep at least this much picture beside it
-  // Right edge of the focused picture, in this window's client coordinates.
+  // Right edge of the focused picture, in this panel's client coordinates.
   wxPoint tr = focused->GetScreenPosition();
   tr.x += focused->GetSize().x;
   int x = ScreenToClient(tr).x;
@@ -175,9 +210,9 @@ void MayaraPpiWindow::PositionControls(RadarDisplayPanel* focused,
     // (overlaying the picture). Only widen the window if that would leave too
     // little picture -- so repeatedly opening the menu doesn't keep growing it.
     x = cs.x - ctrl_w;
-    if (allow_grow && x < kMinPicture) {
+    if (allow_grow && !m_docked && x < kMinPicture) {
       if (!m_grew) {  // remember the size so we can restore it on close
-        m_pre_grow = GetScreenRect();
+        m_pre_grow = WindowRect();
         m_grew = true;
       }
       GrowForControls(kMinPicture - x);
@@ -199,7 +234,7 @@ void MayaraPpiWindow::HideControls() {
   for (RadarDisplayPanel* p : m_radars) p->SetObscuredRight(0);
   if (m_solo) BuildGrid();
   if (m_grew) {  // undo any widening the menu caused
-    SetSize(m_pre_grow);
+    SetWindowRect(m_pre_grow);
     m_grew = false;
   }
 }
@@ -278,30 +313,25 @@ void MayaraPpiWindow::SetOrientationHandlers(
           RadarDisplayPanel* p = FocusedPanel();
           if (!p) return;
           p->SetOrientation(o);
-          const std::string id = m_client ? m_client->RadarId(p->RadarIndex())
-                                          : "";
+          const std::string id =
+              m_client ? m_client->RadarId(p->RadarIndex()) : "";
           if (m_orient_set) m_orient_set(id, o);
         });
 }
 
 void MayaraPpiWindow::GrowForControls(int extra) {
-  const wxSize cs = GetClientSize();
-  SetClientSize(cs.x + extra, cs.y);
+  if (m_docked || !m_frame) return;  // can't grow a docked pane
+  const wxSize cs = m_frame->GetClientSize();
+  m_frame->SetClientSize(cs.x + extra, cs.y);
   // Keep the (now wider) window within the display it is on.
-  int disp = wxDisplay::GetFromWindow(this);
+  int disp = wxDisplay::GetFromWindow(m_frame);
   if (disp == wxNOT_FOUND) disp = 0;
   const wxRect area = wxDisplay(static_cast<unsigned>(disp)).GetClientArea();
-  const wxRect r = GetScreenRect();
+  const wxRect r = m_frame->GetScreenRect();
   int x = r.x, y = r.y;
   if (r.GetRight() > area.GetRight())
     x = std::max(area.x, area.GetRight() - r.width);
   if (r.GetBottom() > area.GetBottom())
     y = std::max(area.y, area.GetBottom() - r.height);
-  if (x != r.x || y != r.y) Move(x, y);
-}
-
-void MayaraPpiWindow::OnClose(wxCloseEvent& event) {
-  // The plugin owns this window's lifetime; hide instead of destroying.
-  Hide();
-  event.Veto();
+  if (x != r.x || y != r.y) m_frame->Move(x, y);
 }

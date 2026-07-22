@@ -7,10 +7,12 @@
 #include <cmath>
 #include <cstdlib>
 
+#include <wx/aui/framemanager.h>
 #include <wx/bmpbndl.h>
 #include <wx/dcmemory.h>
 #include <wx/display.h>
 #include <wx/fileconf.h>
+#include <wx/frame.h>
 #include <wx/spinctrl.h>
 #include <wx/tokenzr.h>
 #include <wx/toplevel.h>
@@ -118,6 +120,7 @@ mayara_pi::~mayara_pi() = default;
 
 int mayara_pi::Init() {
   m_parent_window = GetOCPNCanvasWindow();
+  m_aui = GetFrameAuiManager();  // may be null in some builds
   LoadConfig();
 
   m_tool_id = InsertPlugInTool(
@@ -156,7 +159,7 @@ int mayara_pi::Init() {
   // Phase 1 wires up the spoke renderer.
   return WANTS_OPENGL_OVERLAY_CALLBACK | WANTS_OVERLAY_CALLBACK |
          WANTS_TOOLBAR_CALLBACK | INSTALLS_TOOLBAR_TOOL | WANTS_CURSOR_LATLON |
-         WANTS_PREFERENCES;
+         WANTS_PREFERENCES | USES_AUI_MANAGER;
 }
 
 bool mayara_pi::DeInit() {
@@ -218,6 +221,9 @@ void mayara_pi::LoadConfig() {
   bool shown = false;
   cfg->Read("WindowsVisible", &shown, false);
   m_windows_visible = shown;  // restored on the next fix (see SetPositionFixEx)
+  bool docked = false;
+  cfg->Read("Docked", &docked, false);
+  m_docked = docked;
 }
 
 int mayara_pi::OrientationFor(const std::string& radar_id) const {
@@ -233,9 +239,10 @@ void mayara_pi::SetOrientationFor(const std::string& radar_id, int mode) {
 // Snapshot geometry + visibility while the windows are definitely alive. wx may
 // destroy top-level windows before DeInit, so we never read them at shutdown.
 void mayara_pi::CaptureWindowState() {
+  if (m_docked) return;  // docked panes are laid out by AUI, not by geometry
   m_geom_cache.clear();
   for (MayaraPpiWindow* w : m_windows)
-    if (w) m_geom_cache.push_back(w->GetScreenRect());
+    if (w) m_geom_cache.push_back(w->WindowRect());
 }
 
 void mayara_pi::SaveWindowState() {
@@ -270,7 +277,7 @@ bool mayara_pi::RestoreWindowGeometry() {
         cfg->Read(wxString::Format("Win%d_y", k), &y) &&
         cfg->Read(wxString::Format("Win%d_w", k), &w) &&
         cfg->Read(wxString::Format("Win%d_h", k), &h) && w > 80 && h > 80)
-      m_windows[i]->SetSize(x, y, w, h);
+      m_windows[i]->SetWindowRect(wxRect(x, y, w, h));
   }
   return true;
 }
@@ -285,6 +292,7 @@ void mayara_pi::SaveConfig() {
   for (const auto& kv : m_orient)
     orient += wxString::Format("%s=%d;", kv.first.c_str(), kv.second);
   cfg->Write("Orientations", orient);
+  cfg->Write("Docked", m_docked);
   cfg->Flush();
 }
 
@@ -406,23 +414,35 @@ std::vector<std::vector<int>> mayara_pi::RadarGroups() const {
 }
 
 void mayara_pi::DestroyWindows(bool sync) {
+  bool touched_aui = false;
   for (MayaraPpiWindow* win : m_windows) {
     if (!win) continue;
-    win->Hide();
-    // sync: delete now, so panel timers can't call into a freed client during
-    // plugin teardown. async: defer (we may be inside a window's own handler,
-    // e.g. its gear button); the client is still alive, so timers are safe.
-    if (sync)
-      delete win;
-    else
-      win->Destroy();
+    win->ShowWindow(false);
+    if (win->IsDocked()) {
+      if (m_aui) {
+        m_aui->DetachPane(win);
+        touched_aui = true;
+      }
+      // sync: delete now so panel timers can't call a freed client during
+      // teardown. async: defer (we may be inside a window's own handler).
+      if (sync)
+        delete win;
+      else
+        win->Destroy();
+    } else if (wxFrame* f = win->HostFrame()) {
+      if (sync)
+        delete f;  // deletes its child content panel too
+      else
+        f->Destroy();
+    }
   }
+  if (touched_aui && m_aui) m_aui->Update();
   m_windows.clear();
 }
 
 bool mayara_pi::AnyWindowShown() const {
   for (MayaraPpiWindow* win : m_windows)
-    if (win && win->IsShown()) return true;
+    if (win && win->IsWindowShown()) return true;
   return false;
 }
 
@@ -440,8 +460,42 @@ void mayara_pi::RebuildWindows() {
   // No radars yet: still open one window bound to index 0 so the user sees the
   // "waiting for radar" UI; it starts showing radar 0 as soon as it connects.
   if (groups.empty()) groups.push_back({0});
+  const bool docked = m_docked && m_aui;
+  int pane_no = 0;
   for (const std::vector<int>& grp : groups) {
-    auto* win = new MayaraPpiWindow(m_parent_window, m_client.get(), grp);
+    MayaraPpiWindow* win = nullptr;
+    if (docked) {
+      win = new MayaraPpiWindow(m_aui->GetManagedWindow(), m_client.get(), grp);
+      win->SetDockedHost(m_aui);
+      wxAuiPaneInfo pane;
+      pane.Name(wxString::Format("mayara-%d", pane_no++))
+          .Caption(win->Title())
+          .CaptionVisible(true)
+          .DestroyOnClose(false)
+          .Right()
+          .Dockable(true)
+          .Floatable(true)
+          .CloseButton(true)
+          .MinSize(320, 240)
+          .BestSize(640, 520);
+      if (!m_windows_visible) pane.Hide();
+      m_aui->AddPane(win, pane);
+    } else {
+      auto* frame = new wxFrame(m_parent_window, wxID_ANY, wxEmptyString,
+                                wxDefaultPosition, wxSize(880, 560));
+      win = new MayaraPpiWindow(frame, m_client.get(), grp);
+      frame->SetTitle(win->Title());
+      frame->SetMinSize(wxSize(480, 320));
+      auto* fs = new wxBoxSizer(wxVERTICAL);
+      fs->Add(win, 1, wxEXPAND);
+      frame->SetSizer(fs);
+      win->SetFloatingHost(frame);
+      // The plugin owns the window; hide instead of destroying on close.
+      frame->Bind(wxEVT_CLOSE_WINDOW, [win](wxCloseEvent& e) {
+        win->ShowWindow(false);
+        e.Veto();
+      });
+    }
     win->ApplyTheme(ThemeFor(m_color_scheme));
     win->SetOverlayControl([this]() { return m_overlay_enabled; },
                            [this](bool on) {
@@ -451,17 +505,30 @@ void mayara_pi::RebuildWindows() {
                            });
     win->SetSettingsControl([this, win]() { ShowSettings(win); });
     win->SetAutoLayoutControl([this]() { AutoLayoutWindows(/*reflow=*/true); });
+    win->SetDockControl([this]() { return m_docked; },
+                        [this](bool on) {
+                          if (on == m_docked) return;
+                          m_docked = on;
+                          SaveConfig();
+                          // Recreate in the new host mode, but not from inside a
+                          // window's own control handler.
+                          if (m_parent_window)
+                            m_parent_window->CallAfter(
+                                [this]() { RebuildWindows(); });
+                        });
     win->SetNavProvider([this]() { return m_nav; });
     win->SetOrientationHandlers(
         [this](const std::string& id) { return OrientationFor(id); },
         [this](const std::string& id, int o) { SetOrientationFor(id, o); });
-    win->Show(m_windows_visible);
+    win->ShowWindow(m_windows_visible);
     m_windows.push_back(win);
   }
-  // Restore saved positions if they match this window count; otherwise tile
-  // multiple windows so they don't stack at the same spot.
-  if (!RestoreWindowGeometry() && m_windows.size() > 1)
+  if (docked) {
+    m_aui->Update();
+  } else if (!RestoreWindowGeometry() && m_windows.size() > 1) {
+    // Floating: restore saved positions or tile so they don't stack.
     AutoLayoutWindows(/*reflow=*/false);
+  }
 }
 
 // Tile the radar windows to fill `area`. Landscape: a row-major grid
@@ -480,12 +547,12 @@ static void TileInArea(const std::vector<MayaraPpiWindow*>& wins,
     const int x1 = area.x + area.width * (c + 1) / cols;
     const int y0 = area.y + area.height * r / rows;
     const int y1 = area.y + area.height * (r + 1) / rows;
-    if (wins[i]) wins[i]->SetSize(x0, y0, x1 - x0, y1 - y0);
+    if (wins[i]) wins[i]->SetWindowRect(wxRect(x0, y0, x1 - x0, y1 - y0));
   }
 }
 
 void mayara_pi::AutoLayoutWindows(bool reflow_ocpn) {
-  if (m_windows.empty()) return;
+  if (m_windows.empty() || m_docked) return;  // AUI manages docked panes
   wxWindow* frame =
       m_parent_window ? wxGetTopLevelParent(m_parent_window) : nullptr;
   int main_disp = frame ? wxDisplay::GetFromWindow(frame) : wxNOT_FOUND;
@@ -524,7 +591,7 @@ void mayara_pi::TogglePpiWindow() {
       (m_windows.empty() || m_windows_radar_count != radar_count))
     RebuildWindows();  // build, or rebuild for a changed radar set
   for (MayaraPpiWindow* win : m_windows)
-    if (win) win->Show(m_windows_visible);
+    if (win) win->ShowWindow(m_windows_visible);
   SetToolbarItemState(m_tool_id, m_windows_visible);
   if (m_windows_visible) CaptureWindowState();
 }
