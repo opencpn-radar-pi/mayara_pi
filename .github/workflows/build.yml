@@ -1,9 +1,11 @@
-# mayara_pi CI. Replaces the FE2 template's CircleCI/AppVeyor/Travis with
-# GitHub Actions. Each job just runs the portable FE2 ci/ build scripts on a
-# GitHub-hosted runner, then the (GitHub-Actions-aware) cloudsmith-upload.sh.
+# mayara_pi CI. GitHub Actions only (the FE2 template's CircleCI/AppVeyor/
+# Travis are gone). Every job runs the portable FE2 ci/ build script for its
+# target on a GitHub-hosted runner, then the GitHub-Actions-aware
+# cloudsmith-upload.sh, and uploads the package as a workflow artifact.
 #
-# Status: macOS is the validated target. windows/linux jobs are wired but need
-# a first CI run to shake out; expand to arm64/armhf/flatpak/android later.
+# Linux targets run inside a distro container (so the artifact links against
+# that distro's libraries) with a small prereqs step to install git/sudo that
+# the FE2 scripts assume. Windows/macOS run on their native runners.
 name: build
 
 on:
@@ -20,19 +22,18 @@ env:
   CLOUDSMITH_STABLE_REPO: ${{ secrets.CLOUDSMITH_STABLE_REPO }}
   CLOUDSMITH_UNSTABLE_REPO: ${{ secrets.CLOUDSMITH_UNSTABLE_REPO }}
   CLOUDSMITH_BETA_REPO: ${{ secrets.CLOUDSMITH_BETA_REPO }}
+  CMAKE_BUILD_PARALLEL_LEVEL: '3'
 
 jobs:
+  # --------------------------------------------------------------- macOS ----
   macos-universal:
     runs-on: macos-14
     env:
       OCPN_TARGET: macos
       WX_VER: '32'
-      CMAKE_BUILD_PARALLEL_LEVEL: '3'
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
+        with: { submodules: recursive, fetch-depth: 0 }
       - name: Build (arm64 + x86_64 universal)
         run: bash ci/circleci-build-macos-universal.sh
       - name: Publish to Cloudsmith
@@ -46,18 +47,15 @@ jobs:
             build/*.pkg
           if-no-files-found: warn
 
-  # --- Expansion targets: wired, not yet validated on a runner --------------
-  windows:
-    runs-on: windows-latest
-    if: ${{ false }} # flip to true to enable once validated
+  # ------------------------------------------------------------- Windows ----
+  windows-msvc:
+    runs-on: windows-2022
     env:
       OCPN_TARGET: MSVC
       WX_VER: '32'
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
+        with: { submodules: recursive, fetch-depth: 0 }
       - name: Build
         shell: cmd
         run: ci\circleci-build-msvc.bat
@@ -65,22 +63,109 @@ jobs:
         if: env.CLOUDSMITH_API_KEY != ''
         shell: bash
         run: bash ci/cloudsmith-upload.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mayara_pi-windows-msvc
+          path: |
+            build/*.exe
+            build/*.tar.gz
+          if-no-files-found: warn
 
-  linux-x86_64:
-    runs-on: ubuntu-latest
-    if: ${{ false }} # flip to true to enable once validated
-    container: debian:bookworm
+  # --------------------------------------------------------- Debian/Ubuntu --
+  # One job per distro (each links against that distro's wx/libs). x86_64 runs
+  # on the standard runner; arm64 uses GitHub's native arm runner.
+  linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: debian-bookworm-x86_64, runs-on: ubuntu-latest,    container: 'debian:bookworm', script: ci/circleci-build-debian.sh, target: bookworm, env: debian }
+          - { name: debian-bookworm-arm64,  runs-on: ubuntu-24.04-arm, container: 'debian:bookworm', script: ci/circleci-build-debian.sh, target: bookworm, env: debian }
+          - { name: ubuntu-jammy,           runs-on: ubuntu-22.04,     container: '',                script: ci/circleci-build-jammy.sh,  target: jammy,    env: debian }
+          - { name: ubuntu-noble,           runs-on: ubuntu-24.04,     container: '',                script: ci/circleci-build-debian.sh, target: noble,    env: debian }
+          - { name: fedora,                 runs-on: ubuntu-latest,    container: 'fedora:41',       script: ci/circleci-build-fedora.sh, target: fedora,   env: fedora }
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runs-on }}
+    container: ${{ matrix.container }}
     env:
-      OCPN_TARGET: bookworm
-      BUILD_ENV: debian
+      OCPN_TARGET: ${{ matrix.target }}
+      BUILD_ENV: ${{ matrix.env }}
       WX_VER: '32'
     steps:
+      - name: Container prerequisites
+        if: matrix.container != ''
+        shell: sh
+        run: |
+          if command -v apt-get >/dev/null 2>&1; then
+            apt-get update
+            apt-get install -y --no-install-recommends git sudo ca-certificates
+          elif command -v dnf >/dev/null 2>&1; then
+            dnf install -y git sudo dnf-plugins-core
+          fi
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
+        with: { submodules: recursive, fetch-depth: 0 }
       - name: Build
-        run: bash ci/circleci-build-debian.sh
+        run: bash ${{ matrix.script }}
       - name: Publish to Cloudsmith
         if: env.CLOUDSMITH_API_KEY != ''
         run: bash ci/cloudsmith-upload.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mayara_pi-${{ matrix.name }}
+          path: |
+            build/*.tar.gz
+            build/*.deb
+            build/*.rpm
+          if-no-files-found: warn
+
+  # --------------------------------------------------------------- Flatpak --
+  flatpak:
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:41
+      options: --privileged  # flatpak-builder needs bubblewrap/user namespaces
+    env:
+      OCPN_TARGET: flatpak
+      BUILD_ARCH: x86_64
+      SDK_VER: '24.08'
+      FLATPAK_BRANCH: beta
+      WX_VER: '32'
+    steps:
+      - name: Prerequisites
+        run: dnf install -y git sudo flatpak flatpak-builder cmake
+      - uses: actions/checkout@v4
+        with: { submodules: recursive, fetch-depth: 0 }
+      - name: Build
+        run: bash ci/circleci-build-flatpak.sh
+      - name: Publish to Cloudsmith
+        if: env.CLOUDSMITH_API_KEY != ''
+        run: bash ci/cloudsmith-upload.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mayara_pi-flatpak
+          path: build/*.tar.gz
+          if-no-files-found: warn
+
+  # --------------------------------------------------------------- Android --
+  android:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: android-arm64, script: ci/circleci-build-android-arm64.sh }
+          - { name: android-armhf, script: ci/circleci-build-android-armhf.sh }
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive, fetch-depth: 0 }
+      - name: Build
+        run: bash ${{ matrix.script }}
+      - name: Publish to Cloudsmith
+        if: env.CLOUDSMITH_API_KEY != ''
+        run: bash ci/cloudsmith-upload.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mayara_pi-${{ matrix.name }}
+          path: build/*.tar.gz
+          if-no-files-found: warn
