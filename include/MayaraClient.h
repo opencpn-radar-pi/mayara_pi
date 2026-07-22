@@ -88,6 +88,8 @@ class MayaraClient {
   // Acquire a target at a true bearing (deg) and distance (m) from the radar.
   // POSTs to the server; the tracker confirms it via the target stream.
   void AcquireTargetAt(int index, double bearing_deg, double distance_m);
+  // Stop tracking a target (DELETE .../targets/{id}).
+  void CancelTargetAt(int index, uint64_t target_id);
 
   // Radars currently composited on the chart overlay. Defaults to all radars.
   std::vector<int> ShownRadars();

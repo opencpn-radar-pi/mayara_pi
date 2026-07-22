@@ -708,3 +708,23 @@ void MayaraClient::AcquireTargetAt(int index, double bearing_deg,
     http.post(url, json_body, args);
   }).detach();
 }
+
+void MayaraClient::CancelTargetAt(int index, uint64_t target_id) {
+  std::string radar_id;
+  {
+    std::lock_guard<std::mutex> lock(m_radars_mutex);
+    if (index < 0 || index >= static_cast<int>(m_radars.size())) return;
+    radar_id = m_radars[index]->id;
+  }
+  const std::string base = m_base_url;
+  const std::string tid = std::to_string(target_id);
+  std::thread([base, radar_id, tid] {
+    ix::HttpClient http(/*async=*/false);
+    auto args = http.createRequest();
+    args->connectTimeout = 5;
+    args->transferTimeout = 5;
+    const std::string url = base + "/signalk/v2/api/vessels/self/radars/" +
+                            radar_id + "/targets/" + tid;
+    http.request(url, ix::HttpClient::kDelete, std::string(), args);
+  }).detach();
+}

@@ -124,6 +124,7 @@ wxBEGIN_EVENT_TABLE(RadarDisplayPanel, wxPanel)
     EVT_TIMER(kRadarTimerId, RadarDisplayPanel::OnTimer)
     EVT_SIZE(RadarDisplayPanel::OnSize)
     EVT_LEFT_DOWN(RadarDisplayPanel::OnLeftDown)
+    EVT_LEFT_DCLICK(RadarDisplayPanel::OnLeftDClick)
 wxEND_EVENT_TABLE()
 
 RadarDisplayPanel::RadarDisplayPanel(wxWindow* parent, MayaraClient* client,
@@ -807,6 +808,84 @@ void RadarDisplayPanel::OnLeftDown(wxMouseEvent& event) {
     if (m_on_focus) m_on_focus();
     event.Skip();
   }
+}
+
+void RadarDisplayPanel::OnLeftDClick(wxMouseEvent& event) {
+  const wxPoint p = event.GetPosition();
+  // Double-clicking a control/lozenge is not an acquire gesture.
+  if (m_menu_rect.Contains(p) || m_icon_view.Contains(p) ||
+      m_icon_ais.Contains(p) || m_icon_ebl.Contains(p) ||
+      m_icon_gain.Contains(p) || m_icon_sea.Contains(p) ||
+      m_icon_rain.Contains(p) || m_power_rect.Contains(p) ||
+      m_range_minus_rect.Contains(p) || m_range_plus_rect.Contains(p)) {
+    event.Skip();
+    return;
+  }
+  if (!m_client) return;
+
+  // Double-clicking on (or very near) a tracked target drops it; empty space
+  // acquires a new one. Recompute the picture geometry as OnPaint does.
+  const wxSize sz = GetClientSize();
+  const int avail_w = std::max(16, sz.x - m_obscured_right);
+  const int side = std::max(16, std::min(avail_w, sz.y));
+  const wxPoint c(avail_w / 2, sz.y / 2);
+  const double radius = side / 2.0;
+  RadarState* state = m_client->StateAt(m_index);
+  double report_m = state ? state->RangeMeters() : 0.0;
+  bool metric = false;
+  EffectiveRange(report_m, metric);
+  if (report_m > 0 && radius >= 8) {
+    double up_bearing = 0, raster_rot = 0, heading = 0;
+    bool has_heading = false;
+    ResolveOrientation(up_bearing, raster_rot, heading, has_heading);
+    for (const RadarTarget& t : m_client->TargetsAt(m_index)) {
+      if (t.distance_m <= 0 || t.status == RadarTarget::kLost) continue;
+      const double r = radius * t.distance_m / report_m;
+      const double a = (t.bearing_deg - up_bearing) * M_PI / 180.0;
+      const wxPoint tp(c.x + static_cast<int>(std::lround(r * std::sin(a))),
+                       c.y - static_cast<int>(std::lround(r * std::cos(a))));
+      if (std::hypot(p.x - tp.x, p.y - tp.y) <= 12) {
+        m_client->CancelTargetAt(m_index, t.id);
+        return;
+      }
+    }
+  }
+
+  double bearing_deg = 0, distance_m = 0;
+  if (PointToPolar(p, bearing_deg, distance_m))
+    m_client->AcquireTargetAt(m_index, bearing_deg, distance_m);
+}
+
+bool RadarDisplayPanel::PointToPolar(const wxPoint& p, double& bearing_deg,
+                                     double& distance_m) const {
+  const wxSize sz = GetClientSize();
+  const int avail_w = std::max(16, sz.x - m_obscured_right);
+  const int side = std::max(16, std::min(avail_w, sz.y));
+  const wxPoint c(avail_w / 2, sz.y / 2);
+  const double radius = side / 2.0;
+  if (radius < 8) return false;
+
+  RadarState* state = m_client ? m_client->StateAt(m_index) : nullptr;
+  double report_m = state ? state->RangeMeters() : 0.0;
+  bool metric = false;
+  EffectiveRange(report_m, metric);
+  if (report_m <= 0) return false;
+
+  const double dx = p.x - c.x, dy = p.y - c.y;
+  const double pix = std::sqrt(dx * dx + dy * dy);
+  if (pix > radius * 1.45) return false;  // outside the visible picture
+
+  // The display scale is constant: the reported range maps to `radius`.
+  distance_m = (pix / radius) * report_m;
+
+  double up_bearing = 0, raster_rot = 0, heading = 0;
+  bool has_heading = false;
+  ResolveOrientation(up_bearing, raster_rot, heading, has_heading);
+  // Inverse of PolarPoint: screen up is `up_bearing`, x grows east.
+  bearing_deg = up_bearing + std::atan2(dx, -dy) * 180.0 / M_PI;
+  while (bearing_deg < 0) bearing_deg += 360;
+  while (bearing_deg >= 360) bearing_deg -= 360;
+  return true;
 }
 
 void RadarDisplayPanel::TogglePower() {

@@ -68,6 +68,11 @@ class RadarDisplayPanel : public wxPanel {
   void OnTimer(wxTimerEvent& event);
   void OnSize(wxSizeEvent& event);
   void OnLeftDown(wxMouseEvent& event);
+  void OnLeftDClick(wxMouseEvent& event);  // acquire an ARPA target
+  // Convert a click in the picture to a true bearing (deg) and distance (m)
+  // from the radar. False if outside the picture or the range is unknown.
+  bool PointToPolar(const wxPoint& p, double& bearing_deg,
+                    double& distance_m) const;
   void DrawLozenges(wxDC& dc, const wxSize& sz);
   void DrawIconBar(wxDC& dc, const wxSize& sz);  // vertical hand-drawn toolbar
   // Paint the extra layers over the picture. `center` is the sweep origin,
