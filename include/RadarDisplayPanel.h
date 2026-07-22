@@ -69,6 +69,7 @@ class RadarDisplayPanel : public wxPanel {
   void OnSize(wxSizeEvent& event);
   void OnLeftDown(wxMouseEvent& event);
   void OnLeftDClick(wxMouseEvent& event);  // acquire an ARPA target
+  void OnMouseWheel(wxMouseEvent& event);  // free PPI display zoom
   // Convert a click in the picture to a true bearing (deg) and distance (m)
   // from the radar. False if outside the picture or the range is unknown.
   bool PointToPolar(const wxPoint& p, double& bearing_deg,
@@ -78,7 +79,7 @@ class RadarDisplayPanel : public wxPanel {
   // Paint the extra layers over the picture. `center` is the sweep origin,
   // `radius` the pixel radius of the reported range `report_m`.
   void DrawLayers(wxDC& dc, wxPoint center, double radius, double report_m,
-                  bool metric);
+                  bool metric, double disp_zoom);
   // Reported range (range control value, metres) + whether the range unit is
   // metric. Leaves the passed default report_m/metric if unavailable.
   void EffectiveRange(double& report_m, bool& metric) const;
@@ -99,6 +100,7 @@ class RadarDisplayPanel : public wxPanel {
   std::function<NavState()> m_nav;  // own-ship nav provider (may be null)
   PpiLayers m_layers;
   int m_orientation = kHeadUp;
+  double m_display_zoom = 1.0;  // free PPI magnification (0.5x - 5x), transient
   int m_obscured_right = 0;  // px covered on the right by the open menu
   bool m_ebl_on = false;  // EBL/VRM toggle (placeholder until implemented)
   MayaraTheme m_theme;

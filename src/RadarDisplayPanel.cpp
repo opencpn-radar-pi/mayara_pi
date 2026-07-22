@@ -125,6 +125,7 @@ wxBEGIN_EVENT_TABLE(RadarDisplayPanel, wxPanel)
     EVT_SIZE(RadarDisplayPanel::OnSize)
     EVT_LEFT_DOWN(RadarDisplayPanel::OnLeftDown)
     EVT_LEFT_DCLICK(RadarDisplayPanel::OnLeftDClick)
+    EVT_MOUSEWHEEL(RadarDisplayPanel::OnMouseWheel)
 wxEND_EVENT_TABLE()
 
 RadarDisplayPanel::RadarDisplayPanel(wxWindow* parent, MayaraClient* client,
@@ -168,8 +169,11 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
   double report_m = spoke_m;
   bool metric = false;
   EffectiveRange(report_m, metric);
-  const double zoom =
+  // Base zoom fits the reported range to the window edge; the user's free
+  // display zoom magnifies about the centre on top of that.
+  const double base_zoom =
       (report_m > 0 && spoke_m > 0) ? spoke_m / report_m : 1.0;
+  const double zoom = base_zoom * m_display_zoom;
 
   double up_bearing = 0, raster_rot = 0, heading = 0;
   bool has_heading = false;
@@ -187,7 +191,7 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
 
   // Extra layers over the picture. Radius maps to the reported range; layers
   // are placed relative to whatever bearing is shown at screen-up.
-  DrawLayers(dc, pctr, side / 2.0, report_m, metric);
+  DrawLayers(dc, pctr, side / 2.0, report_m, metric, m_display_zoom);
 
   DrawLozenges(dc, sz);
 
@@ -517,8 +521,14 @@ void RadarDisplayPanel::EffectiveRange(double& report_m, bool& metric) const {
 }
 
 void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
-                                   double report_m, bool metric) {
+                                   double report_m, bool metric,
+                                   double disp_zoom) {
   if (radius < 8) return;
+  if (disp_zoom <= 0) disp_zoom = 1.0;
+  // Geographic layers (rings, AIS, ARPA) scale with the free display zoom;
+  // window-fixed decorations (compass, heading, north, COG) do not. `geo`
+  // maps a true geographic distance to screen pixels.
+  const double geo = disp_zoom / report_m * radius;
 
   NavState nav;
   if (m_nav) nav = m_nav();
@@ -538,7 +548,8 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
     dc.SetTextForeground(m_theme.dim_text);
     const double k = 0.70710678;  // cos/sin 45 deg (top-right diagonal)
     for (int i = 1; i <= rings; ++i) {
-      const double rr = radius * i / rings;
+      const double rr = radius * i / rings * disp_zoom;
+      if (rr > radius * 1.5) continue;  // ring past the picture when zoomed in
       dc.DrawCircle(c.x, c.y, static_cast<int>(rr));
       const wxString lbl = FormatRange(report_m * i / rings, metric);
       wxCoord tw, th;
@@ -625,13 +636,13 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
         PlugIn_AIS_Target* t = arr->Item(i);
         if (!t) continue;
         const double rng_m = t->Range_NM * 1852.0;
-        // Show targets within the picture (report range plus the overzoom
-        // corners, ~1.45x).
-        if (rng_m <= 0 || rng_m > report_m * 1.45) {
+        const double r = rng_m * geo;
+        // Show targets within the picture (window edge plus the overzoom
+        // corners, ~1.45x), honouring the free display zoom.
+        if (rng_m <= 0 || r > radius * 1.45) {
           delete t;
           continue;
         }
-        const double r = radius * rng_m / report_m;
         const wxPoint p = PolarPoint(c, r, t->Brg, up_bearing);
         const double course =
             (t->COG >= 0 && t->COG < 360) ? t->COG : t->Brg;
@@ -653,7 +664,7 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
         // COG/SOG predictor vector (10 minutes), like OpenCPN's.
         if (moving) {
           const double pred_m = (t->SOG / 6.0) * 1852.0;  // 10 min = SOG/6 NM
-          const double pred_px = radius * pred_m / report_m;
+          const double pred_px = pred_m * geo;
           const wxPoint e2(p.x + static_cast<int>(std::lround(pred_px * sa)),
                            p.y - static_cast<int>(std::lround(pred_px * ca)));
           dc.SetPen(wxPen(fill, 1));
@@ -713,8 +724,8 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
       const wxColour col_acq = gcol("CHYLW", wxColour(255, 210, 0));
       const wxColour col_lost = gcol("UGRY1", wxColour(140, 140, 140));
       for (const RadarTarget& t : targets) {
-        if (t.distance_m <= 0 || t.distance_m > report_m * 1.45) continue;
-        const double r = radius * t.distance_m / report_m;
+        const double r = t.distance_m * geo;
+        if (t.distance_m <= 0 || r > radius * 1.45) continue;
         const wxPoint p = PolarPoint(c, r, t.bearing_deg, up_bearing);
         const bool dangerous = t.has_danger && t.is_dangerous;
         const wxColour col = t.status == RadarTarget::kLost ? col_lost
@@ -726,7 +737,7 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
         if (t.has_motion && t.speed_kn >= 0.2 &&
             t.status == RadarTarget::kTracking) {
           const double pred_nm = t.speed_kn * (6.0 / 60.0);
-          const double pred_px = radius * (pred_nm * 1852.0) / report_m;
+          const double pred_px = (pred_nm * 1852.0) * geo;
           const double a = (t.course_deg - up_bearing) * M_PI / 180.0;
           const wxPoint e(p.x + static_cast<int>(std::lround(pred_px * std::sin(a))),
                           p.y - static_cast<int>(std::lround(pred_px * std::cos(a))));
@@ -777,6 +788,17 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
         }
       }
     }
+  }
+
+  // Free-zoom indicator, only while magnified/reduced.
+  if (std::fabs(disp_zoom - 1.0) > 0.02) {
+    dc.SetFont(GetFont());
+    dc.SetTextForeground(m_theme.text);
+    const wxString z = wxString::Format("%.1f×", disp_zoom);
+    wxCoord tw, th;
+    dc.GetTextExtent(z, &tw, &th);
+    dc.DrawText(z, c.x - tw / 2,
+                c.y + static_cast<int>(radius) - th - 4);
   }
 }
 
@@ -838,9 +860,10 @@ void RadarDisplayPanel::OnLeftDClick(wxMouseEvent& event) {
     double up_bearing = 0, raster_rot = 0, heading = 0;
     bool has_heading = false;
     ResolveOrientation(up_bearing, raster_rot, heading, has_heading);
+    const double dz = m_display_zoom > 0 ? m_display_zoom : 1.0;
     for (const RadarTarget& t : m_client->TargetsAt(m_index)) {
       if (t.distance_m <= 0 || t.status == RadarTarget::kLost) continue;
-      const double r = radius * t.distance_m / report_m;
+      const double r = radius * t.distance_m / report_m * dz;
       const double a = (t.bearing_deg - up_bearing) * M_PI / 180.0;
       const wxPoint tp(c.x + static_cast<int>(std::lround(r * std::sin(a))),
                        c.y - static_cast<int>(std::lround(r * std::cos(a))));
@@ -875,8 +898,10 @@ bool RadarDisplayPanel::PointToPolar(const wxPoint& p, double& bearing_deg,
   const double pix = std::sqrt(dx * dx + dy * dy);
   if (pix > radius * 1.45) return false;  // outside the visible picture
 
-  // The display scale is constant: the reported range maps to `radius`.
-  distance_m = (pix / radius) * report_m;
+  // The reported range maps to `radius` at 1x; the free display zoom magnifies
+  // about the centre, so undo it to recover the geographic distance.
+  const double dz = m_display_zoom > 0 ? m_display_zoom : 1.0;
+  distance_m = (pix / (radius * dz)) * report_m;
 
   double up_bearing = 0, raster_rot = 0, heading = 0;
   bool has_heading = false;
@@ -886,6 +911,20 @@ bool RadarDisplayPanel::PointToPolar(const wxPoint& p, double& bearing_deg,
   while (bearing_deg < 0) bearing_deg += 360;
   while (bearing_deg >= 360) bearing_deg -= 360;
   return true;
+}
+
+void RadarDisplayPanel::OnMouseWheel(wxMouseEvent& event) {
+  // Free PPI magnification, independent of the radar range control. Each notch
+  // is ~15%; clamped to 0.5x - 5x. A notch back to ~1.0 snaps to exactly 1x.
+  const double factor = event.GetWheelRotation() > 0 ? 1.15 : 1.0 / 1.15;
+  double z = m_display_zoom * factor;
+  if (z < 0.5) z = 0.5;
+  if (z > 5.0) z = 5.0;
+  if (std::fabs(z - 1.0) < 0.05) z = 1.0;  // detent at 1x
+  if (z != m_display_zoom) {
+    m_display_zoom = z;
+    Refresh(false);
+  }
 }
 
 void RadarDisplayPanel::TogglePower() {
