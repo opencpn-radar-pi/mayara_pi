@@ -49,6 +49,10 @@ class MayaraClient {
   void Stop();
 
   std::string StatusLine();
+  // Radar API version handshake. ServerApiVersion is empty until GET /radars is
+  // read; ApiVersionMismatch is true once it is known and differs from ours.
+  std::string ServerApiVersion();
+  bool ApiVersionMismatch();
 
   // Active-radar accessors (the one shown/controlled in the UI).
   RadarState* State();

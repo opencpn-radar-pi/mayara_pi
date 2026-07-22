@@ -190,8 +190,23 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
 
   DrawLozenges(dc, sz);
 
-  // Connection status only until a radar is up (no "streaming N radar(s)").
-  if (!m_client || !m_client->ControlsAt(m_index)) {
+  if (m_client && m_client->ApiVersionMismatch()) {
+    // Loud, centred, two-line warning at menu-item point size.
+    const wxString l1 = _("Radar API version mismatch");
+    const wxString l2 = wxString::Format(
+        _("server %s, plugin %s — update the plugin"),
+        wxString::FromUTF8(m_client->ServerApiVersion().c_str()),
+        wxString::FromUTF8(MayaraClient::kRadarApiVersion));
+    dc.SetFont(GetFont());  // same point size as the menu items
+    dc.SetTextForeground(wxColour(255, 90, 90));
+    wxCoord w1, h1, w2, h2;
+    dc.GetTextExtent(l1, &w1, &h1);
+    dc.GetTextExtent(l2, &w2, &h2);
+    const int cx = (sz.x - m_obscured_right) / 2, cy = sz.y / 2;
+    dc.DrawText(l1, cx - w1 / 2, cy - h1);
+    dc.DrawText(l2, cx - w2 / 2, cy + 2);
+  } else if (!m_client || !m_client->ControlsAt(m_index)) {
+    // Connection status only until a radar is up (no "streaming N radar(s)").
     const wxString status =
         m_client ? wxString::FromUTF8(m_client->StatusLine().c_str())
                  : wxString("no client");
