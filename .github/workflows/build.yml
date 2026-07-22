@@ -99,13 +99,17 @@ jobs:
         run: |
           if command -v apt-get >/dev/null 2>&1; then
             # Bare container apt prompts interactively; make every apt-get -y.
-            printf 'APT::Get::Assume-Yes "true";\nAPT::Get::force-yes "true";\n' \
+            printf 'APT::Get::Assume-Yes "true";\n' \
               > /etc/apt/apt.conf.d/90noninteractive
             apt-get update
             apt-get install -y --no-install-recommends git sudo ca-certificates
           elif command -v dnf >/dev/null 2>&1; then
             dnf install -y git sudo dnf-plugins-core
           fi
+          # The workspace is owned by a different UID than root in the
+          # container; let git operate on it (the FE2 scripts run submodule
+          # update).
+          git config --global --add safe.directory '*'
       - uses: actions/checkout@v4
         with: { submodules: recursive, fetch-depth: 0 }
       - name: Build
@@ -136,7 +140,9 @@ jobs:
       WX_VER: '32'
     steps:
       - name: Prerequisites
-        run: dnf install -y git sudo flatpak flatpak-builder cmake
+        run: |
+          dnf install -y git sudo flatpak flatpak-builder cmake
+          git config --global --add safe.directory '*'
       - uses: actions/checkout@v4
         with: { submodules: recursive, fetch-depth: 0 }
       - name: Build
