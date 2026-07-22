@@ -594,7 +594,17 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
       wxFont label_font = dc.GetFont();
       label_font.SetPointSize(std::max(7, label_font.GetPointSize() - 2));
       dc.SetFont(label_font);
-      const wxColour green(0, 220, 120), red(255, 80, 80);
+      // OpenCPN's AIS palette (matches the active colour scheme).
+      auto gcol = [](const char* name, const wxColour& fallback) {
+        wxColour col;
+        if (GetGlobalColor(wxString::FromUTF8(name), &col) && col.IsOk())
+          return col;
+        return fallback;
+      };
+      const wxColour col_outline = gcol("UBLCK", wxColour(20, 20, 20));
+      const wxColour col_active = gcol("TEAL1", wxColour(0, 150, 150));
+      const wxColour col_noname = gcol("CHYLW", wxColour(255, 220, 0));
+      const wxColour col_danger = gcol("URED", wxColour(210, 0, 0));
       for (size_t i = 0; i < arr->GetCount(); ++i) {
         PlugIn_AIS_Target* t = arr->Item(i);
         if (!t) continue;
@@ -607,7 +617,6 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
         }
         const double r = radius * rng_m / report_m;
         const wxPoint p = PolarPoint(c, r, t->Brg, up_bearing);
-        // Small triangle oriented to COG (fallback: bearing).
         const double course =
             (t->COG >= 0 && t->COG < 360) ? t->COG : t->Brg;
         const double a = (course - up_bearing) * M_PI / 180.0;
@@ -617,33 +626,44 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
                          p.y + static_cast<int>(std::lround(dx * sa + dy * ca)));
         };
         const bool danger = t->bCPA_Valid && t->CPA < 0.5 && t->TCPA > 0;
+        const bool moving = t->SOG >= 0.5 && t->SOG < 102.2;
 
-        // Course predictor ("extension line"): where the target will be in
-        // 10 minutes at its current SOG, along its COG.
-        if (t->SOG > 0.1 && t->SOG < 102.2) {
+        wxString name = wxString::FromUTF8(t->ShipName);
+        name.Replace("@", " ");  // AIS pads names with '@'
+        name.Trim().Trim(false);
+        const wxColour fill =
+            danger ? col_danger : (name.IsEmpty() ? col_noname : col_active);
+
+        // COG/SOG predictor vector (10 minutes), like OpenCPN's.
+        if (moving) {
           const double pred_m = (t->SOG / 6.0) * 1852.0;  // 10 min = SOG/6 NM
           const double pred_px = radius * pred_m / report_m;
           const wxPoint e2(p.x + static_cast<int>(std::lround(pred_px * sa)),
                            p.y - static_cast<int>(std::lround(pred_px * ca)));
-          dc.SetPen(wxPen(danger ? red : green, 1));
+          dc.SetPen(wxPen(fill, 1));
           dc.DrawLine(p.x, p.y, e2.x, e2.y);
         }
 
-        // Triangle: nose forward (screen up = -y before rotation).
-        wxPoint tri[3] = {rot(0, -8), rot(-5, 6), rot(5, 6)};
-        dc.SetBrush(wxBrush(danger ? red : green));
-        dc.SetPen(wxPen(m_theme.text, 1));
-        dc.DrawPolygon(3, tri);
+        dc.SetBrush(wxBrush(fill));
+        dc.SetPen(wxPen(col_outline, 1));
+        if (moving) {
+          // Directional AIS "kite": long nose along COG, base astern. Class B
+          // gets a notched back; Class A a flat back.
+          const int back = t->Class == 1 ? 1 : 6;
+          wxPoint kite[4] = {rot(-5, 6), rot(0, -13), rot(5, 6), rot(0, back)};
+          dc.DrawPolygon(4, kite);
+        } else {
+          dc.DrawCircle(p, 5);  // stationary/anchored target
+        }
 
         // Label: ship name (or MMSI), plus COG/SOG when moving.
-        wxString name = wxString::FromUTF8(t->ShipName).Trim().Trim(false);
         if (name.IsEmpty() && t->MMSI) name = wxString::Format("%d", t->MMSI);
         wxString line2;
-        if (t->SOG >= 0 && t->SOG < 102.2)
+        if (moving)
           line2 = wxString::Format("%03.0f° %.1fkn",
                                    (t->COG >= 0 && t->COG < 360) ? t->COG : 0.0,
                                    t->SOG);
-        dc.SetTextForeground(danger ? red : green);
+        dc.SetTextForeground(fill);
         int ty = p.y + 8;
         if (!name.IsEmpty()) {
           dc.DrawText(name, p.x + 8, ty);
