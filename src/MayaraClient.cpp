@@ -6,9 +6,6 @@
 #include <chrono>
 #include <cstdint>
 
-#include <wx/log.h>
-#include <wx/thread.h>
-
 #include <ixwebsocket/IXHttpClient.h>
 #include <ixwebsocket/IXNetSystem.h>
 #include <ixwebsocket/IXWebSocket.h>
@@ -145,19 +142,12 @@ std::string MayaraClient::StatusLine() {
 }
 
 void MayaraClient::SetStatus(const std::string& s) {
-  {
-    std::lock_guard<std::mutex> lock(m_status_mutex);
-    m_status = s;
-  }
-  // Never call wxLog from our worker threads. wxLog defers cross-thread records
-  // and flushes them later on the main idle loop; by then OpenCPN may have
-  // unloaded this plugin's dylib, leaving the __FILE__ pointer baked into the
-  // log record dangling -> strlen() segfault inside OcpnLog::DoLogRecord. Log
-  // only when we happen to be on the GUI thread; otherwise the status is still
-  // available via StatusLine().
-  if (wxThread::IsMain()) {
-    wxLogMessage("mayara_pi: %s", s.c_str());
-  }
+  // Deliberately wx-free (this TU also pulls in IXWebSocket, whose ssize_t
+  // typedef clashes with wxWidgets' on Win32). The status is surfaced via
+  // StatusLine(); we never call wxLog from these worker threads anyway (its
+  // deferred cross-thread flush can dereference our unloaded dylib).
+  std::lock_guard<std::mutex> lock(m_status_mutex);
+  m_status = s;
 }
 
 std::string MayaraClient::ServerApiVersion() {
