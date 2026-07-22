@@ -311,13 +311,21 @@ bool MayaraClient::DiscoverAndConnect() {
       auto r = std::make_unique<Radar>();
       r->id = id;
       r->name = info.value("name", id);
+      // 3.4.0 carries no stream URL (reached by convention); older shapes may.
       r->spoke_url = info.value("spokeDataUrl", std::string());
       radars.push_back(std::move(r));
     };
-    if (j.is_object())
-      for (auto it = j.begin(); it != j.end(); ++it) add(it.key(), it.value());
-    else if (j.is_array())
+    if (j.is_object() && j.contains("radars") && j["radars"].is_object()) {
+      // 3.4.0 envelope: { version, radars: { id: RadarInfo } }.
+      for (auto it = j["radars"].begin(); it != j["radars"].end(); ++it)
+        add(it.key(), it.value());
+    } else if (j.is_object()) {
+      // Older shape: radars keyed at the top level.
+      for (auto it = j.begin(); it != j.end(); ++it)
+        if (it.key() != "version") add(it.key(), it.value());
+    } else if (j.is_array()) {
       for (const auto& e : j) add(e.value("id", std::string()), e);
+    }
   } catch (const std::exception& e) {
     JsonError("radars", e.what());
     return false;
@@ -368,24 +376,37 @@ bool MayaraClient::FetchCapabilities(Radar* radar) {
     std::vector<Rgba> legend;
     if (j.contains("legend") && j["legend"].contains("pixels"))
       for (const auto& px : j["legend"]["pixels"]) {
-        const std::string col = px.value("color", "#00000000");
         Rgba c;
-        auto hex = [](char ch) -> int {
-          if (ch >= '0' && ch <= '9') return ch - '0';
-          if (ch >= 'a' && ch <= 'f') return ch - 'a' + 10;
-          if (ch >= 'A' && ch <= 'F') return ch - 'A' + 10;
-          return 0;
-        };
-        const size_t i = (!col.empty() && col[0] == '#') ? 1 : 0;
-        auto byte = [&](size_t off) -> uint8_t {
-          return (off + 1 < col.size())
-                     ? static_cast<uint8_t>(hex(col[off]) * 16 + hex(col[off + 1]))
-                     : 0;
-        };
-        c.r = byte(i);
-        c.g = byte(i + 2);
-        c.b = byte(i + 4);
-        c.a = (col.size() >= i + 8) ? byte(i + 6) : 255;
+        const auto cit = px.find("color");
+        if (cit != px.end() && cit->is_object()) {
+          // 3.4.0: color is an { r, g, b, a } object.
+          c.r = cit->value("r", 0);
+          c.g = cit->value("g", 0);
+          c.b = cit->value("b", 0);
+          c.a = cit->value("a", 255);
+        } else {
+          // Older shape: color is a "#RRGGBBAA" hex string.
+          const std::string col =
+              (cit != px.end() && cit->is_string()) ? cit->get<std::string>()
+                                                    : "#00000000";
+          auto hex = [](char ch) -> int {
+            if (ch >= '0' && ch <= '9') return ch - '0';
+            if (ch >= 'a' && ch <= 'f') return ch - 'a' + 10;
+            if (ch >= 'A' && ch <= 'F') return ch - 'A' + 10;
+            return 0;
+          };
+          const size_t i = (!col.empty() && col[0] == '#') ? 1 : 0;
+          auto byte = [&](size_t off) -> uint8_t {
+            return (off + 1 < col.size())
+                       ? static_cast<uint8_t>(hex(col[off]) * 16 +
+                                              hex(col[off + 1]))
+                       : 0;
+          };
+          c.r = byte(i);
+          c.g = byte(i + 2);
+          c.b = byte(i + 4);
+          c.a = (col.size() >= i + 8) ? byte(i + 6) : 255;
+        }
         legend.push_back(c);
       }
     radar->state.Configure(spokes, maxlen, std::move(legend));

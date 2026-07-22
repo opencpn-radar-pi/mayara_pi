@@ -40,7 +40,7 @@ class MayaraClient {
   // The Radar API version this client speaks. The server reports its own in the
   // `version` field of GET /radars; a mismatch on any JSON error is fatal (see
   // MayaraClient.cpp). Bump this only once the parsing matches that version.
-  static constexpr const char* kRadarApiVersion = "3.3.0";
+  static constexpr const char* kRadarApiVersion = "3.4.0";
 
   MayaraClient(std::string explicit_url, std::string fallback_url);
   ~MayaraClient();
