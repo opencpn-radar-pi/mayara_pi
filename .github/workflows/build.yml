@@ -81,7 +81,7 @@ jobs:
         include:
           - { name: debian-bookworm-x86_64, runs-on: ubuntu-latest,    container: 'debian:bookworm', script: ci/circleci-build-debian.sh, target: bookworm, env: debian }
           - { name: debian-bookworm-arm64,  runs-on: ubuntu-24.04-arm, container: 'debian:bookworm', script: ci/circleci-build-debian.sh, target: bookworm, env: debian }
-          - { name: ubuntu-jammy,           runs-on: ubuntu-22.04,     container: '',                script: ci/circleci-build-jammy.sh,  target: jammy,    env: debian }
+          - { name: ubuntu-jammy,           runs-on: ubuntu-22.04,     container: '',                script: ci/circleci-build-debian.sh, target: jammy,    env: debian }
           - { name: ubuntu-noble,           runs-on: ubuntu-24.04,     container: '',                script: ci/circleci-build-debian.sh, target: noble,    env: debian }
           - { name: fedora,                 runs-on: ubuntu-latest,    container: 'fedora:41',       script: ci/circleci-build-fedora.sh, target: fedora,   env: fedora }
     name: ${{ matrix.name }}
@@ -91,12 +91,16 @@ jobs:
       OCPN_TARGET: ${{ matrix.target }}
       BUILD_ENV: ${{ matrix.env }}
       WX_VER: '32'
+      DEBIAN_FRONTEND: noninteractive
     steps:
       - name: Container prerequisites
         if: matrix.container != ''
         shell: sh
         run: |
           if command -v apt-get >/dev/null 2>&1; then
+            # Bare container apt prompts interactively; make every apt-get -y.
+            printf 'APT::Get::Assume-Yes "true";\nAPT::Get::force-yes "true";\n' \
+              > /etc/apt/apt.conf.d/90noninteractive
             apt-get update
             apt-get install -y --no-install-recommends git sudo ca-certificates
           elif command -v dnf >/dev/null 2>&1; then
