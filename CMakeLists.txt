@@ -173,7 +173,15 @@ if(NOT OCPN_FLATPAK_CONFIG)
   # IXWebSocket: WebSocket + HTTP client, permessage-deflate via zlib. TLS is
   # off for now (mayara-server is typically ws:// on the LAN); enable later.
   set(USE_TLS OFF CACHE BOOL "" FORCE)
-  set(USE_ZLIB ON CACHE BOOL "" FORCE)
+  # zlib enables permessage-deflate. It's a system library on macOS/Linux but
+  # not on Windows/MSVC (find_package(ZLIB) would fail the configure); drop it
+  # there. WebSocket compression is negotiated, so uncompressed frames still
+  # work -- just a little more bandwidth on Windows.
+  if(WIN32)
+    set(USE_ZLIB OFF CACHE BOOL "" FORCE)
+  else()
+    set(USE_ZLIB ON CACHE BOOL "" FORCE)
+  endif()
   set(IXWEBSOCKET_INSTALL OFF CACHE BOOL "" FORCE)
   # Build IXWebSocket as a STATIC lib linked into the plugin (FE2 sets
   # BUILD_SHARED_LIBS globally, which would otherwise emit a separate dylib the
