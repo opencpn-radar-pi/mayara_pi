@@ -23,6 +23,11 @@
 #include <GL/gl.h>
 #endif
 
+// Windows ships GL 1.1 headers; GL_CLAMP_TO_EDGE (1.2) may be absent.
+#ifndef GL_CLAMP_TO_EDGE
+#define GL_CLAMP_TO_EDGE 0x812F
+#endif
+
 #include "MayaraClient.h"
 #include "MayaraTheme.h"
 #include "PpiWindow.h"

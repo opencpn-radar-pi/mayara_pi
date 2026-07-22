@@ -198,6 +198,12 @@ if(NOT OCPN_FLATPAK_CONFIG)
     ${PROJECT_SOURCE_DIR}/third_party/IXWebSocket
     ${PROJECT_SOURCE_DIR}/third_party/mdns
   )
+  # MSVC portability: M_PI needs _USE_MATH_DEFINES before <cmath>; NOMINMAX
+  # keeps windows.h from defining min/max macros; WIN32_LEAN_AND_MEAN trims it.
+  if(MSVC)
+    target_compile_definitions(${PACKAGE_NAME} PRIVATE
+      _USE_MATH_DEFINES NOMINMAX WIN32_LEAN_AND_MEAN)
+  endif()
 endif()
 
 # ---------------------------------------------------------------------------

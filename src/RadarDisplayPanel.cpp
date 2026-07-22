@@ -319,13 +319,13 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
     const wxFont base = GetFont();
     wxFont big = base;
     big.SetPointSize(base.GetPointSize() + 2);
-    const wxFont& small = base;  // name line == ring-label size
+    const wxFont& name_font = base;  // ("small" is a Windows macro)  // name line == ring-label size
 
     wxCoord tw, th, nw = 0, nh = 0;
     dc.SetFont(big);
     dc.GetTextExtent(label, &tw, &th);
     if (!name.IsEmpty()) {
-      dc.SetFont(small);
+      dc.SetFont(name_font);
       dc.GetTextExtent(name, &nw, &nh);
     }
 
@@ -351,7 +351,7 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
     const int textX = x + padx + icon + gap;
     const int textY = y + (h - textH) / 2;
     if (!name.IsEmpty()) {
-      dc.SetFont(small);
+      dc.SetFont(name_font);
       dc.SetTextForeground(m_theme.text);
       dc.DrawText(name, textX, textY);
       dc.SetFont(big);
