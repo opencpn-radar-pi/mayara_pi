@@ -270,10 +270,11 @@ void mayara_pi::SaveWindowState() {
     cfg->Write(wxString::Format("Win%d_w", k), r.width);
     cfg->Write(wxString::Format("Win%d_h", k), r.height);
   }
-  // Docked pane layouts (AUI perspective per pane).
-  cfg->Write("PaneCount", static_cast<int>(m_persp_cache.size()));
+  // Docked pane layouts (AUI perspective per pane). The "R" key version was
+  // bumped when the default dock moved to a full-height right column.
+  cfg->Write("PaneRCount", static_cast<int>(m_persp_cache.size()));
   for (size_t i = 0; i < m_persp_cache.size(); ++i)
-    cfg->Write(wxString::Format("Pane%d", static_cast<int>(i)),
+    cfg->Write(wxString::Format("PaneR%d", static_cast<int>(i)),
                m_persp_cache[i]);
   cfg->Flush();
 }
@@ -303,10 +304,10 @@ wxString mayara_pi::SavedPaneInfo(int index) const {
   if (!cfg) return wxString();
   cfg->SetPath(kConfigGroup);
   int pc = 0;
-  cfg->Read("PaneCount", &pc, 0);
+  cfg->Read("PaneRCount", &pc, 0);
   if (index < 0 || index >= pc) return wxString();
   wxString s;
-  cfg->Read(wxString::Format("Pane%d", index), &s);
+  cfg->Read(wxString::Format("PaneR%d", index), &s);
   return s;
 }
 
@@ -502,11 +503,12 @@ void mayara_pi::RebuildWindows() {
           .CaptionVisible(true)
           .DestroyOnClose(false)
           .Right()
+          .Layer(1)  // outer layer: a full-height column right of the charts
           .Dockable(true)
           .Floatable(true)
           .CloseButton(true)
-          .MinSize(320, 240)
-          .BestSize(640, 520);
+          .MinSize(300, 240)
+          .BestSize(420, 900);
       // Restore this pane's saved AUI layout, then re-assert identity/caption.
       const wxString saved = SavedPaneInfo(pane_no);
       if (!saved.IsEmpty()) {
