@@ -81,6 +81,7 @@ class mayara_pi : public opencpn_plugin_121 {
   void SaveWindowState();          // visibility + geometry of the PPI windows
   bool RestoreWindowGeometry();    // apply saved geometry; false if none match
   void CaptureWindowState();       // snapshot geometry while windows are alive
+  wxString SavedPaneInfo(int index) const;  // saved AUI pane layout, or empty
   int OrientationFor(const std::string& radar_id) const;   // per-radar mode
   void SetOrientationFor(const std::string& radar_id, int mode);
 
@@ -108,6 +109,7 @@ class mayara_pi : public opencpn_plugin_121 {
   // id. Persisted.
   std::map<std::string, int> m_orient;
   std::vector<wxRect> m_geom_cache;  // last live snapshot of window geometry
+  std::vector<wxString> m_persp_cache;  // last live snapshot of AUI pane info
   bool m_docked = false;             // radar windows docked into OpenCPN (AUI)
   wxAuiManager* m_aui = nullptr;     // OpenCPN main-frame AUI manager
 

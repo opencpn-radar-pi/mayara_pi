@@ -239,7 +239,18 @@ void mayara_pi::SetOrientationFor(const std::string& radar_id, int mode) {
 // Snapshot geometry + visibility while the windows are definitely alive. wx may
 // destroy top-level windows before DeInit, so we never read them at shutdown.
 void mayara_pi::CaptureWindowState() {
-  if (m_docked) return;  // docked panes are laid out by AUI, not by geometry
+  if (m_docked) {
+    // Docked: remember each pane's AUI layout (dock side, float pos/size, ...).
+    m_persp_cache.clear();
+    if (m_aui)
+      for (MayaraPpiWindow* w : m_windows) {
+        if (!w) continue;
+        wxAuiPaneInfo& pane = m_aui->GetPane(w);
+        m_persp_cache.push_back(pane.IsOk() ? m_aui->SavePaneInfo(pane)
+                                            : wxString());
+      }
+    return;
+  }
   m_geom_cache.clear();
   for (MayaraPpiWindow* w : m_windows)
     if (w) m_geom_cache.push_back(w->WindowRect());
@@ -259,6 +270,11 @@ void mayara_pi::SaveWindowState() {
     cfg->Write(wxString::Format("Win%d_w", k), r.width);
     cfg->Write(wxString::Format("Win%d_h", k), r.height);
   }
+  // Docked pane layouts (AUI perspective per pane).
+  cfg->Write("PaneCount", static_cast<int>(m_persp_cache.size()));
+  for (size_t i = 0; i < m_persp_cache.size(); ++i)
+    cfg->Write(wxString::Format("Pane%d", static_cast<int>(i)),
+               m_persp_cache[i]);
   cfg->Flush();
 }
 
@@ -280,6 +296,18 @@ bool mayara_pi::RestoreWindowGeometry() {
       m_windows[i]->SetWindowRect(wxRect(x, y, w, h));
   }
   return true;
+}
+
+wxString mayara_pi::SavedPaneInfo(int index) const {
+  wxFileConfig* cfg = GetOCPNConfigObject();
+  if (!cfg) return wxString();
+  cfg->SetPath(kConfigGroup);
+  int pc = 0;
+  cfg->Read("PaneCount", &pc, 0);
+  if (index < 0 || index >= pc) return wxString();
+  wxString s;
+  cfg->Read(wxString::Format("Pane%d", index), &s);
+  return s;
 }
 
 void mayara_pi::SaveConfig() {
@@ -467,8 +495,9 @@ void mayara_pi::RebuildWindows() {
     if (docked) {
       win = new MayaraPpiWindow(m_aui->GetManagedWindow(), m_client.get(), grp);
       win->SetDockedHost(m_aui);
+      const wxString pane_name = wxString::Format("mayara-%d", pane_no);
       wxAuiPaneInfo pane;
-      pane.Name(wxString::Format("mayara-%d", pane_no++))
+      pane.Name(pane_name)
           .Caption(win->Title())
           .CaptionVisible(true)
           .DestroyOnClose(false)
@@ -478,8 +507,15 @@ void mayara_pi::RebuildWindows() {
           .CloseButton(true)
           .MinSize(320, 240)
           .BestSize(640, 520);
+      // Restore this pane's saved AUI layout, then re-assert identity/caption.
+      const wxString saved = SavedPaneInfo(pane_no);
+      if (!saved.IsEmpty()) {
+        m_aui->LoadPaneInfo(saved, pane);
+        pane.Name(pane_name).Caption(win->Title()).MinSize(320, 240);
+      }
       if (!m_windows_visible) pane.Hide();
       m_aui->AddPane(win, pane);
+      ++pane_no;
     } else {
       auto* frame = new wxFrame(m_parent_window, wxID_ANY, wxEmptyString,
                                 wxDefaultPosition, wxSize(880, 560));
