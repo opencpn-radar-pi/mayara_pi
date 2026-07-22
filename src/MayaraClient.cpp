@@ -160,6 +160,19 @@ void MayaraClient::SetStatus(const std::string& s) {
   }
 }
 
+void MayaraClient::JsonError(const std::string& context, const char* what) {
+  if (!m_server_api_version.empty() &&
+      m_server_api_version != kRadarApiVersion) {
+    SetStatus("!!!!!! RADAR API VERSION MISMATCH !!!!!!  server speaks " +
+              m_server_api_version + " but this plugin only understands " +
+              std::string(kRadarApiVersion) +
+              " -- REFUSING TO CONTINUE. The plugin must be updated for the new "
+              "radar API. (" + context + ": " + what + ")");
+  } else {
+    SetStatus(context + " JSON error: " + what);
+  }
+}
+
 RadarState* MayaraClient::State() {
   std::lock_guard<std::mutex> lock(m_radars_mutex);
   const int i = m_active;
@@ -277,6 +290,10 @@ bool MayaraClient::DiscoverAndConnect() {
   std::vector<std::unique_ptr<Radar>> radars;
   try {
     auto j = json::parse(resp->body);
+    // Note the server's Radar API version up front, so any JSON error below is
+    // reported as a version mismatch when it applies.
+    if (j.is_object() && j.contains("version") && j["version"].is_string())
+      m_server_api_version = j["version"].get<std::string>();
     auto add = [&](const std::string& id, const json& info) {
       auto r = std::make_unique<Radar>();
       r->id = id;
@@ -289,7 +306,7 @@ bool MayaraClient::DiscoverAndConnect() {
     else if (j.is_array())
       for (const auto& e : j) add(e.value("id", std::string()), e);
   } catch (const std::exception& e) {
-    SetStatus(std::string("radars JSON error: ") + e.what());
+    JsonError("radars", e.what());
     return false;
   }
   if (radars.empty()) {
@@ -372,7 +389,8 @@ bool MayaraClient::FetchCapabilities(Radar* radar) {
 
     FetchControlValues(radar);
     return true;
-  } catch (const std::exception&) {
+  } catch (const std::exception& e) {
+    JsonError("capabilities", e.what());
     return false;
   }
 }
@@ -392,7 +410,8 @@ void MayaraClient::FetchControlValues(Radar* radar) {
     if (j.is_object())
       for (auto it = j.begin(); it != j.end(); ++it)
         radar->controls.SetValue(it.key(), ParseControlValue(it.value()));
-  } catch (const std::exception&) {
+  } catch (const std::exception& e) {
+    JsonError("controls", e.what());
   }
 }
 
@@ -501,7 +520,8 @@ void MayaraClient::ConnectControlStream() {
             if (v.contains("value") && v["value"].is_object())
               route(v.value("path", std::string()), v["value"], false);
       }
-    } catch (const std::exception&) {
+    } catch (const std::exception& e) {
+      JsonError("control stream", e.what());
     }
   });
   m_control_ws->start();

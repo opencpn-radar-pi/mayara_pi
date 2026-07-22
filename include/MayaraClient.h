@@ -37,6 +37,11 @@ struct Radar {
 
 class MayaraClient {
  public:
+  // The Radar API version this client speaks. The server reports its own in the
+  // `version` field of GET /radars; a mismatch on any JSON error is fatal (see
+  // MayaraClient.cpp). Bump this only once the parsing matches that version.
+  static constexpr const char* kRadarApiVersion = "3.3.0";
+
   MayaraClient(std::string explicit_url, std::string fallback_url);
   ~MayaraClient();
 
@@ -75,6 +80,9 @@ class MayaraClient {
   bool DiscoverAndConnect();  // one attempt; true once at least one streams
   bool FetchCapabilities(Radar* radar);
   void FetchControlValues(Radar* radar);
+  // Surface a JSON error. If the server's API version was seen and differs from
+  // kRadarApiVersion, this throws a loud "version mismatch" tantrum instead.
+  void JsonError(const std::string& context, const char* what);
   bool ConnectSpokes(Radar* radar);  // true if it opens
   void ConnectControlStream();
   void SetStatus(const std::string& s);
@@ -87,6 +95,7 @@ class MayaraClient {
 
   std::mutex m_status_mutex;
   std::string m_status{"not connected"};
+  std::string m_server_api_version;  // from GET /radars `version`, if present
 
   std::mutex m_radars_mutex;  // guards m_radars membership (stable once up)
   std::vector<std::unique_ptr<Radar>> m_radars;
