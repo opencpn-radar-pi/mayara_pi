@@ -15,6 +15,7 @@
 #include <wx/frame.h>
 #include <wx/radiobox.h>
 #include <wx/spinctrl.h>
+#include <wx/statline.h>
 #include <wx/tokenzr.h>
 #include <wx/toplevel.h>
 
@@ -149,6 +150,8 @@ int mayara_pi::Init() {
                                             kMayaraServerFallback);
   if (!m_saved_server_url.empty())
     m_client->SetRememberedUrl(m_saved_server_url);  // fast reconnect
+  if (!m_explicit_server_url.empty())
+    m_client->SetServerUrl(m_explicit_server_url);   // Settings override wins
   m_client->Start();
 
   // 1 Hz heartbeat: re-open windows persisted as shown once radars appear, and
@@ -279,6 +282,9 @@ void mayara_pi::LoadConfig() {
   wxString url;
   cfg->Read("ServerUrl", &url);
   m_saved_server_url = std::string(url.mb_str());
+  wxString xurl;
+  cfg->Read("ExplicitServerUrl", &xurl);
+  m_explicit_server_url = std::string(xurl.mb_str());
 }
 
 int mayara_pi::OrientationFor(const std::string& radar_id) const {
@@ -392,6 +398,8 @@ void mayara_pi::SaveConfig() {
   cfg->Write("Thresholds", thresh);
   cfg->Write("Docked", m_docked);
   cfg->Write("ServerUrl", wxString::FromUTF8(m_saved_server_url.c_str()));
+  cfg->Write("ExplicitServerUrl",
+             wxString::FromUTF8(m_explicit_server_url.c_str()));
   cfg->Flush();
 }
 
@@ -500,6 +508,24 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   hint->Wrap(360);
   top->Add(hint, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10);
 
+  // Explicit server, for setups where mDNS discovery is unavailable.
+  top->Add(new wxStaticLine(&dlg), 0, wxEXPAND | wxLEFT | wxRIGHT, 10);
+  auto* srow = new wxBoxSizer(wxHORIZONTAL);
+  srow->Add(new wxStaticText(&dlg, wxID_ANY, _("Server:")), 0,
+            wxALIGN_CENTER_VERTICAL | wxTOP | wxRIGHT, 8);
+  auto* server = new wxTextCtrl(
+      &dlg, wxID_ANY, wxString::FromUTF8(m_explicit_server_url.c_str()),
+      wxDefaultPosition, wxSize(240, -1));
+  srow->Add(server, 1, wxALIGN_CENTER_VERTICAL | wxTOP, 8);
+  top->Add(srow, 0, wxLEFT | wxRIGHT, 10);
+  auto* shint = new wxStaticText(
+      &dlg, wxID_ANY,
+      _("Blank = discover automatically (mDNS). Otherwise give a host or "
+        "host:port — use :3000 for a Signal K server, :6502 for a Mayara "
+        "server. A server set here overrides discovery."));
+  shint->Wrap(360);
+  top->Add(shint, 0, wxALL, 10);
+
   top->Add(dlg.CreateButtonSizer(wxOK | wxCANCEL), 0,
            wxALIGN_RIGHT | wxALL, 10);
   dlg.SetSizerAndFit(top);
@@ -512,6 +538,20 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
       // Re-lay-out the radars across the new number of windows, keeping the
       // current show/hide intent.
       if (!m_windows.empty() || m_windows_visible) RebuildWindows();
+    }
+    // Normalise the explicit server URL (add scheme, drop trailing slash).
+    wxString raw = server->GetValue();
+    raw.Trim().Trim(false);
+    std::string url(raw.mb_str());
+    if (!url.empty() && url.rfind("http://", 0) != 0 &&
+        url.rfind("https://", 0) != 0)
+      url = "http://" + url;
+    while (!url.empty() && url.back() == '/') url.pop_back();
+    if (url != m_explicit_server_url) {
+      m_explicit_server_url = url;
+      SaveConfig();
+      // Empty clears the override (back to discovery); a value wins immediately.
+      if (m_client) m_client->SetServerUrl(url);
     }
   }
 }

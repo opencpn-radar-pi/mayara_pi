@@ -123,6 +123,7 @@ class mayara_pi : public opencpn_plugin_121 {
   wxAuiManager* m_aui = nullptr;     // OpenCPN main-frame AUI manager
   bool m_ocpn_fullscreen = false;    // last-seen OpenCPN full-screen state
   std::string m_saved_server_url;    // last-known-good server, persisted
+  std::string m_explicit_server_url; // user-set server (Settings); wins, persisted
   wxDialog* m_search_dialog = nullptr;  // "looking for a server" dialog
   int m_no_radar_ticks = 0;          // heartbeat ticks with no radar
   bool m_search_dismissed = false;   // user closed the search dialog
