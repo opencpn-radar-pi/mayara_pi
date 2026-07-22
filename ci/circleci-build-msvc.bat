@@ -72,5 +72,5 @@ dir
 
 echo Build for windows
 
-:cmake --build . --target tarball --config %CONFIGURATION%
+cmake --build . --config %CONFIGURATION%
 cmake --build . --target package --config %CONFIGURATION%

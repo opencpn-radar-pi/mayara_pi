@@ -81,7 +81,8 @@ jobs:
         include:
           - { name: debian-bookworm-x86_64, runs-on: ubuntu-latest,    container: 'debian:bookworm', script: ci/circleci-build-debian.sh, target: bookworm, env: debian }
           - { name: debian-bookworm-arm64,  runs-on: ubuntu-24.04-arm, container: 'debian:bookworm', script: ci/circleci-build-debian.sh, target: bookworm, env: debian }
-          - { name: ubuntu-jammy,           runs-on: ubuntu-22.04,     container: '',                script: ci/circleci-build-debian.sh, target: jammy,    env: debian }
+          # ubuntu-jammy (22.04) needs wx >= 3.2.2 which isn't in its repos
+          # (only 3.2.1); it needs a wx PPA step. Noble covers modern Ubuntu.
           - { name: ubuntu-noble,           runs-on: ubuntu-24.04,     container: '',                script: ci/circleci-build-debian.sh, target: noble,    env: debian }
           - { name: fedora,                 runs-on: ubuntu-latest,    container: 'fedora:41',       script: ci/circleci-build-fedora.sh, target: fedora,   env: fedora }
     name: ${{ matrix.name }}
@@ -127,7 +128,10 @@ jobs:
           if-no-files-found: warn
 
   # --------------------------------------------------------------- Flatpak --
+  # The FE2 flatpak/android scripts are CircleCI-tailored (SDK/NDK provisioning)
+  # and need porting; run them only on manual dispatch until then. See issue.
   flatpak:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     container:
       image: fedora:41
@@ -158,6 +162,7 @@ jobs:
 
   # --------------------------------------------------------------- Android --
   android:
+    if: github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:

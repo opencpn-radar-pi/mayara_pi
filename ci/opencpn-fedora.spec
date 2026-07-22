@@ -16,10 +16,9 @@ BuildRequires: libcurl-devel
 BuildRequires: mesa-libGL-devel
 BuildRequires: mesa-libGLU-devel
 BuildRequires: portaudio-devel
-BuildRequires: redhat-lsb-core
 BuildRequires: tar
 BuildRequires: tinyxml-devel
-BuildRequires: compat-wxGTK3-gtk2-devel
+BuildRequires: wxGTK-devel
 BuildRequires: xz-devel
 BuildRequires: xz-lzma-compat
 
