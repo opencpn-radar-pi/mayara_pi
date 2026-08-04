@@ -549,7 +549,26 @@ void MayaraClient::Run() {
       if (m_stop) return;
       m_base_url = base;
       StripTrailingSlash(m_base_url);
-      if (DiscoverAndConnect()) {
+      Attempt r = DiscoverAndConnect();
+      // A server whose radar API answers but lists nothing is still the right
+      // server -- it just has nothing to show yet, which is what a local server
+      // with no radar attached looks like. Stay on it and re-poll instead of
+      // falling through to the remaining candidates and starting discovery
+      // over, which walked the status line through "searching...", stale
+      // addresses and back every few seconds while nothing was actually wrong.
+      while (r == Attempt::kNoRadars && !m_stop) {
+        // Remember it meanwhile: otherwise a stale address that never answers
+        // stays first in line for every future session.
+        {
+          std::lock_guard<std::mutex> lock(m_status_mutex);
+          m_connected_url = m_base_url;
+        }
+        for (int i = 0; i < 30 && !m_stop; ++i)
+          std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        if (m_stop) return;
+        r = DiscoverAndConnect();
+      }
+      if (r == Attempt::kConnected) {
         std::lock_guard<std::mutex> lock(m_status_mutex);
         m_connected_url = m_base_url;
         return;
@@ -560,7 +579,7 @@ void MayaraClient::Run() {
   }
 }
 
-bool MayaraClient::DiscoverAndConnect() {
+MayaraClient::Attempt MayaraClient::DiscoverAndConnect() {
   ix::HttpClient http(/*async=*/false);
   auto args = http.createRequest();
   args->connectTimeout = 5;
@@ -574,11 +593,11 @@ bool MayaraClient::DiscoverAndConnect() {
   auto resp = http.get(url, args);
   if (!resp || resp->statusCode == 0) {
     SetStatus("no server at " + m_base_url);
-    return false;
+    return Attempt::kFailed;
   }
   if (resp->statusCode != 200) {
     SetStatus("GET radars -> HTTP " + std::to_string(resp->statusCode));
-    return false;
+    return Attempt::kFailed;
   }
 
   // Build the radar list from either shape (keyed object or array).
@@ -612,11 +631,11 @@ bool MayaraClient::DiscoverAndConnect() {
     }
   } catch (const std::exception& e) {
     JsonError("radars", e.what());
-    return false;
+    return Attempt::kFailed;
   }
   if (radars.empty()) {
     SetStatus("connected; no radars transmitting");
-    return false;
+    return Attempt::kNoRadars;
   }
 
   // Fetch capabilities + connect the spoke stream for each radar; keep the ones
@@ -630,7 +649,7 @@ bool MayaraClient::DiscoverAndConnect() {
   }
   if (live.empty()) {
     SetStatus("no spoke stream at " + m_base_url);
-    return false;
+    return Attempt::kFailed;
   }
 
   {
@@ -640,7 +659,7 @@ bool MayaraClient::DiscoverAndConnect() {
   }
   ConnectControlStream();
   SetStatus("streaming " + std::to_string(RadarCount()) + " radar(s)");
-  return true;
+  return Attempt::kConnected;
 }
 
 bool MayaraClient::FetchCapabilities(Radar* radar) {

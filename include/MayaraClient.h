@@ -146,7 +146,13 @@ class MayaraClient {
 
  private:
   void Run();                 // background: discover + connect, retry
-  bool DiscoverAndConnect();  // one attempt; true once at least one streams
+  // Outcome of one attempt at m_base_url.
+  enum class Attempt {
+    kFailed,     // no answer, or an answer we cannot use
+    kNoRadars,   // the radar API answered, but lists nothing
+    kConnected,  // at least one radar is streaming
+  };
+  Attempt DiscoverAndConnect();
   bool FetchCapabilities(Radar* radar);
   void FetchControlValues(Radar* radar);
   // Surface a JSON error. If the server's API version was seen and differs from

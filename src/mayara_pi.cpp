@@ -195,15 +195,20 @@ int mayara_pi::Init() {
     // save the full-screen rects).
     if (AnyWindowShown() && !m_ocpn_fullscreen) CaptureWindowState();
 
-    // Remember the server we connected to (fast reconnect next boot); when the
-    // radar can't be found, offer the search/manual-entry dialog.
-    if (m_client && m_client->Connected()) {
-      m_no_radar_ticks = 0;
+    // Remember the server that answered (fast reconnect next boot). Not gated
+    // on a radar streaming: a server with nothing attached is still the right
+    // address, and waiting for a radar meant a stale one that never answers
+    // stayed first in line for every future session.
+    if (m_client) {
       const std::string url = m_client->ConnectedUrl();
       if (!url.empty() && url != m_saved_server_url) {
         m_saved_server_url = url;
         SaveConfig();
       }
+    }
+    // When the radar can't be found, offer the search/manual-entry dialog.
+    if (m_client && m_client->Connected()) {
+      m_no_radar_ticks = 0;
       if (m_search_dialog) {
         m_search_dialog->Destroy();
         m_search_dialog = nullptr;
