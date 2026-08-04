@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <random>
 
 #include <wx/aui/framemanager.h>
 #include <wx/bmpbndl.h>
@@ -161,7 +162,14 @@ int mayara_pi::Init() {
   if (!m_explicit_server_url.empty())
     m_client->SetServerUrl(m_explicit_server_url);   // Settings override wins
   SyncLocalServerUrl();
+  m_client->SetClientId(m_client_id);
+  if (!m_sk_token.empty())
+    m_client->SetAuthToken(m_sk_token_server, m_sk_token);
   m_client->Start();
+  // An access request posted in an earlier session may still be waiting for
+  // someone to approve it; pick it up where we left off.
+  if (!m_sk_pending_href.empty())
+    m_client->ResumeAccessRequest(m_sk_pending_server, m_sk_pending_href);
 
   // 1 Hz heartbeat: re-open windows persisted as shown once radars appear, and
   // keep a live geometry snapshot for saving (independent of a GPS fix).
@@ -170,6 +178,7 @@ int mayara_pi::Init() {
       m_server->Poll();  // weekly release check + notice a died-on-us server
       MaybeOfferServerUpdate();
     }
+    SyncAccessConfig();
     if (m_windows_visible && m_windows.empty() && m_client &&
         m_client->RadarCount() > 0) {
       RebuildWindows();
@@ -222,6 +231,12 @@ bool mayara_pi::DeInit() {
   if (m_search_dialog) {
     m_search_dialog->Destroy();
     m_search_dialog = nullptr;
+  }
+  if (m_access_dialog) {
+    m_access_status = nullptr;
+    m_access_button = nullptr;
+    m_access_dialog->Destroy();
+    m_access_dialog = nullptr;
   }
   SaveWindowState();  // remember visibility + positions before tearing down
   DestroyWindows(/*sync=*/true);
@@ -302,6 +317,32 @@ void mayara_pi::LoadConfig() {
   wxString declined;
   cfg->Read("LocalServerUpdateDeclined", &declined);
   m_update_declined = std::string(declined.mb_str());
+  // Signal K device access.
+  wxString s;
+  cfg->Read("SignalKClientId", &s);
+  m_client_id = std::string(s.mb_str());
+  if (m_client_id.empty()) {
+    // A stable identity for this OpenCPN installation, so an approval given
+    // once in the Signal K admin UI keeps working.
+    std::random_device rd;
+    wxString id = "mayara-pi-";
+    for (int i = 0; i < 4; ++i) id += wxString::Format("%08x", rd());
+    m_client_id = std::string(id.mb_str());
+    cfg->Write("SignalKClientId", id);
+    cfg->Flush();
+  }
+  s.Clear();
+  cfg->Read("SignalKToken", &s);
+  m_sk_token = std::string(s.mb_str());
+  s.Clear();
+  cfg->Read("SignalKTokenServer", &s);
+  m_sk_token_server = std::string(s.mb_str());
+  s.Clear();
+  cfg->Read("SignalKPendingHref", &s);
+  m_sk_pending_href = std::string(s.mb_str());
+  s.Clear();
+  cfg->Read("SignalKPendingServer", &s);
+  m_sk_pending_server = std::string(s.mb_str());
 }
 
 int mayara_pi::OrientationFor(const std::string& radar_id) const {
@@ -420,6 +461,142 @@ void mayara_pi::SaveConfig() {
   cfg->Write("LocalServerUpdateDeclined",
              wxString::FromUTF8(m_update_declined.c_str()));
   cfg->Flush();
+}
+
+// Keep the persisted Signal K access state in step with the client, and raise
+// the approval dialog the first time a control write is refused.
+void mayara_pi::SyncAccessConfig() {
+  if (!m_client) return;
+  bool dirty = false;
+  const std::string token = m_client->AuthToken();
+  if (token != m_sk_token) {
+    m_sk_token = token;
+    m_sk_token_server = m_client->AuthTokenServer();
+    dirty = true;
+  }
+  const std::string href = m_client->PendingHref();
+  if (href != m_sk_pending_href) {
+    m_sk_pending_href = href;
+    m_sk_pending_server = m_client->PendingServer();
+    dirty = true;
+  }
+  if (dirty) {
+    wxFileConfig* cfg = GetOCPNConfigObject();
+    if (cfg) {
+      cfg->SetPath(kConfigGroup);
+      cfg->Write("SignalKToken", wxString::FromUTF8(m_sk_token.c_str()));
+      cfg->Write("SignalKTokenServer",
+                 wxString::FromUTF8(m_sk_token_server.c_str()));
+      cfg->Write("SignalKPendingHref",
+                 wxString::FromUTF8(m_sk_pending_href.c_str()));
+      cfg->Write("SignalKPendingServer",
+                 wxString::FromUTF8(m_sk_pending_server.c_str()));
+      cfg->Flush();
+    }
+  }
+
+  const MayaraClient::AuthState state = m_client->Auth();
+  // The radar silently ignoring the transmit button is the worst outcome, so
+  // explain it as soon as the server refuses a write.
+  if (!m_access_dialog && !m_access_dismissed &&
+      (state == MayaraClient::AuthState::kNeeded ||
+       state == MayaraClient::AuthState::kPending))
+    ShowAccessDialog();
+  UpdateAccessDialog();
+}
+
+// Shown when the Signal K server refuses radar control: explains the approval
+// step and drives Signal K's access-request flow.
+void mayara_pi::ShowAccessDialog() {
+  if (m_access_dialog) return;
+  auto* dlg = new wxDialog(m_parent_window, wxID_ANY,
+                           _("Mayara — permission needed"), wxDefaultPosition,
+                           wxDefaultSize, wxDEFAULT_DIALOG_STYLE);
+  m_access_dialog = dlg;
+  auto* top = new wxBoxSizer(wxVERTICAL);
+  auto* intro = new wxStaticText(
+      dlg, wxID_ANY,
+      _("Your Signal K server allows this plugin to read radar data, but not "
+        "to control the radar, so buttons like Transmit do nothing.\n\n"
+        "Ask the server for permission below, then approve the request in the "
+        "Signal K web interface under Security → Access Requests. The "
+        "permission is remembered, so this is only needed once."));
+  intro->Wrap(420);
+  top->Add(intro, 0, wxALL, 12);
+
+  m_access_status = new wxStaticText(dlg, wxID_ANY, wxEmptyString);
+  top->Add(m_access_status, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12);
+
+  auto* btns = new wxBoxSizer(wxHORIZONTAL);
+  m_access_button = new wxButton(dlg, wxID_ANY, _("Ask for permission"));
+  auto* later = new wxButton(dlg, wxID_ANY, _("Not now"));
+  btns->AddStretchSpacer();
+  btns->Add(later, 0, wxRIGHT, 8);
+  btns->Add(m_access_button, 0);
+  top->Add(btns, 0, wxEXPAND | wxALL, 12);
+  dlg->SetSizerAndFit(top);
+
+  m_access_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+    if (m_client) m_client->RequestAccess();
+    UpdateAccessDialog();
+  });
+  auto close = [this](wxEvent&) {
+    m_access_dismissed = true;
+    m_access_status = nullptr;
+    m_access_button = nullptr;
+    if (m_access_dialog) {
+      m_access_dialog->Destroy();
+      m_access_dialog = nullptr;
+    }
+  };
+  later->Bind(wxEVT_BUTTON, close);
+  dlg->Bind(wxEVT_CLOSE_WINDOW, close);
+  UpdateAccessDialog();
+  dlg->Show();
+}
+
+void mayara_pi::UpdateAccessDialog() {
+  if (!m_access_dialog || !m_client || !m_access_status) return;
+  const MayaraClient::AuthState state = m_client->Auth();
+  const wxString detail = wxString::FromUTF8(m_client->AuthMessage().c_str());
+  wxString line;
+  bool can_ask = true;
+  switch (state) {
+    case MayaraClient::AuthState::kRequesting:
+      line = _("Asking the server…");
+      can_ask = false;
+      break;
+    case MayaraClient::AuthState::kPending:
+      line = _("Waiting — approve \"Mayara radar plugin for OpenCPN\" in "
+               "Signal K under Security → Access Requests.");
+      can_ask = false;
+      break;
+    case MayaraClient::AuthState::kApproved:
+      line = _("Approved. Radar control works now.");
+      can_ask = false;
+      break;
+    case MayaraClient::AuthState::kDenied:
+      line = _("The request was refused. You can ask again.");
+      break;
+    case MayaraClient::AuthState::kUnavailable:
+      line = _("This server does not hand out permissions this way; it has to "
+               "be granted in its own configuration.");
+      can_ask = false;
+      break;
+    default:
+      line = _("No permission yet.");
+      break;
+  }
+  if (!detail.IsEmpty()) line += "\n(" + detail + ")";
+  if (line == m_access_last_line) return;  // called once a second; don't churn
+  m_access_last_line = line;
+  m_access_status->SetLabel(line);
+  m_access_status->Wrap(420);
+  if (m_access_button) m_access_button->Enable(can_ask);
+  m_access_dialog->Layout();
+  m_access_dialog->Fit();
+  // Approval is the end of the story; let the user get on with it.
+  if (state == MayaraClient::AuthState::kApproved) m_access_dismissed = true;
 }
 
 // The client tries our own server ahead of mDNS, but only while we actually

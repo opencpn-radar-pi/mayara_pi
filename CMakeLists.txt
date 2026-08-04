@@ -200,6 +200,13 @@ if(NOT OCPN_FLATPAK_CONFIG)
     ${PROJECT_SOURCE_DIR}/third_party/IXWebSocket
     ${PROJECT_SOURCE_DIR}/third_party/mdns
   )
+  # MAKING_PLUGIN switches ocpn_plugin.h's DECL_IMP to __declspec(dllimport).
+  # It guards exactly one declaration -- wxEVT_DOWNLOAD_EVENT -- and MSVC
+  # resolves a *data* symbol from opencpn.lib only through its __imp_ form, so
+  # without this the background-download API fails to link on Windows.
+  if(WIN32)
+    target_compile_definitions(${PACKAGE_NAME} PRIVATE MAKING_PLUGIN)
+  endif()
   # MSVC portability: M_PI needs _USE_MATH_DEFINES before <cmath>; NOMINMAX
   # keeps windows.h from defining min/max macros; WIN32_LEAN_AND_MEAN trims it.
   if(MSVC)
