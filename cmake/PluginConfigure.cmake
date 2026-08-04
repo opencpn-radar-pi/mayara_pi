@@ -462,6 +462,28 @@ if (OCPN_FLATPAK_CONFIG)
   message(STATUS "${CMLOC}FLATPAK_BRANCH: ${FLATPAK_BRANCH}")
   set(RUNTIME_VERSION ${FLATPAK_BRANCH})
 
+  # Where flatpak-builder gets the sources. Upstream always clones the remote,
+  # which needs GIT_REPOSITORY -- and that is derived from the branch's tracking
+  # remote, which a CI checkout does not have: actions/checkout leaves a
+  # detached HEAD, so the URL came out as "https://github.com/" and the build
+  # died with "repository not found".
+  #
+  # With no usable remote, build the tree we are standing in. That is also the
+  # more honest thing for CI to do: every other job builds the checkout under
+  # test, and cloning would build whatever is on the remote branch instead.
+  if (GIT_REPOSITORY STREQUAL "")
+    message(
+      STATUS "${CMLOC}No tracking remote; flatpak builds the local tree"
+    )
+    set(FLATPAK_SOURCE
+        "       - type: dir\n         path: ${PROJECT_SOURCE_DIR}\n         skip: [build]"
+    )
+  else ()
+    set(FLATPAK_SOURCE
+        "       - type: git\n         url: https://${GIT_REPOSITORY_SERVER}/${GIT_REPOSITORY}\n         ${GIT_BRANCH_OR_TAG}: ${GIT_REPOSITORY_ITEM}"
+    )
+  endif ()
+
   message(
     STATUS
       "${CMLOC}Checking OCPN_FLATPAK_CONFIG: ${OCPN_FLATPAK_CONFIG}, SDK_VER: ${SDK_VER}, WX_VER: $ENV{WX_VER}"
