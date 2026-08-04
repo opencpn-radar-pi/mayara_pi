@@ -48,7 +48,10 @@ elif [ "$GITHUB_ACTIONS" ]; then
     # mayara_pi: GitHub Actions replaces CircleCI/AppVeyor/Travis. Populate the
     # same variables the branches above set, from GitHub's environment.
     BUILD_ID=${GITHUB_RUN_NUMBER:-1}
-    BUILD_DIR=${GITHUB_WORKSPACE}/build
+    # GITHUB_WORKSPACE is a Windows path on the MSVC runner ("D:\a\..."), and
+    # Git Bash cannot glob through backslashes: the .xml lookup further down
+    # failed with "No such file or directory". Normalise the separators.
+    BUILD_DIR="${GITHUB_WORKSPACE//\\//}/build"
     if [ "$GITHUB_REF_TYPE" = "tag" ]; then
         BUILD_BRANCH=""
         BUILD_TAG=${GITHUB_REF_NAME}
