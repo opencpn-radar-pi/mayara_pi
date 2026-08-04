@@ -102,6 +102,8 @@ jobs:
         include:
           - { name: debian-bookworm-x86_64, runs-on: ubuntu-latest,    container: 'debian:bookworm', script: ci/circleci-build-debian.sh, target: bookworm, env: debian }
           - { name: debian-bookworm-arm64,  runs-on: ubuntu-24.04-arm, container: 'debian:bookworm', script: ci/circleci-build-debian.sh, target: bookworm, env: debian }
+          - { name: debian-trixie-x86_64,   runs-on: ubuntu-latest,    container: 'debian:trixie',   script: ci/circleci-build-debian.sh, target: trixie,   env: debian }
+          - { name: debian-trixie-arm64,    runs-on: ubuntu-24.04-arm, container: 'debian:trixie',   script: ci/circleci-build-debian.sh, target: trixie,   env: debian }
           # ubuntu-jammy (22.04) needs wx >= 3.2.2 which isn't in its repos
           # (only 3.2.1); it needs a wx PPA step. Noble covers modern Ubuntu.
           - { name: ubuntu-noble,           runs-on: ubuntu-24.04,     container: '',                script: ci/circleci-build-debian.sh, target: noble,    env: debian }
@@ -171,7 +173,11 @@ jobs:
     env:
       OCPN_TARGET: flatpak
       BUILD_ARCH: x86_64
-      SDK_VER: '24.08'
+      # Must match the runtime the OpenCPN flatpak is built on:
+      # flathub org.opencpn.OpenCPN (master and beta) is on
+      # org.freedesktop.Platform 25.08. Building the extension
+      # against an older SDK links it to a base OpenCPN is not on.
+      SDK_VER: '25.08'
       FLATPAK_BRANCH: beta
       WX_VER: '32'
     steps:
@@ -207,8 +213,11 @@ jobs:
           if-no-files-found: warn
 
   # --------------------------------------------------------------- Android --
+  # Disabled: the FE2 android scripts provision the SDK/NDK the CircleCI way
+  # and have not been ported, so these only ever fail. The jobs are kept (rather
+  # than deleted) so re-enabling is a one-line change once that work is done.
   android:
-    if: github.event_name == 'workflow_dispatch'
+    if: false
     strategy:
       fail-fast: false
       matrix:
