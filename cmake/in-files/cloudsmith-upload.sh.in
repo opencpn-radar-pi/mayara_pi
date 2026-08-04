@@ -151,14 +151,16 @@ if [ "$BUILD_TAG" = "" ] && [ "$tag" != "" ]; then
 fi
 if [ "$BUILD_BRANCH" = "" ]; then
     build_commit=$(git show -s --format=%d $BUILD_TAG)
-    is_master=$(echo $build_commit | awk '/\/master/ {print}')
+    is_master=$(echo $build_commit | awk '/\/(master|main)/ {print}')
     if [ "$is_master" != "" ] || [ "$TRAVIS" ]; then
         BUILD_BRANCH="master"
     fi
 fi
 
 BUILD_BRANCH_LOWER=`echo $BUILD_BRANCH | tr '[A-Z]' '[a-z]'`
-if [ "$BUILD_BRANCH_LOWER" = "master" ]; then
+# "main" is this repo's default branch; upstream FE2 only knows "master", so
+# every build of main was landing in the alpha repo and every release in beta.
+if [ "$BUILD_BRANCH_LOWER" = "master" ] || [ "$BUILD_BRANCH_LOWER" = "main" ]; then
     echo "In master branch "
     if [ -n "$BUILD_TAG"  ]; then
         echo "building with tag"
