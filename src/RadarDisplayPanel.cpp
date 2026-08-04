@@ -216,7 +216,11 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
 void RadarDisplayPanel::DrawIconBar(wxDC& dc, const wxSize& sz) {
   RadarControls* controls = m_client ? m_client->ControlsAt(m_index) : nullptr;
   const int cell = 40, bw = 40;
-  const int bx = sz.x - bw - 6, by = 6, barH = 7 * cell;
+  // Against the right edge of the *visible* picture, not the panel: with the
+  // controls open the full-width position puts the bar underneath them, which
+  // hides the one icon (View) that opens the section they are not showing.
+  const int avail_w = std::max(16, sz.x - m_obscured_right);
+  const int bx = avail_w - bw - 6, by = 6, barH = 7 * cell;
 
   // Very dark grey rounded background.
   dc.SetBrush(wxBrush(wxColour(22, 22, 24)));

@@ -392,26 +392,33 @@ void ControlsPanel::AddControl(wxSizer* content, const ControlDef& d) {
 }
 
 void ControlsPanel::FillViewSection(wxSizer* content) {
-  if (m_set_overlay) {
-    auto* cb =
-        new ThemedButton(this, _("Radar overlay on chart"), m_theme, true);
-    content->Add(cb, 0, wxEXPAND | wxALL, 4);
-    cb->Bind(wxEVT_TOGGLEBUTTON, [this, cb](wxCommandEvent&) {
-      if (m_set_overlay) m_set_overlay(cb->GetValue());
-    });
-    m_updaters.push_back([this, cb]() {
-      if (m_get_overlay) cb->SetValue(m_get_overlay());
-    });
-  }
-  if (m_set_ppi) {
-    auto* cb = new ThemedButton(this, _("Show PPI"), m_theme, true);
-    content->Add(cb, 0, wxEXPAND | wxALL, 4);
-    cb->Bind(wxEVT_TOGGLEBUTTON, [this, cb](wxCommandEvent&) {
-      if (m_set_ppi) m_set_ppi(cb->GetValue());
-    });
-    m_updaters.push_back([this, cb]() {
-      if (m_get_ppi) cb->SetValue(m_get_ppi());
-      cb->Enable(m_get_overlay && m_get_overlay());  // hide PPI only w/ overlay
+  // Where the radar picture appears. Independent toggles rather than one
+  // exclusive choice: overlay and PPI can both be up, and "docked" is a
+  // property of the PPI window rather than a third place to put the picture.
+  if (m_set_overlay || m_set_ppi || m_set_dock) {
+    content->Add(new wxStaticText(this, wxID_ANY, _("Views")), 0,
+                 wxLEFT | wxTOP, 4);
+    auto* row = new wxBoxSizer(wxHORIZONTAL);
+    auto add = [&](const wxString& label, std::function<void(bool)> set) {
+      auto* b = new ThemedButton(this, label, m_theme, /*toggle=*/true);
+      row->Add(b, 1, wxALL, 2);
+      b->Bind(wxEVT_TOGGLEBUTTON,
+              [b, set](wxCommandEvent&) { if (set) set(b->GetValue()); });
+      return b;
+    };
+    ThemedButton* overlay = m_set_overlay ? add(_("Overlay"), m_set_overlay)
+                                          : nullptr;
+    ThemedButton* ppi = m_set_ppi ? add(_("PPI"), m_set_ppi) : nullptr;
+    ThemedButton* dock = m_set_dock ? add(_("Docked"), m_set_dock) : nullptr;
+    content->Add(row, 0, wxEXPAND | wxLEFT | wxRIGHT, 2);
+    m_updaters.push_back([this, overlay, ppi, dock]() {
+      if (overlay && m_get_overlay) overlay->SetValue(m_get_overlay());
+      if (ppi) {
+        if (m_get_ppi) ppi->SetValue(m_get_ppi());
+        // The PPI may only be hidden while the overlay still shows the radar.
+        ppi->Enable(m_get_overlay && m_get_overlay());
+      }
+      if (dock && m_get_dock) dock->SetValue(m_get_dock());
     });
   }
   if (m_get_orientation && m_set_orientation)
@@ -463,16 +470,6 @@ void ControlsPanel::FillViewSection(wxSizer* content) {
     content->Add(b, 0, wxEXPAND | wxALL, 4);
     b->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
       if (m_on_autolayout) m_on_autolayout();
-    });
-  }
-  if (m_get_dock && m_set_dock) {
-    auto* cb = new ThemedButton(this, _("Dock in OpenCPN"), m_theme, true);
-    content->Add(cb, 0, wxEXPAND | wxALL, 4);
-    cb->Bind(wxEVT_TOGGLEBUTTON, [this, cb](wxCommandEvent&) {
-      if (m_set_dock) m_set_dock(cb->GetValue());
-    });
-    m_updaters.push_back([this, cb]() {
-      if (m_get_dock) cb->SetValue(m_get_dock());
     });
   }
 }
