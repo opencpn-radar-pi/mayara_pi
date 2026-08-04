@@ -132,6 +132,7 @@ set(SRCS
     src/RadarState.cpp
     src/RadarMessage.cpp
     src/MayaraDiscovery.cpp
+    src/LocalServerHttp.cpp
     src/MayaraServer.cpp
     src/RadarDisplayPanel.cpp
     src/ControlsPanel.cpp

@@ -33,9 +33,9 @@
 #include <sys/stat.h>
 #endif
 
-#include <ixwebsocket/IXHttpClient.h>
 #include <nlohmann/json.hpp>
 
+#include "LocalServerHttp.h"
 #include "ocpn_plugin.h"
 
 using json = nlohmann::json;
@@ -415,26 +415,6 @@ bool MayaraServer::Start() {
   return true;
 }
 
-// GET /quit asks mayara-server to shut itself down. Short timeouts: this runs
-// on the UI thread, and the reply ("bye") comes before the shutdown does.
-void MayaraServer::RequestQuit() {
-  ix::HttpClient http(/*async=*/false);
-  auto args = http.createRequest();
-  args->connectTimeout = 1;
-  args->transferTimeout = 2;
-  http.get(LocalUrl() + "/quit", args);  // result ignored: best effort
-}
-
-// True while something still answers on the local server's port.
-bool MayaraServer::PortInUse() {
-  ix::HttpClient http(/*async=*/false);
-  auto args = http.createRequest();
-  args->connectTimeout = 1;
-  args->transferTimeout = 1;
-  auto resp = http.get(LocalUrl() + "/signalk", args);
-  return resp && resp->statusCode > 0;  // 0 == could not connect
-}
-
 void MayaraServer::Stop() {
   const long pid = m_pid;
   m_pid = 0;
@@ -442,7 +422,7 @@ void MayaraServer::Stop() {
   // longer know -- an orphan left by a session that crashed, or a copy that
   // outlived a launch of ours that failed to bind -- and that is exactly the
   // case where a restart would otherwise silently change nothing.
-  RequestQuit();
+  LocalServerHttp::RequestQuit(LocalUrl());
   if (pid && wxProcess::Exists(pid)) {
     wxKill(pid, wxSIGTERM, nullptr, wxKILL_CHILDREN);
     for (int i = 0; i < 20 && wxProcess::Exists(pid); ++i) wxMilliSleep(50);
@@ -451,7 +431,7 @@ void MayaraServer::Stop() {
   }
   // Wait for the port to actually come free, or the replacement launched right
   // after this will fail to bind and die without saying why.
-  for (int i = 0; i < 30 && PortInUse(); ++i) wxMilliSleep(100);
+  for (int i = 0; i < 30 && LocalServerHttp::Responds(LocalUrl()); ++i) wxMilliSleep(100);
   Notify();
 }
 
