@@ -274,6 +274,15 @@ void mayara_pi::LoadConfig() {
   bool overlay = true;
   cfg->Read("OverlayEnabled", &overlay, true);
   m_overlay_enabled = overlay;
+  long hz = 5, autohide = 0;
+  bool reverse_zoom = false;
+  cfg->Read("RefreshHz", &hz, 5);
+  cfg->Read("ReverseZoom", &reverse_zoom, false);
+  cfg->Read("MenuAutoHide", &autohide, 0);
+  m_prefs.refresh_hz = static_cast<int>(hz < 1 ? 1 : (hz > 15 ? 15 : hz));
+  m_prefs.reverse_zoom = reverse_zoom;
+  m_prefs.menu_autohide =
+      static_cast<int>(autohide < 0 ? 0 : (autohide > 2 ? 2 : autohide));
   // Per-radar orientation: "id=mode;id=mode;..."
   m_orient.clear();
   wxString orient;
@@ -446,6 +455,9 @@ void mayara_pi::SaveConfig() {
   cfg->SetPath(kConfigGroup);
   cfg->Write("WindowsCount", m_windows_count);
   cfg->Write("OverlayEnabled", m_overlay_enabled);
+  cfg->Write("RefreshHz", static_cast<long>(m_prefs.refresh_hz));
+  cfg->Write("ReverseZoom", m_prefs.reverse_zoom);
+  cfg->Write("MenuAutoHide", static_cast<long>(m_prefs.menu_autohide));
   wxString orient;
   for (const auto& kv : m_orient)
     orient += wxString::Format("%s=%d;", kv.first.c_str(), kv.second);
@@ -987,6 +999,14 @@ void mayara_pi::RebuildWindows() {
     win->SetThresholdHandlers(
         [this](const std::string& id) { return ThresholdFor(id); },
         [this](const std::string& id, int l) { SetThresholdFor(id, l); });
+    win->SetPrefsHandlers([this]() { return m_prefs; },
+                          [this](const PpiPrefs& p) {
+                            m_prefs = p;
+                            SaveConfig();
+                            // Every window shares these, not just this one.
+                            for (MayaraPpiWindow* w : m_windows)
+                              if (w) w->ApplyPrefs();
+                          });
     win->ShowWindow(m_windows_visible);
     m_windows.push_back(win);
   }

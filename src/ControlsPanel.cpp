@@ -25,6 +25,10 @@ enum { kControlsTimerId = wxID_HIGHEST + 20 };
 
 namespace {
 
+// Offered PPI refresh rates, in the order the buttons appear.
+const int kRates[] = {1, 2, 5, 10};
+const int kRateCount = static_cast<int>(sizeof(kRates) / sizeof(kRates[0]));
+
 std::string Num(double v) {
   char buf[32];
   std::snprintf(buf, sizeof(buf), "%g", v);
@@ -388,73 +392,77 @@ void ControlsPanel::AddControl(wxSizer* content, const ControlDef& d) {
 }
 
 void ControlsPanel::FillViewSection(wxSizer* content) {
-  if (m_set_overlay) {
-    auto* cb =
-        new ThemedButton(this, _("Radar overlay on chart"), m_theme, true);
-    content->Add(cb, 0, wxEXPAND | wxALL, 4);
-    cb->Bind(wxEVT_TOGGLEBUTTON, [this, cb](wxCommandEvent&) {
-      if (m_set_overlay) m_set_overlay(cb->GetValue());
-    });
-    m_updaters.push_back([this, cb]() {
-      if (m_get_overlay) cb->SetValue(m_get_overlay());
-    });
-  }
-  if (m_set_ppi) {
-    auto* cb = new ThemedButton(this, _("Show PPI"), m_theme, true);
-    content->Add(cb, 0, wxEXPAND | wxALL, 4);
-    cb->Bind(wxEVT_TOGGLEBUTTON, [this, cb](wxCommandEvent&) {
-      if (m_set_ppi) m_set_ppi(cb->GetValue());
-    });
-    m_updaters.push_back([this, cb]() {
-      if (m_get_ppi) cb->SetValue(m_get_ppi());
-      cb->Enable(m_get_overlay && m_get_overlay());  // hide PPI only w/ overlay
-    });
-  }
-  if (m_get_orientation && m_set_orientation) {
-    content->Add(new wxStaticText(this, wxID_ANY, _("Orientation")), 0,
+  // Where the radar picture appears. Independent toggles rather than one
+  // exclusive choice: overlay and PPI can both be up, and "docked" is a
+  // property of the PPI window rather than a third place to put the picture.
+  if (m_set_overlay || m_set_ppi || m_set_dock) {
+    content->Add(new wxStaticText(this, wxID_ANY, _("Views")), 0,
                  wxLEFT | wxTOP, 4);
     auto* row = new wxBoxSizer(wxHORIZONTAL);
-    const wxString labels[3] = {_("Head up"), _("North up"), _("Course up")};
-    auto btns = std::make_shared<std::vector<ThemedButton*>>();
-    for (int i = 0; i < 3; ++i) {
-      auto* b = new ThemedButton(this, labels[i], m_theme, /*toggle=*/false);
+    auto add = [&](const wxString& label, std::function<void(bool)> set) {
+      auto* b = new ThemedButton(this, label, m_theme, /*toggle=*/true);
       row->Add(b, 1, wxALL, 2);
-      btns->push_back(b);
-      b->Bind(wxEVT_BUTTON, [this, i, btns](wxCommandEvent&) {
-        if (m_set_orientation) m_set_orientation(i);
-        for (size_t j = 0; j < btns->size(); ++j)
-          (*btns)[j]->SetValue(static_cast<int>(j) == i);
-      });
-    }
+      b->Bind(wxEVT_TOGGLEBUTTON,
+              [b, set](wxCommandEvent&) { if (set) set(b->GetValue()); });
+      return b;
+    };
+    ThemedButton* overlay = m_set_overlay ? add(_("Overlay"), m_set_overlay)
+                                          : nullptr;
+    ThemedButton* ppi = m_set_ppi ? add(_("PPI"), m_set_ppi) : nullptr;
+    ThemedButton* dock = m_set_dock ? add(_("Docked"), m_set_dock) : nullptr;
     content->Add(row, 0, wxEXPAND | wxLEFT | wxRIGHT, 2);
-    m_updaters.push_back([this, btns]() {
-      const int o = m_get_orientation ? m_get_orientation() : 0;
-      for (size_t j = 0; j < btns->size(); ++j)
-        (*btns)[j]->SetValue(static_cast<int>(j) == o);
+    m_updaters.push_back([this, overlay, ppi, dock]() {
+      if (overlay && m_get_overlay) overlay->SetValue(m_get_overlay());
+      if (ppi) {
+        if (m_get_ppi) ppi->SetValue(m_get_ppi());
+        // The PPI may only be hidden while the overlay still shows the radar.
+        ppi->Enable(m_get_overlay && m_get_overlay());
+      }
+      if (dock && m_get_dock) dock->SetValue(m_get_dock());
     });
   }
-  if (m_get_threshold && m_set_threshold) {
-    content->Add(new wxStaticText(this, wxID_ANY, _("Echo threshold")), 0,
-                 wxLEFT | wxTOP, 4);
-    auto* row = new wxBoxSizer(wxHORIZONTAL);
-    const wxString labels[3] = {_("All"), _("Medium"), _("Strong")};
-    auto btns = std::make_shared<std::vector<ThemedButton*>>();
-    for (int i = 0; i < 3; ++i) {
-      auto* b = new ThemedButton(this, labels[i], m_theme, /*toggle=*/false);
-      row->Add(b, 1, wxALL, 2);
-      btns->push_back(b);
-      b->Bind(wxEVT_BUTTON, [this, i, btns](wxCommandEvent&) {
-        if (m_set_threshold) m_set_threshold(i);
-        for (size_t j = 0; j < btns->size(); ++j)
-          (*btns)[j]->SetValue(static_cast<int>(j) == i);
-      });
-    }
-    content->Add(row, 0, wxEXPAND | wxLEFT | wxRIGHT, 2);
-    m_updaters.push_back([this, btns]() {
-      const int t = m_get_threshold ? m_get_threshold() : 0;
-      for (size_t j = 0; j < btns->size(); ++j)
-        (*btns)[j]->SetValue(static_cast<int>(j) == t);
+  if (m_get_orientation && m_set_orientation)
+    AddChoiceRow(content, _("Orientation"),
+                 {_("Head up"), _("North up"), _("Course up")},
+                 m_get_orientation, m_set_orientation);
+  if (m_get_threshold && m_set_threshold)
+    AddChoiceRow(content, _("Echo threshold"),
+                 {_("All"), _("Medium"), _("Strong")}, m_get_threshold,
+                 m_set_threshold);
+  if (m_get_prefs && m_set_prefs) {
+    // Refresh rate: presets rather than a slider. The picture is CPU-rendered,
+    // so this is the one display setting that costs something to raise.
+    AddChoiceRow(
+        content, _("Refresh rate"), {"1 Hz", "2 Hz", "5 Hz", "10 Hz"},
+        [this]() {
+          const int hz = m_get_prefs().refresh_hz;
+          int best = 0;
+          for (int i = 0; i < kRateCount; ++i)
+            if (std::abs(kRates[i] - hz) < std::abs(kRates[best] - hz)) best = i;
+          return best;
+        },
+        [this](int i) {
+          PpiPrefs p = m_get_prefs();
+          p.refresh_hz = kRates[i];
+          m_set_prefs(p);
+        });
+    AddChoiceRow(
+        content, _("Menu auto-hide"), {_("Never"), "10 s", "30 s"},
+        [this]() { return m_get_prefs().menu_autohide; },
+        [this](int i) {
+          PpiPrefs p = m_get_prefs();
+          p.menu_autohide = i;
+          m_set_prefs(p);
+        });
+    auto* rz = new ThemedButton(this, _("Reverse zoom wheel"), m_theme, true);
+    content->Add(rz, 0, wxEXPAND | wxALL, 4);
+    rz->Bind(wxEVT_TOGGLEBUTTON, [this, rz](wxCommandEvent&) {
+      PpiPrefs p = m_get_prefs();
+      p.reverse_zoom = rz->GetValue();
+      m_set_prefs(p);
     });
+    m_updaters.push_back(
+        [this, rz]() { rz->SetValue(m_get_prefs().reverse_zoom); });
   }
   if (m_on_autolayout) {
     auto* b = new ThemedButton(this, _("Auto layout windows"), m_theme,
@@ -464,16 +472,39 @@ void ControlsPanel::FillViewSection(wxSizer* content) {
       if (m_on_autolayout) m_on_autolayout();
     });
   }
-  if (m_get_dock && m_set_dock) {
-    auto* cb = new ThemedButton(this, _("Dock in OpenCPN"), m_theme, true);
-    content->Add(cb, 0, wxEXPAND | wxALL, 4);
-    cb->Bind(wxEVT_TOGGLEBUTTON, [this, cb](wxCommandEvent&) {
-      if (m_set_dock) m_set_dock(cb->GetValue());
-    });
-    m_updaters.push_back([this, cb]() {
-      if (m_get_dock) cb->SetValue(m_get_dock());
+}
+
+void ControlsPanel::AddChoiceRow(wxSizer* content, const wxString& label,
+                                 const std::vector<wxString>& labels,
+                                 std::function<int()> get,
+                                 std::function<void(int)> set) {
+  content->Add(new wxStaticText(this, wxID_ANY, label), 0, wxLEFT | wxTOP, 4);
+  auto* row = new wxBoxSizer(wxHORIZONTAL);
+  auto btns = std::make_shared<std::vector<ThemedButton*>>();
+  for (size_t i = 0; i < labels.size(); ++i) {
+    auto* b = new ThemedButton(this, labels[i], m_theme, /*toggle=*/false);
+    row->Add(b, 1, wxALL, 2);
+    btns->push_back(b);
+    const int idx = static_cast<int>(i);
+    b->Bind(wxEVT_BUTTON, [set, idx, btns](wxCommandEvent&) {
+      if (set) set(idx);
+      for (size_t j = 0; j < btns->size(); ++j)
+        (*btns)[j]->SetValue(static_cast<int>(j) == idx);
     });
   }
+  content->Add(row, 0, wxEXPAND | wxLEFT | wxRIGHT, 2);
+  m_updaters.push_back([get, btns]() {
+    const int v = get ? get() : 0;
+    for (size_t j = 0; j < btns->size(); ++j)
+      (*btns)[j]->SetValue(static_cast<int>(j) == v);
+  });
+}
+
+void ControlsPanel::SetPrefsControl(std::function<PpiPrefs()> get,
+                                    std::function<void(const PpiPrefs&)> set) {
+  m_get_prefs = std::move(get);
+  m_set_prefs = std::move(set);
+  if (m_built) Rebuild();
 }
 
 void ControlsPanel::SetOrientationControl(std::function<int()> get,

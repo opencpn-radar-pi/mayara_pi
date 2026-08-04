@@ -19,6 +19,7 @@
 #include "ocpn_plugin.h"
 
 #include "NavState.h"
+#include "RadarDisplayPanel.h"  // PpiPrefs
 
 // Forward declarations keep implementation types out of this header.
 class MayaraPpiWindow;
@@ -119,6 +120,7 @@ class mayara_pi : public opencpn_plugin_121 {
   PI_ColorScheme m_color_scheme = PI_GLOBAL_COLOR_SCHEME_DAY;
   float m_radar_intensity = 1.0f;
   bool m_overlay_enabled = true;
+  PpiPrefs m_prefs;  // global display prefs, shared by every radar window
 
   // Presentation: how many PPI windows to spread the discovered radars across.
   // 8 radars with m_windows_count = 2 => 4 radars per window. Persisted.

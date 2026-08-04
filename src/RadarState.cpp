@@ -137,7 +137,7 @@ int RadarState::CopyDisc(std::vector<uint8_t>& dst) {
 }
 
 bool RadarState::RenderPPI(uint8_t* rgb, int w, int h, double zoom,
-                          double rot_deg) {
+                          double rot_deg, double off_x, double off_y) {
   std::lock_guard<std::mutex> lock(m_);
   std::memset(rgb, 0, static_cast<size_t>(w) * h * 3);
   if (!has_data_ || disc_size_ <= 0) return false;
@@ -147,7 +147,8 @@ bool RadarState::RenderPPI(uint8_t* rgb, int w, int h, double zoom,
   // rectangle (not clamped to a centred square), so the picture fills the
   // window and the overzoom shows in the corners. The scale keeps the reported
   // range at min(w,h)/2, so the range rings stay circular. `zoom` magnifies
-  // about the centre; `rot_deg` rotates the picture clockwise.
+  // about the sweep origin; `rot_deg` rotates the picture clockwise; the origin
+  // itself sits at the window centre plus (off_x, off_y).
   const int refside = std::min(w, h);
   if (refside <= 0) return true;
   if (zoom <= 0.0) zoom = 1.0;
@@ -155,7 +156,7 @@ bool RadarState::RenderPPI(uint8_t* rgb, int w, int h, double zoom,
   const double step = (static_cast<double>(disc_size_) / refside) / zoom;
   const double th = rot_deg * 3.14159265358979323846 / 180.0;
   const double cs = std::cos(th), sn = std::sin(th);
-  const double ocx = w / 2.0, ocy = h / 2.0;
+  const double ocx = w / 2.0 + off_x, ocy = h / 2.0 + off_y;
   for (int y = 0; y < h; ++y) {
     const double fy = (y - ocy) * step;
     uint8_t* orow = rgb + static_cast<size_t>(y) * w * 3;
