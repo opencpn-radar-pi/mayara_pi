@@ -59,9 +59,11 @@ class MayaraClient {
   // tried in preference to discovery. Thread-safe; takes effect on the next
   // discovery attempt.
   void SetServerUrl(std::string url);
-  // A mayara-server this plugin runs itself, on loopback. Tried only after a
-  // configured, remembered or discovered server has failed, so downloading a
-  // local copy never takes a working boat server away. Empty clears it.
+  // A mayara-server this plugin runs itself, on loopback. Set only while the
+  // user has chosen to run one here, and then it is used exclusively: that
+  // choice is one side of a radio pair in Settings, so a mayara advertising on
+  // the network must not take over from it. Empty clears it, which is what
+  // choosing "use a server on the network" does.
   void SetLocalUrl(std::string url);
   // A Signal K server OpenCPN itself is configured to talk to. A guess, not a
   // promise that mayara runs there, so it is tried after discovery -- but it

@@ -528,6 +528,13 @@ void MayaraClient::Run() {
       candidates.push_back(manual);  // user-entered server wins
     } else if (!m_explicit.empty()) {
       candidates.push_back(m_explicit);
+    } else if (!local.empty()) {
+      // "Run it here" is a choice, not a fallback. Settings offers it as one
+      // side of a radio pair against "use a server on the network", so having a
+      // mayara advertising on the LAN quietly take over would contradict what
+      // the user just picked. It is exclusive for the same reason a manually
+      // entered address is: both say which server, not merely that one exists.
+      candidates.push_back(local);
     } else {
       // Try the last-known-good server first (fast reconnect), then discover.
       if (!m_remembered.empty()) candidates.push_back(m_remembered);
@@ -539,9 +546,6 @@ void MayaraClient::Run() {
       // where mDNS does not (routed networks, mDNS blocked by the AP).
       if (!hint.empty() && hint != m_remembered && hint != found)
         candidates.push_back(hint);
-      // A server we run ourselves is a fallback, not an override: someone with
-      // a boat server should keep using it even after downloading a local copy.
-      if (!local.empty()) candidates.push_back(local);
       if (!m_fallback.empty() && m_fallback != m_remembered)
         candidates.push_back(m_fallback);
     }
