@@ -209,7 +209,16 @@ int mayara_pi::Init() {
         m_search_dialog = nullptr;
       }
     } else if (m_client) {
-      if (++m_no_radar_ticks >= 10 && !m_search_dialog && !m_search_dismissed)
+      // The search dialog is for "we cannot find a server". When we are running
+      // one ourselves we know exactly where it is, so silence about a radar we
+      // have not found is the radar's problem, not the locator's -- offering to
+      // go looking for a server would just be wrong. If our own server is
+      // enabled but not running (the port was taken, it crashed), the dialog is
+      // still the right thing to show.
+      const bool own_server_up =
+          m_server && m_server->Enabled() && m_server->Running();
+      if (++m_no_radar_ticks >= 10 && !own_server_up && !m_search_dialog &&
+          !m_search_dismissed)
         ShowSearchDialog();
     }
   });
@@ -801,19 +810,21 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   lbox->Add(lstatus, 0, wxBOTTOM, 6);
   auto* dl = new wxButton(spage, wxID_ANY, _("Download mayara-server"));
   lbox->Add(dl, 0, wxBOTTOM, 6);
-  auto* cb_emul =
-      new wxCheckBox(spage, wxID_ANY, _("Emulator instead of a real radar"));
-  auto* cb_wifi = new wxCheckBox(
-      spage, wxID_ANY, _("Allow WiFi interfaces (off by default)"));
-  lbox->Add(cb_emul, 0, wxBOTTOM, 4);
+  auto* cb_wifi = new wxCheckBox(spage, wxID_ANY, _("Allow WiFi interfaces"));
   lbox->Add(cb_wifi, 0, wxBOTTOM, 6);
   auto* brow = new wxBoxSizer(wxHORIZONTAL);
-  brow->Add(new wxStaticText(spage, wxID_ANY, _("Limit to brand:")), 0,
+  brow->Add(new wxStaticText(spage, wxID_ANY, _("Radar:")), 0,
             wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+  // The emulator sits in this list as if it were a brand: from here it is just
+  // another thing to look for, and keeping it out of a checkbox of its own says
+  // (correctly) that it is an alternative to a real radar, not a modifier.
   auto* brand = new wxChoice(spage, wxID_ANY);
-  brand->Append(_("Any"));
-  for (const std::string& b : MayaraServer::Brands())
-    brand->Append(wxString::FromUTF8(b.c_str()));
+  brand->Append(_("Any brand"));
+  for (const std::string& b : MayaraServer::Brands()) {
+    wxString label = wxString::FromUTF8(b.c_str());
+    if (!label.IsEmpty()) label[0] = wxToupper(label[0]);
+    brand->Append(label);
+  }
   brow->Add(brand, 0, wxALIGN_CENTER_VERTICAL);
   lbox->Add(brow, 0);
   sbox->Add(lbox, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 24);
@@ -875,7 +886,6 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   (run_local ? r_local : r_net)->SetValue(true);
   if (have_server) {
     const MayaraServer::LocalOptions& o = m_server->Options();
-    cb_emul->SetValue(o.emulator);
     cb_wifi->SetValue(o.allow_wifi);
     int sel = 0;
     for (size_t i = 0; i < MayaraServer::Brands().size(); ++i)
@@ -906,10 +916,8 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
     if (can_get && installed)
       dl->SetLabel(wxString::Format(
           _("Update to %s"), wxString::FromUTF8(m_server->Latest().tag.c_str())));
-    cb_emul->Enable(local && installed);
     cb_wifi->Enable(local && installed);
-    // --brand is meaningless with --emulator: there is no hardware to filter.
-    brand->Enable(local && installed && !cb_emul->GetValue());
+    brand->Enable(local && installed);
     server->Enable(!local);
     shint->Enable(!local);
     dlg.Layout();
@@ -917,7 +925,6 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   };
   r_local->Bind(wxEVT_RADIOBUTTON, [&](wxCommandEvent&) { sync(); });
   r_net->Bind(wxEVT_RADIOBUTTON, [&](wxCommandEvent&) { sync(); });
-  cb_emul->Bind(wxEVT_CHECKBOX, [&](wxCommandEvent&) { sync(); });
   dl->Bind(wxEVT_BUTTON, [&](wxCommandEvent&) {
     wxString error;
     if (!m_server->DownloadAndInstall(&dlg, &error) && !error.IsEmpty())
@@ -940,7 +947,6 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
 
   if (have_server) {
     MayaraServer::LocalOptions o;
-    o.emulator = cb_emul->GetValue();
     o.allow_wifi = cb_wifi->GetValue();
     const int sel = brand->GetSelection();
     if (sel > 0 && sel <= static_cast<int>(MayaraServer::Brands().size()))

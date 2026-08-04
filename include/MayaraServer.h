@@ -83,15 +83,18 @@ class MayaraServer : public wxEvtHandler {
   // How to launch the copy we run ourselves. mayara-server reads these only at
   // start-up, so changing them restarts a running server.
   struct LocalOptions {
-    bool emulator = false;    // a fake radar instead of looking for a real one
     bool allow_wifi = false;  // also search WiFi interfaces (server default:
                               // off, since a boat server is wired)
-    std::string brand;        // "" = any; otherwise navico / furuno / ...
+    // "" = look for any brand; otherwise one of Brands(). kEmulatorBrand is a
+    // brand as far as the user is concerned, but the server takes it as its own
+    // flag rather than a --brand value (--brand only filters the locator; the
+    // fake radar is created only for --emulator).
+    std::string brand;
   };
-  // Brands mayara-server accepts for --brand, in menu order. "playback" and
-  // "emulator" are deliberately absent: the first needs a recording, and the
-  // second has its own checkbox.
+  // What can be asked for, in menu order. "playback" is absent: it needs a
+  // recording to play, which there is nowhere to choose here.
   static const std::vector<std::string>& Brands();
+  static const char* kEmulatorBrand;  // "emulator"
 
   bool Enabled() const { return m_enabled; }
   void SetEnabled(bool on);  // persisted; starts or stops the server
