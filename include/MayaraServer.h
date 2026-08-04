@@ -102,6 +102,8 @@ class MayaraServer : public wxEvtHandler {
   void SetOptions(const LocalOptions& o);  // persisted; restarts if running
   bool Running() const;
   bool Start();
+  // Stops whatever is serving on the local port, not merely the child we
+  // launched: see RequestQuit().
   void Stop();
 
   // Panels refresh through this; the panel unregisters itself when destroyed.
@@ -115,6 +117,10 @@ class MayaraServer : public wxEvtHandler {
   void SetState(CheckState s);
   void Notify();               // tell the observers something changed
   void SaveConfig();
+  // GET /quit on the local server: a graceful stop that works even when the pid
+  // is unknown, which a signal cannot manage.
+  static void RequestQuit();
+  static bool PortInUse();  // something still answers on the local port
 
   opencpn_plugin* m_plugin = nullptr;
   CheckState m_state = CheckState::kIdle;
