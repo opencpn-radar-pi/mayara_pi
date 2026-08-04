@@ -17,7 +17,10 @@ on:
   workflow_dispatch:
 
 env:
-  # Set these as repository secrets to enable Cloudsmith publishing.
+  # Set these as repository secrets to enable Cloudsmith publishing. Publishing
+  # is skipped for pull requests: those builds are unreviewed, and upstream's
+  # "was it a collaborator?" guard reads CircleCI variables that do not exist
+  # here, so it lets everything through.
   CLOUDSMITH_API_KEY: ${{ secrets.CLOUDSMITH_API_KEY }}
   # The upload script reads PROD/BETA/ALPHA. Optional: each falls back to the
   # name cmake baked in (opencpn-radar-pi/mayara-{prod,beta,alpha}).
@@ -39,7 +42,7 @@ jobs:
       - name: Build (arm64 + x86_64 universal)
         run: bash ci/circleci-build-macos-universal.sh
       - name: Publish to Cloudsmith
-        if: env.CLOUDSMITH_API_KEY != ''
+        if: env.CLOUDSMITH_API_KEY != '' && github.event_name != 'pull_request'
         run: |
           set -e
           # The FE2 script installs cloudsmith-cli only under CircleCI/Travis.
@@ -72,7 +75,7 @@ jobs:
         shell: cmd
         run: ci\circleci-build-msvc.bat
       - name: Publish to Cloudsmith
-        if: env.CLOUDSMITH_API_KEY != ''
+        if: env.CLOUDSMITH_API_KEY != '' && github.event_name != 'pull_request'
         shell: bash
         run: |
           set -e
@@ -135,7 +138,7 @@ jobs:
       - name: Build
         run: bash ${{ matrix.script }}
       - name: Publish to Cloudsmith
-        if: env.CLOUDSMITH_API_KEY != ''
+        if: env.CLOUDSMITH_API_KEY != '' && github.event_name != 'pull_request'
         run: |
           set -e
           # The FE2 script installs cloudsmith-cli only under CircleCI/Travis.
@@ -185,7 +188,7 @@ jobs:
           CI: ''
         run: bash ci/circleci-build-flatpak.sh
       - name: Publish to Cloudsmith
-        if: env.CLOUDSMITH_API_KEY != ''
+        if: env.CLOUDSMITH_API_KEY != '' && github.event_name != 'pull_request'
         run: |
           set -e
           # The FE2 script installs cloudsmith-cli only under CircleCI/Travis.
@@ -220,7 +223,7 @@ jobs:
       - name: Build
         run: bash ${{ matrix.script }}
       - name: Publish to Cloudsmith
-        if: env.CLOUDSMITH_API_KEY != ''
+        if: env.CLOUDSMITH_API_KEY != '' && github.event_name != 'pull_request'
         run: |
           set -e
           # The FE2 script installs cloudsmith-cli only under CircleCI/Travis.
