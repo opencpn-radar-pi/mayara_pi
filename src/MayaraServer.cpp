@@ -385,7 +385,14 @@ bool MayaraServer::Start() {
   // --allow-wifi: mayara-server skips WiFi interfaces by default, which is
   // right on a wired boat server but finds nothing at all on the laptop this
   // option exists for.
-  const wxString cmd = "\"" + BinaryPath() + "\" --allow-wifi";
+  //
+  // --parent: run as our helper. mayara-server then binds localhost only and
+  // stays off mDNS (this copy is ours, not the network's -- we reach it through
+  // LocalUrl()), and it exits once we are gone. Stop() cannot do that job alone:
+  // if OpenCPN crashes or is force-quit our destructor never runs, and the
+  // orphan keeps holding port 6502 against the next session.
+  const wxString cmd = wxString::Format("\"%s\" --allow-wifi --parent %lu",
+                                        BinaryPath(), wxGetProcessId());
   const long pid = wxExecute(cmd, wxEXEC_ASYNC | wxEXEC_HIDE_CONSOLE);
   if (pid <= 0) return false;
   m_pid = pid;
