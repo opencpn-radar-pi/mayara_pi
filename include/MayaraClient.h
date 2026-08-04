@@ -65,6 +65,10 @@ class MayaraClient {
   // the network must not take over from it. Empty clears it, which is what
   // choosing "use a server on the network" does.
   void SetLocalUrl(std::string url);
+  // Drop the current connection and reconsider every candidate from scratch.
+  // Needed whenever the server configuration changes: the discovery thread
+  // exits once it has connected, so nothing would otherwise notice.
+  void Rescan();
   // A Signal K server OpenCPN itself is configured to talk to. A guess, not a
   // promise that mayara runs there, so it is tried after discovery -- but it
   // works where mDNS does not (routed networks, mDNS blocked by the AP).

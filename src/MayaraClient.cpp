@@ -125,6 +125,20 @@ void MayaraClient::Start() {
   m_thread = std::thread([this] { Run(); });
 }
 
+// Run() returns as soon as it connects, so nothing is left watching the
+// configuration: without this, changing which server to use had no effect until
+// OpenCPN was restarted, and the URL we reported stayed at the old one forever.
+void MayaraClient::Rescan() {
+  Stop();
+  {
+    std::lock_guard<std::mutex> lock(m_status_mutex);
+    m_connected_url.clear();
+    m_server_api_version.clear();
+  }
+  SetStatus("reconnecting…");
+  Start();
+}
+
 void MayaraClient::Stop() {
   m_stop = true;
   {

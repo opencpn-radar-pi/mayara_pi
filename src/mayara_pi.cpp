@@ -961,6 +961,16 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
     SyncLocalServerUrl();
   }
 
+  // Leaving "run it here": the remembered address is the loopback one, which
+  // now points at a server we just stopped. Keeping it would put a guaranteed
+  // failure first in line on every future search.
+  if (!r_local->GetValue() &&
+      m_saved_server_url == MayaraServer::LocalUrl()) {
+    m_saved_server_url.clear();
+    if (m_client) m_client->SetRememberedUrl("");
+    SaveConfig();
+  }
+
   // Normalise the address (add scheme, drop trailing slash). Running locally
   // means no manual address: the local server is reached at a fixed loopback
   // URL, and leaving a stale override set would quietly win over it.
@@ -977,6 +987,11 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
     // Empty clears the override (back to discovery); a value wins immediately.
     if (m_client) m_client->SetServerUrl(url);
   }
+
+  // Act on all of the above. The discovery thread exits once it has connected,
+  // so without this the new choice sat in the config doing nothing until the
+  // next OpenCPN start -- which looked like "discovery is broken".
+  if (m_client) m_client->Rescan();
 }
 
 int mayara_pi::GetAPIVersionMajor() { return OCPN_API_VERSION_MAJOR; }
