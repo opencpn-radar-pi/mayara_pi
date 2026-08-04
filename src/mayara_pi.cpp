@@ -1193,7 +1193,16 @@ bool mayara_pi::DrawRadarOverlay(int index, PlugIn_ViewPort* vp,
   GetCanvasPixLL(vp, &center, lat, lon);
   if (std::abs(center.x) > 1000000 || std::abs(center.y) > 1000000)
     return false;
-  const double radius_px = range_m * vp->view_scale_ppm;
+  // view_scale_ppm is pixels per *Mercator* metre, not per real metre:
+  // OpenCPN's toSM() maps easting as dlon*R, leaving out the cos(lat) that
+  // turns it into ground distance. The true local scale at latitude phi is
+  // therefore view_scale_ppm / cos(phi) -- using the raw value draws the
+  // overlay cos(lat) too small (40% short at 53N). radar_pi sidesteps this by
+  // measuring pix_height against the great-circle height of the viewport; the
+  // closed form is equivalent and exact at the radar's own latitude.
+  const double coslat =
+      std::max(0.02, std::cos(lat * M_PI / 180.0));  // clamped near the poles
+  const double radius_px = range_m * vp->view_scale_ppm / coslat;
   if (radius_px < 1.0) return false;
 
   double heading = m_heading_true, sh = 0.0;
