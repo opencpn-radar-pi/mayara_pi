@@ -329,15 +329,20 @@ void ControlsPanel::Rebuild() {
     std::vector<const ControlDef*> group;
     for (const auto& d : defs)
       if (d.category == cat && !quick.count(d.id)) group.push_back(&d);
-    if (group.empty()) continue;
+    // Info is always built, even when the radar reports nothing of its own: it
+    // carries the server we are actually talking to, which is the first thing
+    // worth knowing precisely when there is no picture to explain.
+    const bool is_info = std::string(cat) == "info";
+    if (group.empty() && !is_info) continue;
     std::sort(group.begin(), group.end(),
               [](const ControlDef* a, const ControlDef* b) {
                 return a->numeric_id < b->numeric_id;
               });
-    AddCollapsibleSection(
-        root, wxString(cat).Capitalize(), cat, [this, group](wxSizer* c) {
-          for (const ControlDef* d : group) AddControl(c, *d);
-        });
+    AddCollapsibleSection(root, wxString(cat).Capitalize(), cat,
+                          [this, group, is_info](wxSizer* c) {
+                            if (is_info) AddServerRow(c);
+                            for (const ControlDef* d : group) AddControl(c, *d);
+                          });
   }
 
   SetSizer(root);  // deletes the previous sizer
@@ -743,6 +748,23 @@ void ControlsPanel::AddButton(wxSizer* outer, const ControlDef& def) {
   outer->Add(b, 0, wxEXPAND | wxALL, 4);
   const std::string id = def.id;
   b->Bind(wxEVT_BUTTON, [this, id](wxCommandEvent&) { Set(id, "{}"); });
+}
+
+// The server this plugin is talking to. Not a radar control, but it belongs
+// with the other "what am I actually looking at" facts, and it is what you want
+// to see when the radar is silent: whether we are on the copy we run ourselves
+// (loopback) or one on the network.
+void ControlsPanel::AddServerRow(wxSizer* outer) {
+  auto* row = new wxBoxSizer(wxHORIZONTAL);
+  row->Add(new wxStaticText(this, wxID_ANY, _("Server:")), 0, wxRIGHT, 6);
+  auto* val = new wxStaticText(this, wxID_ANY, wxEmptyString);
+  row->Add(val, 1);
+  outer->Add(row, 0, wxEXPAND | wxALL, 4);
+  m_updaters.push_back([this, val]() {
+    const std::string url = m_client ? m_client->ConnectedUrl() : std::string();
+    val->SetLabel(url.empty() ? wxString(_("not connected"))
+                              : wxString::FromUTF8(url.c_str()));
+  });
 }
 
 void ControlsPanel::AddReadonly(wxSizer* outer, const ControlDef& def) {

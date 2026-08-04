@@ -84,6 +84,7 @@ class ControlsPanel : public wxScrolledWindow {
                              const std::string& key,
                              std::function<void(wxSizer*)> fill);
   void AddControl(wxSizer* content, const ControlDef& def);
+  void AddServerRow(wxSizer* content);  // active server URL, in Info
   void FillViewSection(wxSizer* content);
   // A labelled row of mutually exclusive buttons over an int, kept in sync by
   // an updater. The View section is made of these.
