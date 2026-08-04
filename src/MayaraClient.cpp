@@ -272,6 +272,12 @@ void MayaraClient::SetServerUrl(std::string url) {
   m_manual = std::move(url);
 }
 
+void MayaraClient::SetLocalUrl(std::string url) {
+  StripTrailingSlash(url);
+  std::lock_guard<std::mutex> lock(m_status_mutex);
+  m_local = std::move(url);
+}
+
 std::string MayaraClient::ConnectedUrl() {
   std::lock_guard<std::mutex> lock(m_status_mutex);
   return m_connected_url;
@@ -281,10 +287,11 @@ bool MayaraClient::Connected() { return RadarCount() > 0; }
 
 void MayaraClient::Run() {
   while (!m_stop) {
-    std::string manual;
+    std::string manual, local;
     {
       std::lock_guard<std::mutex> lock(m_status_mutex);
       manual = m_manual;
+      local = m_local;
     }
     std::vector<std::string> candidates;
     if (!manual.empty()) {
@@ -297,6 +304,9 @@ void MayaraClient::Run() {
       SetStatus("searching for a Signal K server with mayara…");
       std::string found = MayaraDiscovery::FindSignalK(2000);
       if (!found.empty() && found != m_remembered) candidates.push_back(found);
+      // A server we run ourselves is a fallback, not an override: someone with
+      // a boat server should keep using it even after downloading a local copy.
+      if (!local.empty()) candidates.push_back(local);
       if (!m_fallback.empty() && m_fallback != m_remembered)
         candidates.push_back(m_fallback);
     }

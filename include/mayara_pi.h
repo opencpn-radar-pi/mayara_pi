@@ -23,6 +23,7 @@
 // Forward declarations keep implementation types out of this header.
 class MayaraPpiWindow;
 class MayaraClient;
+class MayaraServer;
 class wxAuiManager;
 
 class mayara_pi : public opencpn_plugin_121 {
@@ -80,6 +81,10 @@ class mayara_pi : public opencpn_plugin_121 {
   void SyncRadarFullScreen(bool on);
   void ShowSettings(wxWindow* parent);
   void ShowSearchDialog();  // "looking for a server" + manual entry
+  // Point the client at the mayara-server we run ourselves, or clear it.
+  void SyncLocalServerUrl();
+  // Ask, once per release, whether to install a newer local mayara-server.
+  void MaybeOfferServerUpdate();
   void LoadConfig();
   void SaveConfig();
   void SaveWindowState();          // visibility + geometry of the PPI windows
@@ -104,6 +109,8 @@ class mayara_pi : public opencpn_plugin_121 {
   bool m_windows_visible = false;  // user's show/hide intent for the windows
   int m_windows_radar_count = -1;  // radar count the windows were built for
   std::unique_ptr<MayaraClient> m_client;
+  std::unique_ptr<MayaraServer> m_server;  // optional local mayara-server
+  std::string m_update_declined;  // release tag the user said "later" to
   PI_ColorScheme m_color_scheme = PI_GLOBAL_COLOR_SCHEME_DAY;
   float m_radar_intensity = 1.0f;
   bool m_overlay_enabled = true;

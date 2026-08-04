@@ -59,6 +59,10 @@ class MayaraClient {
   // tried in preference to discovery. Thread-safe; takes effect on the next
   // discovery attempt.
   void SetServerUrl(std::string url);
+  // A mayara-server this plugin runs itself, on loopback. Tried only after a
+  // configured, remembered or discovered server has failed, so downloading a
+  // local copy never takes a working boat server away. Empty clears it.
+  void SetLocalUrl(std::string url);
   // The base URL currently streaming (empty until connected), for persisting.
   std::string ConnectedUrl();
   bool Connected();  // at least one radar is streaming
@@ -124,6 +128,7 @@ class MayaraClient {
   std::string m_status{"not connected"};
   std::string m_server_api_version;  // from GET /radars `version`, if present
   std::string m_manual;              // user-entered server URL (guarded)
+  std::string m_local;               // our own local server, if any (guarded)
   std::string m_connected_url;       // base URL that connected (guarded)
   std::string m_remembered;          // last-known-good URL (set before Start)
 

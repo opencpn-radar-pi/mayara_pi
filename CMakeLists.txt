@@ -132,6 +132,7 @@ set(SRCS
     src/RadarState.cpp
     src/RadarMessage.cpp
     src/MayaraDiscovery.cpp
+    src/MayaraServer.cpp
     src/RadarDisplayPanel.cpp
     src/ControlsPanel.cpp
     src/RadarControls.cpp
@@ -145,6 +146,7 @@ set(HDRS
     include/RadarState.h
     include/RadarMessage.h
     include/MayaraDiscovery.h
+    include/MayaraServer.h
     include/RadarDisplayPanel.h
     include/ControlsPanel.h
 )

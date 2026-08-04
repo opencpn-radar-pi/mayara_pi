@@ -4,6 +4,7 @@ src/MayaraClient.cpp
 src/RadarState.cpp
 src/RadarMessage.cpp
 src/MayaraDiscovery.cpp
+src/MayaraServer.cpp
 src/RadarDisplayPanel.cpp
 src/ControlsPanel.cpp
 src/RadarControls.cpp
@@ -14,5 +15,6 @@ include/MayaraClient.h
 include/RadarState.h
 include/RadarMessage.h
 include/MayaraDiscovery.h
+include/MayaraServer.h
 include/RadarDisplayPanel.h
 include/ControlsPanel.h
