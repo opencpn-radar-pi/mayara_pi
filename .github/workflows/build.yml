@@ -41,9 +41,15 @@ jobs:
       - name: Publish to Cloudsmith
         if: env.CLOUDSMITH_API_KEY != ''
         run: |
-          python3 -m pip install --user --quiet --break-system-packages cloudsmith-cli \
-            || python3 -m pip install --user --quiet cloudsmith-cli
-          export PATH="$HOME/.local/bin:$PATH"
+          set -e
+          # The FE2 script installs cloudsmith-cli only under CircleCI/Travis.
+          # A venv keeps this identical everywhere: pip --user puts the scripts
+          # in a different place on macOS than on Linux, and the distro
+          # containers ship no pip at all.
+          python3 -m venv "$HOME/cs-venv"
+          "$HOME/cs-venv/bin/pip" install --quiet cloudsmith-cli
+          export PATH="$HOME/cs-venv/bin:$PATH"
+          cloudsmith --version
           bash ci/cloudsmith-upload.sh
       - uses: actions/upload-artifact@v4
         with:
@@ -69,7 +75,11 @@ jobs:
         if: env.CLOUDSMITH_API_KEY != ''
         shell: bash
         run: |
-          python -m pip install --quiet cloudsmith-cli
+          set -e
+          python -m venv "$HOME/cs-venv"
+          "$HOME/cs-venv/Scripts/pip" install --quiet cloudsmith-cli
+          export PATH="$HOME/cs-venv/Scripts:$PATH"
+          cloudsmith --version
           bash ci/cloudsmith-upload.sh
       - uses: actions/upload-artifact@v4
         with:
@@ -111,9 +121,10 @@ jobs:
             printf 'APT::Get::Assume-Yes "true";\n' \
               > /etc/apt/apt.conf.d/90noninteractive
             apt-get update
-            apt-get install -y --no-install-recommends git sudo ca-certificates
+            apt-get install -y --no-install-recommends git sudo ca-certificates \
+              python3 python3-venv python3-pip
           elif command -v dnf >/dev/null 2>&1; then
-            dnf install -y git sudo dnf-plugins-core
+            dnf install -y git sudo dnf-plugins-core python3 python3-pip
           fi
           # The workspace is owned by a different UID than root in the
           # container; let git operate on it (the FE2 scripts run submodule
@@ -126,9 +137,15 @@ jobs:
       - name: Publish to Cloudsmith
         if: env.CLOUDSMITH_API_KEY != ''
         run: |
-          python3 -m pip install --user --quiet --break-system-packages cloudsmith-cli \
-            || python3 -m pip install --user --quiet cloudsmith-cli
-          export PATH="$HOME/.local/bin:$PATH"
+          set -e
+          # The FE2 script installs cloudsmith-cli only under CircleCI/Travis.
+          # A venv keeps this identical everywhere: pip --user puts the scripts
+          # in a different place on macOS than on Linux, and the distro
+          # containers ship no pip at all.
+          python3 -m venv "$HOME/cs-venv"
+          "$HOME/cs-venv/bin/pip" install --quiet cloudsmith-cli
+          export PATH="$HOME/cs-venv/bin:$PATH"
+          cloudsmith --version
           bash ci/cloudsmith-upload.sh
       - uses: actions/upload-artifact@v4
         with:
@@ -170,9 +187,15 @@ jobs:
       - name: Publish to Cloudsmith
         if: env.CLOUDSMITH_API_KEY != ''
         run: |
-          python3 -m pip install --user --quiet --break-system-packages cloudsmith-cli \
-            || python3 -m pip install --user --quiet cloudsmith-cli
-          export PATH="$HOME/.local/bin:$PATH"
+          set -e
+          # The FE2 script installs cloudsmith-cli only under CircleCI/Travis.
+          # A venv keeps this identical everywhere: pip --user puts the scripts
+          # in a different place on macOS than on Linux, and the distro
+          # containers ship no pip at all.
+          python3 -m venv "$HOME/cs-venv"
+          "$HOME/cs-venv/bin/pip" install --quiet cloudsmith-cli
+          export PATH="$HOME/cs-venv/bin:$PATH"
+          cloudsmith --version
           bash ci/cloudsmith-upload.sh
       - uses: actions/upload-artifact@v4
         with:
@@ -199,9 +222,15 @@ jobs:
       - name: Publish to Cloudsmith
         if: env.CLOUDSMITH_API_KEY != ''
         run: |
-          python3 -m pip install --user --quiet --break-system-packages cloudsmith-cli \
-            || python3 -m pip install --user --quiet cloudsmith-cli
-          export PATH="$HOME/.local/bin:$PATH"
+          set -e
+          # The FE2 script installs cloudsmith-cli only under CircleCI/Travis.
+          # A venv keeps this identical everywhere: pip --user puts the scripts
+          # in a different place on macOS than on Linux, and the distro
+          # containers ship no pip at all.
+          python3 -m venv "$HOME/cs-venv"
+          "$HOME/cs-venv/bin/pip" install --quiet cloudsmith-cli
+          export PATH="$HOME/cs-venv/bin:$PATH"
+          cloudsmith --version
           bash ci/cloudsmith-upload.sh
       - uses: actions/upload-artifact@v4
         with:
