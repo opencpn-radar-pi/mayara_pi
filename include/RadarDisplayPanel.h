@@ -30,6 +30,15 @@ struct PpiLayers {
   bool ais = true;
   bool arpa = true;         // server-tracked radar targets
   bool guard_zones = true;  // server guard zones (guardZone1/2)
+  bool extreme_range = true;  // ring at the outer edge of the spoke data
+};
+
+// Display preferences that are the operator's, not the radar's, so they are
+// held by the plugin and pushed down rather than read from the control schema.
+struct PpiPrefs {
+  int refresh_hz = 5;       // PPI repaint rate, 1..15
+  bool reverse_zoom = false;  // invert the wheel's zoom direction
+  int menu_autohide = 0;    // 0 = never, 1 = 10 s, 2 = 30 s
 };
 
 // Everything the picture and the layers over it are placed by. Computed once
@@ -41,6 +50,7 @@ struct PpiGeometry {
   wxPoint offset;         // pan away from the window centre (committed + drag)
   double radius = 0;      // pixels the reported range maps to, at 1x zoom
   double report_m = 0;    // reported (range control) range, metres
+  double spoke_m = 0;     // range of the last spoke pixel, metres; >= report_m
   bool metric = false;    // reported range unit
   double zoom = 1.0;      // free display zoom
   double up_bearing = 0;  // true bearing shown at screen-up
@@ -76,6 +86,8 @@ class RadarDisplayPanel : public wxPanel {
   // shared radar state so the disc re-maps.
   void SetThreshold(int level);
   int Threshold() const { return m_threshold; }
+  // Repaint rate and wheel direction; the rest of PpiPrefs is the window's.
+  void SetPrefs(const PpiPrefs& p);
   // Pixels obscured on the right by the open menu, so the picture re-centres in
   // the remaining space.
   void SetObscuredRight(int px) {
@@ -160,6 +172,8 @@ class RadarDisplayPanel : public wxPanel {
   // Pointer position, for the cursor readout. Only while over the picture.
   wxPoint m_cursor = wxPoint(0, 0);
   bool m_cursor_in = false;
+
+  bool m_reverse_zoom = false;  // from PpiPrefs
 
   MayaraTheme m_theme;
 

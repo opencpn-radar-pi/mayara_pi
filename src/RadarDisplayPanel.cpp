@@ -526,7 +526,8 @@ PpiGeometry RadarDisplayPanel::Geometry() const {
   g.zoom = m_display_zoom > 0 ? m_display_zoom : 1.0;
 
   RadarState* st = m_client ? m_client->StateAt(m_index) : nullptr;
-  g.report_m = st ? st->RangeMeters() : 0.0;
+  g.spoke_m = st ? st->RangeMeters() : 0.0;
+  g.report_m = g.spoke_m;
   EffectiveRange(g.report_m, g.metric);
   ResolveOrientation(g.up_bearing, g.raster_rot, g.heading, g.has_heading);
   g.valid = g.radius >= 8 && g.report_m > 0;
@@ -570,6 +571,17 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, const PpiGeometry& g) {
       // Text starts just outside the ring on the upper-right diagonal.
       dc.DrawText(lbl, c.x + static_cast<int>((rr + 3) * k),
                   c.y - static_cast<int>((rr + 3) * k) - th / 2);
+    }
+  }
+
+  // Extreme range: where the spoke data actually stops, which is further out
+  // than the reported range (the difference is the overzoom filling the
+  // corners). Beyond this ring there is no radar, only black.
+  if (m_layers.extreme_range && geo > 0 && g.spoke_m > g.report_m) {
+    const double er = g.spoke_m * geo;
+    if (er <= radius * 1.45) {  // otherwise it is off-picture anyway
+      dc.SetPen(wxPen(wxColour(200, 40, 40), 1));
+      dc.DrawCircle(c.x, c.y, static_cast<int>(er));
     }
   }
 
@@ -805,6 +817,16 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, const PpiGeometry& g) {
       }
     }
   }
+
+  // Own-ship marker at the sweep origin. Always drawn: once the picture can be
+  // dragged off centre, "where is the boat" stops being obvious.
+  dc.SetPen(wxPen(m_theme.text, 1));
+  dc.SetBrush(*wxTRANSPARENT_BRUSH);
+  dc.DrawCircle(c.x, c.y, 4);
+  dc.DrawLine(c.x - 7, c.y, c.x - 5, c.y);
+  dc.DrawLine(c.x + 5, c.y, c.x + 7, c.y);
+  dc.DrawLine(c.x, c.y - 7, c.x, c.y - 5);
+  dc.DrawLine(c.x, c.y + 5, c.x, c.y + 7);
 
   // EBL/VRM and the cursor readout go on top of everything geographic.
   if (m_ebl_on && m_ebl_set && geo > 0) DrawEblVrm(dc, g, geo);
@@ -1104,10 +1126,18 @@ bool RadarDisplayPanel::PointToPolar(const wxPoint& p, double& bearing_deg,
   return true;
 }
 
+void RadarDisplayPanel::SetPrefs(const PpiPrefs& p) {
+  m_reverse_zoom = p.reverse_zoom;
+  const int hz = std::max(1, std::min(15, p.refresh_hz));
+  const int ms = 1000 / hz;
+  if (!m_timer.IsRunning() || m_timer.GetInterval() != ms) m_timer.Start(ms);
+}
+
 void RadarDisplayPanel::OnMouseWheel(wxMouseEvent& event) {
   // Free PPI magnification, independent of the radar range control. Each notch
   // is ~15%; clamped to 0.5x - 5x. A notch back to ~1.0 snaps to exactly 1x.
-  const double factor = event.GetWheelRotation() > 0 ? 1.15 : 1.0 / 1.15;
+  const bool up = (event.GetWheelRotation() > 0) != m_reverse_zoom;
+  const double factor = up ? 1.15 : 1.0 / 1.15;
   double z = m_display_zoom * factor;
   if (z < 0.5) z = 0.5;
   if (z > 5.0) z = 5.0;

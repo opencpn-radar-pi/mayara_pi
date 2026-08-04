@@ -35,13 +35,16 @@ wxString WindowTitle(MayaraClient* client, const std::vector<int>& idx) {
 }
 }  // namespace
 
+enum { kIdleTimerId = wxID_HIGHEST + 30 };
+
 wxBEGIN_EVENT_TABLE(MayaraPpiWindow, wxPanel)
     EVT_SIZE(MayaraPpiWindow::OnSize)
+    EVT_TIMER(kIdleTimerId, MayaraPpiWindow::OnIdleTimer)
 wxEND_EVENT_TABLE()
 
 MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client,
                                  std::vector<int> radar_indices)
-    : wxPanel(parent, wxID_ANY) {
+    : wxPanel(parent, wxID_ANY), m_idle_timer(this, kIdleTimerId) {
   SetMinSize(wxSize(480, 320));
   if (radar_indices.empty()) radar_indices.push_back(0);
   m_client = client;
@@ -370,6 +373,54 @@ void MayaraPpiWindow::SetThresholdHandlers(
               m_client ? m_client->RadarId(p->RadarIndex()) : "";
           if (m_thresh_set) m_thresh_set(id, level);
         });
+}
+
+void MayaraPpiWindow::SetPrefsHandlers(std::function<PpiPrefs()> get,
+                                       std::function<void(const PpiPrefs&)> set) {
+  m_prefs_get = std::move(get);
+  // Re-apply on every change so a new refresh rate takes effect at once.
+  m_prefs_set = [this, set](const PpiPrefs& p) {
+    if (set) set(p);
+    ApplyPrefs();
+  };
+  if (m_controls) m_controls->SetPrefsControl(m_prefs_get, m_prefs_set);
+  ApplyPrefs();
+}
+
+void MayaraPpiWindow::ApplyPrefs() {
+  if (!m_prefs_get) return;
+  const PpiPrefs p = m_prefs_get();
+  for (RadarDisplayPanel* r : m_radars) r->SetPrefs(p);
+  m_idle_secs = 0;
+  if (p.menu_autohide > 0) {
+    if (!m_idle_timer.IsRunning()) m_idle_timer.Start(1000);
+  } else {
+    m_idle_timer.Stop();
+  }
+}
+
+// Auto-hide the controls once the pointer has been away from them for the
+// chosen time. "Away from" rather than "no clicks in": the panel's own widgets
+// swallow their events, and a menu left open under the cursor is being read,
+// not forgotten.
+void MayaraPpiWindow::OnIdleTimer(wxTimerEvent&) {
+  if (!m_prefs_get || !m_controls || !m_controls->IsShown()) {
+    m_idle_secs = 0;
+    return;
+  }
+  const int mode = m_prefs_get().menu_autohide;
+  if (mode <= 0) return;
+  const int limit = mode == 1 ? 10 : 30;
+  const wxPoint mouse = wxGetMousePosition();
+  if (m_controls->GetScreenRect().Contains(mouse)) {
+    m_idle_secs = 0;
+    return;
+  }
+  if (++m_idle_secs >= limit) {
+    m_idle_secs = 0;
+    HideControls();
+    Layout();
+  }
 }
 
 void MayaraPpiWindow::GrowForControls(int extra) {

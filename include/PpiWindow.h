@@ -19,6 +19,7 @@
 
 #include "MayaraTheme.h"
 #include "NavState.h"
+#include "RadarDisplayPanel.h"  // PpiPrefs
 
 class MayaraClient;
 class RadarDisplayPanel;
@@ -78,8 +79,17 @@ class MayaraPpiWindow : public wxPanel {
       std::function<int(const std::string&)> get_level,
       std::function<void(const std::string&, int)> set_level);
 
+  // Global display preferences (refresh rate, wheel direction, menu
+  // auto-hide). Pushed to every picture and to the auto-hide timer.
+  void SetPrefsHandlers(std::function<PpiPrefs()> get,
+                        std::function<void(const PpiPrefs&)> set);
+  // Re-read the prefs and push them to the pictures + auto-hide timer. Public
+  // because they are global: a change made in one window applies to them all.
+  void ApplyPrefs();
+
  private:
   void OnSize(wxSizeEvent& event);
+  void OnIdleTimer(wxTimerEvent& event);  // menu auto-hide
   // Widen the (floating) window by `extra` px to fit the controls, shifting it
   // left/up if that would push it off the display. No-op when docked.
   void GrowForControls(int extra);
@@ -106,6 +116,10 @@ class MayaraPpiWindow : public wxPanel {
   std::function<void(const std::string&, int)> m_orient_set;
   std::function<int(const std::string&)> m_thresh_get;
   std::function<void(const std::string&, int)> m_thresh_set;
+  std::function<PpiPrefs()> m_prefs_get;
+  std::function<void(const PpiPrefs&)> m_prefs_set;
+  wxTimer m_idle_timer;      // 1 Hz, only while auto-hide is on
+  int m_idle_secs = 0;       // seconds the pointer has been off the controls
   int m_grid_cols = 0;      // current grid column count (-1 while soloed)
   bool m_solo = false;      // a single picture is shown for its open menu
   bool m_grew = false;      // the menu widened the window

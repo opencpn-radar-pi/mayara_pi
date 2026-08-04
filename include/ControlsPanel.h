@@ -20,6 +20,7 @@
 
 #include "MayaraTheme.h"
 #include "RadarControls.h"
+#include "RadarDisplayPanel.h"  // PpiPrefs
 
 class MayaraClient;
 
@@ -71,6 +72,11 @@ class ControlsPanel : public wxScrolledWindow {
   // "Dock in OpenCPN" toggle for the View section.
   void SetDockControl(std::function<bool()> get, std::function<void(bool)> set);
 
+  // Operator display preferences (refresh rate, wheel direction, menu
+  // auto-hide) for the View section. Global, not per radar.
+  void SetPrefsControl(std::function<PpiPrefs()> get,
+                       std::function<void(const PpiPrefs&)> set);
+
  private:
   wxSizer* MakeCloseRow();  // a "Controls  ×" header row
   void ThemeChildren();
@@ -79,6 +85,11 @@ class ControlsPanel : public wxScrolledWindow {
                              std::function<void(wxSizer*)> fill);
   void AddControl(wxSizer* content, const ControlDef& def);
   void FillViewSection(wxSizer* content);
+  // A labelled row of mutually exclusive buttons over an int, kept in sync by
+  // an updater. The View section is made of these.
+  void AddChoiceRow(wxSizer* content, const wxString& label,
+                    const std::vector<wxString>& labels,
+                    std::function<int()> get, std::function<void(int)> set);
   void OnTimer(wxTimerEvent& event);
   void Rebuild();      // (re)build widgets from the schema
   void ApplyValues();  // push current model values into the widgets
@@ -126,6 +137,8 @@ class ControlsPanel : public wxScrolledWindow {
   std::function<void(int)> m_set_threshold;
   std::function<bool()> m_get_dock;
   std::function<void(bool)> m_set_dock;
+  std::function<PpiPrefs()> m_get_prefs;
+  std::function<void(const PpiPrefs&)> m_set_prefs;
 
   wxDECLARE_EVENT_TABLE();
 };
