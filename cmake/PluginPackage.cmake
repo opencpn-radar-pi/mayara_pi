@@ -29,8 +29,14 @@ if (OCPN_FLATPAK_CONFIG)
       ${CMAKE_CURRENT_BINARY_DIR}/flatpak/org.opencpn.OpenCPN.Plugin.${PACKAGE}.yaml
   )
   add_custom_target("flatpak-pkg")
+  # POST_BUILD is required with the TARGET signature: CMake used to tolerate its
+  # absence, current versions refuse to configure ("exactly one of PRE_BUILD,
+  # PRE_LINK, or POST_BUILD must be given"). After the target is what was always
+  # meant -- flatpak-pkg has no build step of its own, it only tars up what
+  # flatpak-build produced.
   add_custom_command(
     TARGET flatpak-pkg
+    POST_BUILD
     COMMAND
       ${TAR} -czf
       ${PKG_NVR}-${ARCH}${PKG_TARGET_WX_VER}_${PKG_TARGET_NVR}.tar.gz --verbose

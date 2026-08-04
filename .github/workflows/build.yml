@@ -34,7 +34,7 @@ jobs:
       OCPN_TARGET: macos
       WX_VER: '32'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { submodules: recursive, fetch-depth: 0 }
       - name: Build (arm64 + x86_64 universal)
         run: bash ci/circleci-build-macos-universal.sh
@@ -60,7 +60,7 @@ jobs:
       OCPN_TARGET: MSVC
       WX_VER: '32'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { submodules: recursive, fetch-depth: 0 }
       - name: Build
         shell: cmd
@@ -119,7 +119,7 @@ jobs:
           # container; let git operate on it (the FE2 scripts run submodule
           # update).
           git config --global --add safe.directory '*'
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { submodules: recursive, fetch-depth: 0 }
       - name: Build
         run: bash ${{ matrix.script }}
@@ -155,7 +155,7 @@ jobs:
       FLATPAK_BRANCH: beta
       WX_VER: '32'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { submodules: recursive, fetch-depth: 0 }
       - name: Prerequisites
         run: |
@@ -192,7 +192,7 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { submodules: recursive, fetch-depth: 0 }
       - name: Build
         run: bash ${{ matrix.script }}
