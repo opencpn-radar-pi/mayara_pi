@@ -125,6 +125,20 @@ void MayaraClient::Start() {
   m_thread = std::thread([this] { Run(); });
 }
 
+// Run() returns as soon as it connects, so nothing is left watching the
+// configuration: without this, changing which server to use had no effect until
+// OpenCPN was restarted, and the URL we reported stayed at the old one forever.
+void MayaraClient::Rescan() {
+  Stop();
+  {
+    std::lock_guard<std::mutex> lock(m_status_mutex);
+    m_connected_url.clear();
+    m_server_api_version.clear();
+  }
+  SetStatus("reconnecting…");
+  Start();
+}
+
 void MayaraClient::Stop() {
   m_stop = true;
   {
@@ -277,6 +291,12 @@ void MayaraClient::SetLocalUrl(std::string url) {
   StripTrailingSlash(url);
   std::lock_guard<std::mutex> lock(m_status_mutex);
   m_local = std::move(url);
+}
+
+void MayaraClient::SetHintUrl(std::string url) {
+  StripTrailingSlash(url);
+  std::lock_guard<std::mutex> lock(m_status_mutex);
+  m_hint = std::move(url);
 }
 
 std::string MayaraClient::ConnectedUrl() {
@@ -510,26 +530,36 @@ bool MayaraClient::Connected() { return RadarCount() > 0; }
 
 void MayaraClient::Run() {
   while (!m_stop) {
-    std::string manual, local;
+    std::string manual, local, hint;
     {
       std::lock_guard<std::mutex> lock(m_status_mutex);
       manual = m_manual;
       local = m_local;
+      hint = m_hint;
     }
     std::vector<std::string> candidates;
     if (!manual.empty()) {
       candidates.push_back(manual);  // user-entered server wins
     } else if (!m_explicit.empty()) {
       candidates.push_back(m_explicit);
+    } else if (!local.empty()) {
+      // "Run it here" is a choice, not a fallback. Settings offers it as one
+      // side of a radio pair against "use a server on the network", so having a
+      // mayara advertising on the LAN quietly take over would contradict what
+      // the user just picked. It is exclusive for the same reason a manually
+      // entered address is: both say which server, not merely that one exists.
+      candidates.push_back(local);
     } else {
       // Try the last-known-good server first (fast reconnect), then discover.
       if (!m_remembered.empty()) candidates.push_back(m_remembered);
-      SetStatus("searching for a Signal K server with mayara…");
-      std::string found = MayaraDiscovery::FindSignalK(2000);
+      SetStatus("searching for a mayara or Signal K server…");
+      std::string found = MayaraDiscovery::FindServer(2000);
       if (!found.empty() && found != m_remembered) candidates.push_back(found);
-      // A server we run ourselves is a fallback, not an override: someone with
-      // a boat server should keep using it even after downloading a local copy.
-      if (!local.empty()) candidates.push_back(local);
+      // A Signal K server OpenCPN is already configured to talk to. Not proof
+      // that mayara runs there, but a better guess than nothing, and it works
+      // where mDNS does not (routed networks, mDNS blocked by the AP).
+      if (!hint.empty() && hint != m_remembered && hint != found)
+        candidates.push_back(hint);
       if (!m_fallback.empty() && m_fallback != m_remembered)
         candidates.push_back(m_fallback);
     }
@@ -537,7 +567,26 @@ void MayaraClient::Run() {
       if (m_stop) return;
       m_base_url = base;
       StripTrailingSlash(m_base_url);
-      if (DiscoverAndConnect()) {
+      Attempt r = DiscoverAndConnect();
+      // A server whose radar API answers but lists nothing is still the right
+      // server -- it just has nothing to show yet, which is what a local server
+      // with no radar attached looks like. Stay on it and re-poll instead of
+      // falling through to the remaining candidates and starting discovery
+      // over, which walked the status line through "searching...", stale
+      // addresses and back every few seconds while nothing was actually wrong.
+      while (r == Attempt::kNoRadars && !m_stop) {
+        // Remember it meanwhile: otherwise a stale address that never answers
+        // stays first in line for every future session.
+        {
+          std::lock_guard<std::mutex> lock(m_status_mutex);
+          m_connected_url = m_base_url;
+        }
+        for (int i = 0; i < 30 && !m_stop; ++i)
+          std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        if (m_stop) return;
+        r = DiscoverAndConnect();
+      }
+      if (r == Attempt::kConnected) {
         std::lock_guard<std::mutex> lock(m_status_mutex);
         m_connected_url = m_base_url;
         return;
@@ -548,7 +597,7 @@ void MayaraClient::Run() {
   }
 }
 
-bool MayaraClient::DiscoverAndConnect() {
+MayaraClient::Attempt MayaraClient::DiscoverAndConnect() {
   ix::HttpClient http(/*async=*/false);
   auto args = http.createRequest();
   args->connectTimeout = 5;
@@ -562,11 +611,11 @@ bool MayaraClient::DiscoverAndConnect() {
   auto resp = http.get(url, args);
   if (!resp || resp->statusCode == 0) {
     SetStatus("no server at " + m_base_url);
-    return false;
+    return Attempt::kFailed;
   }
   if (resp->statusCode != 200) {
     SetStatus("GET radars -> HTTP " + std::to_string(resp->statusCode));
-    return false;
+    return Attempt::kFailed;
   }
 
   // Build the radar list from either shape (keyed object or array).
@@ -600,11 +649,11 @@ bool MayaraClient::DiscoverAndConnect() {
     }
   } catch (const std::exception& e) {
     JsonError("radars", e.what());
-    return false;
+    return Attempt::kFailed;
   }
   if (radars.empty()) {
     SetStatus("connected; no radars transmitting");
-    return false;
+    return Attempt::kNoRadars;
   }
 
   // Fetch capabilities + connect the spoke stream for each radar; keep the ones
@@ -618,7 +667,7 @@ bool MayaraClient::DiscoverAndConnect() {
   }
   if (live.empty()) {
     SetStatus("no spoke stream at " + m_base_url);
-    return false;
+    return Attempt::kFailed;
   }
 
   {
@@ -628,7 +677,7 @@ bool MayaraClient::DiscoverAndConnect() {
   }
   ConnectControlStream();
   SetStatus("streaming " + std::to_string(RadarCount()) + " radar(s)");
-  return true;
+  return Attempt::kConnected;
 }
 
 bool MayaraClient::FetchCapabilities(Radar* radar) {

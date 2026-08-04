@@ -35,6 +35,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "LocalServerHttp.h"
 #include "ocpn_plugin.h"
 
 using json = nlohmann::json;
@@ -161,6 +162,10 @@ void MayaraServer::LoadConfig() {
   cfg->SetPath(kConfigGroup);
   cfg->Read("LocalServerEnabled", &m_enabled, false);
   cfg->Read("LocalServerVersion", &m_installed_version);
+  cfg->Read("LocalServerAllowWifi", &m_opts.allow_wifi, false);
+  wxString brand;
+  cfg->Read("LocalServerBrand", &brand);
+  m_opts.brand = std::string(brand.mb_str());
   long last = 0;
   cfg->Read("LocalServerLastCheck", &last, 0);
   m_last_check = static_cast<time_t>(last);
@@ -174,6 +179,9 @@ void MayaraServer::SaveConfig() {
   cfg->SetPath(kConfigGroup);
   cfg->Write("LocalServerEnabled", m_enabled);
   cfg->Write("LocalServerVersion", m_installed_version);
+  cfg->Write("LocalServerAllowWifi", m_opts.allow_wifi);
+  cfg->Write("LocalServerBrand",
+             wxString::FromUTF8(m_opts.brand.c_str()));
   cfg->Write("LocalServerLastCheck", static_cast<long>(m_last_check));
   cfg->Flush();
 }
@@ -381,11 +389,25 @@ bool MayaraServer::Start() {
   // No wxProcess callback object on purpose: that would be a vtable in this
   // plugin's shared library which OpenCPN's event loop could call into after we
   // are unloaded. Liveness is polled with wxProcess::Exists() instead.
-  //
-  // --allow-wifi: mayara-server skips WiFi interfaces by default, which is
-  // right on a wired boat server but finds nothing at all on the laptop this
-  // option exists for.
-  const wxString cmd = "\"" + BinaryPath() + "\" --allow-wifi";
+  wxString cmd = "\"" + BinaryPath() + "\"";
+  // --parent: run as our helper. mayara-server then binds localhost only and
+  // stays off mDNS (this copy is ours, not the network's -- we reach it through
+  // LocalUrl()), and it exits once we are gone. Stop() cannot do that job alone:
+  // if OpenCPN crashes or is force-quit our destructor never runs, and the
+  // orphan keeps holding port 6502 against the next session.
+  cmd += wxString::Format(" --parent %lu", wxGetProcessId());
+  // mayara-server skips WiFi interfaces unless asked: right on a wired boat
+  // server, wrong on the laptop this whole option exists for -- hence the
+  // checkbox rather than a fixed choice either way.
+  if (m_opts.allow_wifi) cmd += " --allow-wifi";
+  // The emulator is offered as a brand, but it is not one to the server:
+  // --brand only narrows the search for real hardware, while the fake radar is
+  // created solely for --emulator.
+  if (m_opts.brand == kEmulatorBrand) {
+    cmd += " --emulator";
+  } else if (!m_opts.brand.empty()) {
+    cmd += " --brand " + wxString::FromUTF8(m_opts.brand.c_str());
+  }
   const long pid = wxExecute(cmd, wxEXEC_ASYNC | wxEXEC_HIDE_CONSOLE);
   if (pid <= 0) return false;
   m_pid = pid;
@@ -394,14 +416,45 @@ bool MayaraServer::Start() {
 }
 
 void MayaraServer::Stop() {
-  if (!m_pid) return;
   const long pid = m_pid;
   m_pid = 0;
-  if (wxProcess::Exists(pid)) {
+  // Ask first, signal second. The HTTP route reaches a server whose pid we no
+  // longer know -- an orphan left by a session that crashed, or a copy that
+  // outlived a launch of ours that failed to bind -- and that is exactly the
+  // case where a restart would otherwise silently change nothing.
+  LocalServerHttp::RequestQuit(LocalUrl());
+  if (pid && wxProcess::Exists(pid)) {
     wxKill(pid, wxSIGTERM, nullptr, wxKILL_CHILDREN);
     for (int i = 0; i < 20 && wxProcess::Exists(pid); ++i) wxMilliSleep(50);
     if (wxProcess::Exists(pid))
       wxKill(pid, wxSIGKILL, nullptr, wxKILL_CHILDREN);
+  }
+  // Wait for the port to actually come free, or the replacement launched right
+  // after this will fail to bind and die without saying why.
+  for (int i = 0; i < 30 && LocalServerHttp::Responds(LocalUrl()); ++i) wxMilliSleep(100);
+  Notify();
+}
+
+const char* MayaraServer::kEmulatorBrand = "emulator";
+
+const std::vector<std::string>& MayaraServer::Brands() {
+  static const std::vector<std::string> kBrands = {
+      "navico", "furuno", "garmin", "koden", "raymarine", kEmulatorBrand};
+  return kBrands;
+}
+
+void MayaraServer::SetOptions(const LocalOptions& o) {
+  if (o.allow_wifi == m_opts.allow_wifi && o.brand == m_opts.brand) return;
+  m_opts = o;
+  SaveConfig();
+  // These are command-line arguments, read once at start-up, so they only take
+  // effect on a restart. Restart whenever we are meant to be running rather
+  // than when we believe we are: if our own launch failed, or we lost track of
+  // the pid, Running() is false while a server with the old arguments is still
+  // on the port -- and then changing a setting would appear to do nothing.
+  if (m_enabled) {
+    Stop();
+    Start();
   }
   Notify();
 }

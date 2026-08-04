@@ -59,10 +59,20 @@ class MayaraClient {
   // tried in preference to discovery. Thread-safe; takes effect on the next
   // discovery attempt.
   void SetServerUrl(std::string url);
-  // A mayara-server this plugin runs itself, on loopback. Tried only after a
-  // configured, remembered or discovered server has failed, so downloading a
-  // local copy never takes a working boat server away. Empty clears it.
+  // A mayara-server this plugin runs itself, on loopback. Set only while the
+  // user has chosen to run one here, and then it is used exclusively: that
+  // choice is one side of a radio pair in Settings, so a mayara advertising on
+  // the network must not take over from it. Empty clears it, which is what
+  // choosing "use a server on the network" does.
   void SetLocalUrl(std::string url);
+  // Drop the current connection and reconsider every candidate from scratch.
+  // Needed whenever the server configuration changes: the discovery thread
+  // exits once it has connected, so nothing would otherwise notice.
+  void Rescan();
+  // A Signal K server OpenCPN itself is configured to talk to. A guess, not a
+  // promise that mayara runs there, so it is tried after discovery -- but it
+  // works where mDNS does not (routed networks, mDNS blocked by the AP).
+  void SetHintUrl(std::string url);
   // The base URL currently streaming (empty until connected), for persisting.
   std::string ConnectedUrl();
   bool Connected();  // at least one radar is streaming
@@ -142,7 +152,13 @@ class MayaraClient {
 
  private:
   void Run();                 // background: discover + connect, retry
-  bool DiscoverAndConnect();  // one attempt; true once at least one streams
+  // Outcome of one attempt at m_base_url.
+  enum class Attempt {
+    kFailed,     // no answer, or an answer we cannot use
+    kNoRadars,   // the radar API answered, but lists nothing
+    kConnected,  // at least one radar is streaming
+  };
+  Attempt DiscoverAndConnect();
   bool FetchCapabilities(Radar* radar);
   void FetchControlValues(Radar* radar);
   // Surface a JSON error. If the server's API version was seen and differs from
@@ -171,6 +187,7 @@ class MayaraClient {
   std::string m_server_api_version;  // from GET /radars `version`, if present
   std::string m_manual;              // user-entered server URL (guarded)
   std::string m_local;               // our own local server, if any (guarded)
+  std::string m_hint;                // OpenCPN's Signal K connection (guarded)
   std::string m_connected_url;       // base URL that connected (guarded)
   std::string m_remembered;          // last-known-good URL (set before Start)
 

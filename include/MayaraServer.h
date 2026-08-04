@@ -80,10 +80,30 @@ class MayaraServer : public wxEvtHandler {
   bool DownloadAndInstall(wxWindow* parent, wxString* error);
 
   // --- Child process -------------------------------------------------------
+  // How to launch the copy we run ourselves. mayara-server reads these only at
+  // start-up, so changing them restarts a running server.
+  struct LocalOptions {
+    bool allow_wifi = false;  // also search WiFi interfaces (server default:
+                              // off, since a boat server is wired)
+    // "" = look for any brand; otherwise one of Brands(). kEmulatorBrand is a
+    // brand as far as the user is concerned, but the server takes it as its own
+    // flag rather than a --brand value (--brand only filters the locator; the
+    // fake radar is created only for --emulator).
+    std::string brand;
+  };
+  // What can be asked for, in menu order. "playback" is absent: it needs a
+  // recording to play, which there is nowhere to choose here.
+  static const std::vector<std::string>& Brands();
+  static const char* kEmulatorBrand;  // "emulator"
+
   bool Enabled() const { return m_enabled; }
   void SetEnabled(bool on);  // persisted; starts or stops the server
+  const LocalOptions& Options() const { return m_opts; }
+  void SetOptions(const LocalOptions& o);  // persisted; restarts if running
   bool Running() const;
   bool Start();
+  // Stops whatever is serving on the local port, not merely the child we
+  // launched: see RequestQuit().
   void Stop();
 
   // Panels refresh through this; the panel unregisters itself when destroyed.
@@ -103,6 +123,7 @@ class MayaraServer : public wxEvtHandler {
   Release m_latest;
   wxString m_installed_version;
   bool m_enabled = false;
+  LocalOptions m_opts;
   long m_pid = 0;
   long m_dl_handle = 0;
   wxString m_json_path;   // temp file the release JSON lands in
