@@ -23,6 +23,7 @@
 // Forward declarations keep implementation types out of this header.
 class MayaraPpiWindow;
 class MayaraClient;
+class MayaraServer;
 class wxAuiManager;
 
 class mayara_pi : public opencpn_plugin_121 {
@@ -80,6 +81,15 @@ class mayara_pi : public opencpn_plugin_121 {
   void SyncRadarFullScreen(bool on);
   void ShowSettings(wxWindow* parent);
   void ShowSearchDialog();  // "looking for a server" + manual entry
+  // "the server won't let us control the radar" + the access-request flow.
+  void ShowAccessDialog();
+  void UpdateAccessDialog();  // live status while approval is pending
+  // Persist a token or pending request the client has just obtained.
+  void SyncAccessConfig();
+  // Point the client at the mayara-server we run ourselves, or clear it.
+  void SyncLocalServerUrl();
+  // Ask, once per release, whether to install a newer local mayara-server.
+  void MaybeOfferServerUpdate();
   void LoadConfig();
   void SaveConfig();
   void SaveWindowState();          // visibility + geometry of the PPI windows
@@ -104,6 +114,8 @@ class mayara_pi : public opencpn_plugin_121 {
   bool m_windows_visible = false;  // user's show/hide intent for the windows
   int m_windows_radar_count = -1;  // radar count the windows were built for
   std::unique_ptr<MayaraClient> m_client;
+  std::unique_ptr<MayaraServer> m_server;  // optional local mayara-server
+  std::string m_update_declined;  // release tag the user said "later" to
   PI_ColorScheme m_color_scheme = PI_GLOBAL_COLOR_SCHEME_DAY;
   float m_radar_intensity = 1.0f;
   bool m_overlay_enabled = true;
@@ -125,6 +137,17 @@ class mayara_pi : public opencpn_plugin_121 {
   std::string m_saved_server_url;    // last-known-good server, persisted
   std::string m_explicit_server_url; // user-set server (Settings); wins, persisted
   wxDialog* m_search_dialog = nullptr;  // "looking for a server" dialog
+  // Signal K device access, persisted so an approval survives a restart.
+  std::string m_client_id;       // our device identity towards Signal K
+  std::string m_sk_token;        // token issued after approval
+  std::string m_sk_token_server;  // the server that issued it
+  std::string m_sk_pending_href;   // request awaiting approval
+  std::string m_sk_pending_server;
+  wxDialog* m_access_dialog = nullptr;
+  wxStaticText* m_access_status = nullptr;
+  wxButton* m_access_button = nullptr;
+  bool m_access_dismissed = false;
+  wxString m_access_last_line;  // avoids re-laying out the dialog every tick
   int m_no_radar_ticks = 0;          // heartbeat ticks with no radar
   bool m_search_dismissed = false;   // user closed the search dialog
 

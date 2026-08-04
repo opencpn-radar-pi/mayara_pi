@@ -59,9 +59,47 @@ class MayaraClient {
   // tried in preference to discovery. Thread-safe; takes effect on the next
   // discovery attempt.
   void SetServerUrl(std::string url);
+  // A mayara-server this plugin runs itself, on loopback. Tried only after a
+  // configured, remembered or discovered server has failed, so downloading a
+  // local copy never takes a working boat server away. Empty clears it.
+  void SetLocalUrl(std::string url);
   // The base URL currently streaming (empty until connected), for persisting.
   std::string ConnectedUrl();
   bool Connected();  // at least one radar is streaming
+
+  // --- Signal K access -----------------------------------------------------
+  // A Signal K server with security enabled answers 401 to every control write
+  // until the plugin holds a device token. Signal K issues one through its
+  // access-request flow: POST a request, then someone approves it in the
+  // server's admin UI (Security -> Access Requests) and the reply carries the
+  // token. Reads are unaffected, which is why radar data arrives either way.
+  enum class AuthState {
+    kUnknown,      // no control write attempted yet
+    kNotNeeded,    // writes are accepted without a token
+    kNeeded,       // a write was refused and we hold no usable token
+    kRequesting,   // posting the access request
+    kPending,      // waiting for approval in the Signal K admin UI
+    kApproved,     // token in hand
+    kDenied,       // approval refused
+    kUnavailable   // this server does not take device access requests
+  };
+  // The device identity we ask under. Set before Start(); the plugin persists
+  // it so an approval survives a restart.
+  void SetClientId(std::string id);
+  // A token obtained earlier and the server that issued it. The token is only
+  // sent while connected to that same server (it is signed by it).
+  void SetAuthToken(std::string server, std::string token);
+  std::string AuthToken();        // non-empty once approved, for persisting
+  std::string AuthTokenServer();
+  AuthState Auth();
+  std::string AuthMessage();      // human-readable detail for the dialog
+  void RequestAccess();           // start the access-request flow
+  // Resume polling a request posted in an earlier session, so approval does
+  // not have to happen within one run of OpenCPN.
+  void ResumeAccessRequest(std::string server, std::string href);
+  // The request currently awaiting approval, for persisting ("" if none).
+  std::string PendingHref();
+  std::string PendingServer();
 
   std::string StatusLine();
   // Radar API version handshake. ServerApiVersion is empty until GET /radars is
@@ -113,6 +151,14 @@ class MayaraClient {
   bool ConnectSpokes(Radar* radar);  // true if it opens
   void ConnectControlStream();
   void SetStatus(const std::string& s);
+  // The bearer token to send to `base`, or empty when we hold none for it.
+  std::string TokenFor(const std::string& base);
+  void SetAuth(AuthState s, std::string message);
+  // Fold a control write's HTTP status into the auth state: 401/403 is the
+  // server telling us we need a token.
+  void NoteWriteStatus(int status_code, const std::string& base);
+  void PollAccessRequest(std::string base, std::string href);
+  void RunAccessRequest();  // background: post the request, then poll
 
   std::string m_explicit;
   std::string m_fallback;
@@ -124,8 +170,20 @@ class MayaraClient {
   std::string m_status{"not connected"};
   std::string m_server_api_version;  // from GET /radars `version`, if present
   std::string m_manual;              // user-entered server URL (guarded)
+  std::string m_local;               // our own local server, if any (guarded)
   std::string m_connected_url;       // base URL that connected (guarded)
   std::string m_remembered;          // last-known-good URL (set before Start)
+
+  // Signal K device access. Strings guarded by m_status_mutex.
+  std::string m_client_id;
+  std::string m_token;
+  std::string m_token_server;
+  std::string m_pending_href;
+  std::string m_pending_server;
+  std::string m_auth_message;
+  std::atomic<AuthState> m_auth{AuthState::kUnknown};
+  std::atomic<bool> m_auth_busy{false};
+  std::thread m_auth_thread;
 
   std::mutex m_radars_mutex;  // guards m_radars membership (stable once up)
   std::vector<std::unique_ptr<Radar>> m_radars;

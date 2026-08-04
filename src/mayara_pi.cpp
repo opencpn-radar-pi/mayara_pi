@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <random>
 
 #include <wx/aui/framemanager.h>
 #include <wx/bmpbndl.h>
@@ -31,6 +32,7 @@
 #endif
 
 #include "MayaraClient.h"
+#include "MayaraServer.h"
 #include "MayaraTheme.h"
 #include "PpiWindow.h"
 
@@ -146,17 +148,37 @@ int mayara_pi::Init() {
     m_mi_ppi = AddCanvasContextMenuItem(m_mi_ppi_item, this);
   }
 
+  // Optional mayara-server of our own: start it before the client so it is
+  // already listening on loopback by the time discovery runs.
+  m_server = std::make_unique<MayaraServer>(this);
+  m_server->LoadConfig();
+  if (m_server->Enabled()) m_server->Start();
+  m_server->CheckLatest();  // silent when github.com is unreachable
+
   m_client = std::make_unique<MayaraClient>(MayaraExplicitUrl(),
                                             kMayaraServerFallback);
   if (!m_saved_server_url.empty())
     m_client->SetRememberedUrl(m_saved_server_url);  // fast reconnect
   if (!m_explicit_server_url.empty())
     m_client->SetServerUrl(m_explicit_server_url);   // Settings override wins
+  SyncLocalServerUrl();
+  m_client->SetClientId(m_client_id);
+  if (!m_sk_token.empty())
+    m_client->SetAuthToken(m_sk_token_server, m_sk_token);
   m_client->Start();
+  // An access request posted in an earlier session may still be waiting for
+  // someone to approve it; pick it up where we left off.
+  if (!m_sk_pending_href.empty())
+    m_client->ResumeAccessRequest(m_sk_pending_server, m_sk_pending_href);
 
   // 1 Hz heartbeat: re-open windows persisted as shown once radars appear, and
   // keep a live geometry snapshot for saving (independent of a GPS fix).
   m_heartbeat = std::make_unique<CallbackTimer>([this]() {
+    if (m_server) {
+      m_server->Poll();  // weekly release check + notice a died-on-us server
+      MaybeOfferServerUpdate();
+    }
+    SyncAccessConfig();
     if (m_windows_visible && m_windows.empty() && m_client &&
         m_client->RadarCount() > 0) {
       RebuildWindows();
@@ -210,6 +232,12 @@ bool mayara_pi::DeInit() {
     m_search_dialog->Destroy();
     m_search_dialog = nullptr;
   }
+  if (m_access_dialog) {
+    m_access_status = nullptr;
+    m_access_button = nullptr;
+    m_access_dialog->Destroy();
+    m_access_dialog = nullptr;
+  }
   SaveWindowState();  // remember visibility + positions before tearing down
   DestroyWindows(/*sync=*/true);
   if (m_tool_id != -1) {
@@ -223,6 +251,7 @@ bool mayara_pi::DeInit() {
     m_client->Stop();
     m_client.reset();
   }
+  m_server.reset();  // stops the local mayara-server if we started one
   // Drain any pending (possibly cross-thread) log records now, while this
   // plugin's dylib -- and the string literals its log records point at -- is
   // still mapped. Otherwise OpenCPN flushes them on a later idle tick after
@@ -285,6 +314,35 @@ void mayara_pi::LoadConfig() {
   wxString xurl;
   cfg->Read("ExplicitServerUrl", &xurl);
   m_explicit_server_url = std::string(xurl.mb_str());
+  wxString declined;
+  cfg->Read("LocalServerUpdateDeclined", &declined);
+  m_update_declined = std::string(declined.mb_str());
+  // Signal K device access.
+  wxString s;
+  cfg->Read("SignalKClientId", &s);
+  m_client_id = std::string(s.mb_str());
+  if (m_client_id.empty()) {
+    // A stable identity for this OpenCPN installation, so an approval given
+    // once in the Signal K admin UI keeps working.
+    std::random_device rd;
+    wxString id = "mayara-pi-";
+    for (int i = 0; i < 4; ++i) id += wxString::Format("%08x", rd());
+    m_client_id = std::string(id.mb_str());
+    cfg->Write("SignalKClientId", id);
+    cfg->Flush();
+  }
+  s.Clear();
+  cfg->Read("SignalKToken", &s);
+  m_sk_token = std::string(s.mb_str());
+  s.Clear();
+  cfg->Read("SignalKTokenServer", &s);
+  m_sk_token_server = std::string(s.mb_str());
+  s.Clear();
+  cfg->Read("SignalKPendingHref", &s);
+  m_sk_pending_href = std::string(s.mb_str());
+  s.Clear();
+  cfg->Read("SignalKPendingServer", &s);
+  m_sk_pending_server = std::string(s.mb_str());
 }
 
 int mayara_pi::OrientationFor(const std::string& radar_id) const {
@@ -400,15 +458,186 @@ void mayara_pi::SaveConfig() {
   cfg->Write("ServerUrl", wxString::FromUTF8(m_saved_server_url.c_str()));
   cfg->Write("ExplicitServerUrl",
              wxString::FromUTF8(m_explicit_server_url.c_str()));
+  cfg->Write("LocalServerUpdateDeclined",
+             wxString::FromUTF8(m_update_declined.c_str()));
   cfg->Flush();
 }
 
-// Shown when no radar is found (first boot or after ~10 s): explain the search
-// and let the user point us at a Signal K (:3000) or Mayara (:6502) server.
+// Keep the persisted Signal K access state in step with the client, and raise
+// the approval dialog the first time a control write is refused.
+void mayara_pi::SyncAccessConfig() {
+  if (!m_client) return;
+  bool dirty = false;
+  const std::string token = m_client->AuthToken();
+  if (token != m_sk_token) {
+    m_sk_token = token;
+    m_sk_token_server = m_client->AuthTokenServer();
+    dirty = true;
+  }
+  const std::string href = m_client->PendingHref();
+  if (href != m_sk_pending_href) {
+    m_sk_pending_href = href;
+    m_sk_pending_server = m_client->PendingServer();
+    dirty = true;
+  }
+  if (dirty) {
+    wxFileConfig* cfg = GetOCPNConfigObject();
+    if (cfg) {
+      cfg->SetPath(kConfigGroup);
+      cfg->Write("SignalKToken", wxString::FromUTF8(m_sk_token.c_str()));
+      cfg->Write("SignalKTokenServer",
+                 wxString::FromUTF8(m_sk_token_server.c_str()));
+      cfg->Write("SignalKPendingHref",
+                 wxString::FromUTF8(m_sk_pending_href.c_str()));
+      cfg->Write("SignalKPendingServer",
+                 wxString::FromUTF8(m_sk_pending_server.c_str()));
+      cfg->Flush();
+    }
+  }
+
+  const MayaraClient::AuthState state = m_client->Auth();
+  // The radar silently ignoring the transmit button is the worst outcome, so
+  // explain it as soon as the server refuses a write.
+  if (!m_access_dialog && !m_access_dismissed &&
+      (state == MayaraClient::AuthState::kNeeded ||
+       state == MayaraClient::AuthState::kPending))
+    ShowAccessDialog();
+  UpdateAccessDialog();
+}
+
+// Shown when the Signal K server refuses radar control: explains the approval
+// step and drives Signal K's access-request flow.
+void mayara_pi::ShowAccessDialog() {
+  if (m_access_dialog) return;
+  auto* dlg = new wxDialog(m_parent_window, wxID_ANY,
+                           _("Mayara — permission needed"), wxDefaultPosition,
+                           wxDefaultSize, wxDEFAULT_DIALOG_STYLE);
+  m_access_dialog = dlg;
+  auto* top = new wxBoxSizer(wxVERTICAL);
+  auto* intro = new wxStaticText(
+      dlg, wxID_ANY,
+      _("Your Signal K server allows this plugin to read radar data, but not "
+        "to control the radar, so buttons like Transmit do nothing.\n\n"
+        "Ask the server for permission below, then approve the request in the "
+        "Signal K web interface under Security → Access Requests. The "
+        "permission is remembered, so this is only needed once."));
+  intro->Wrap(420);
+  top->Add(intro, 0, wxALL, 12);
+
+  m_access_status = new wxStaticText(dlg, wxID_ANY, wxEmptyString);
+  top->Add(m_access_status, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12);
+
+  auto* btns = new wxBoxSizer(wxHORIZONTAL);
+  m_access_button = new wxButton(dlg, wxID_ANY, _("Ask for permission"));
+  auto* later = new wxButton(dlg, wxID_ANY, _("Not now"));
+  btns->AddStretchSpacer();
+  btns->Add(later, 0, wxRIGHT, 8);
+  btns->Add(m_access_button, 0);
+  top->Add(btns, 0, wxEXPAND | wxALL, 12);
+  dlg->SetSizerAndFit(top);
+
+  m_access_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+    if (m_client) m_client->RequestAccess();
+    UpdateAccessDialog();
+  });
+  auto close = [this](wxEvent&) {
+    m_access_dismissed = true;
+    m_access_status = nullptr;
+    m_access_button = nullptr;
+    if (m_access_dialog) {
+      m_access_dialog->Destroy();
+      m_access_dialog = nullptr;
+    }
+  };
+  later->Bind(wxEVT_BUTTON, close);
+  dlg->Bind(wxEVT_CLOSE_WINDOW, close);
+  UpdateAccessDialog();
+  dlg->Show();
+}
+
+void mayara_pi::UpdateAccessDialog() {
+  if (!m_access_dialog || !m_client || !m_access_status) return;
+  const MayaraClient::AuthState state = m_client->Auth();
+  const wxString detail = wxString::FromUTF8(m_client->AuthMessage().c_str());
+  wxString line;
+  bool can_ask = true;
+  switch (state) {
+    case MayaraClient::AuthState::kRequesting:
+      line = _("Asking the server…");
+      can_ask = false;
+      break;
+    case MayaraClient::AuthState::kPending:
+      line = _("Waiting — approve \"Mayara radar plugin for OpenCPN\" in "
+               "Signal K under Security → Access Requests.");
+      can_ask = false;
+      break;
+    case MayaraClient::AuthState::kApproved:
+      line = _("Approved. Radar control works now.");
+      can_ask = false;
+      break;
+    case MayaraClient::AuthState::kDenied:
+      line = _("The request was refused. You can ask again.");
+      break;
+    case MayaraClient::AuthState::kUnavailable:
+      line = _("This server does not hand out permissions this way; it has to "
+               "be granted in its own configuration.");
+      can_ask = false;
+      break;
+    default:
+      line = _("No permission yet.");
+      break;
+  }
+  if (!detail.IsEmpty()) line += "\n(" + detail + ")";
+  if (line == m_access_last_line) return;  // called once a second; don't churn
+  m_access_last_line = line;
+  m_access_status->SetLabel(line);
+  m_access_status->Wrap(420);
+  if (m_access_button) m_access_button->Enable(can_ask);
+  m_access_dialog->Layout();
+  m_access_dialog->Fit();
+  // Approval is the end of the story; let the user get on with it.
+  if (state == MayaraClient::AuthState::kApproved) m_access_dismissed = true;
+}
+
+// The client tries our own server ahead of mDNS, but only while we actually
+// have one; otherwise it must fall back to the network as before.
+void mayara_pi::SyncLocalServerUrl() {
+  if (!m_client) return;
+  const bool use_local = m_server && m_server->Enabled() &&
+                         m_server->Installed();
+  m_client->SetLocalUrl(use_local ? MayaraServer::LocalUrl() : std::string());
+}
+
+// A newer mayara-server than the one we installed: ask once per release, then
+// leave it to the Settings dialog. Never asked when offline (there is no
+// release to compare against) and never while a dialog is already up.
+void mayara_pi::MaybeOfferServerUpdate() {
+  if (!m_server || !m_server->UpdateAvailable()) return;
+  const std::string tag = m_server->Latest().tag;
+  if (tag.empty() || tag == m_update_declined) return;
+  m_update_declined = tag;  // asked; don't ask again for this release
+  SaveConfig();
+  const wxString msg = wxString::Format(
+      _("A newer mayara-server is available.\n\n"
+        "Installed: %s\nAvailable: %s\n\nDownload and install it now?"),
+      m_server->InstalledVersion(), wxString::FromUTF8(tag.c_str()));
+  if (wxMessageBox(msg, _("Mayara"), wxYES_NO | wxICON_QUESTION,
+                   m_parent_window) != wxYES)
+    return;
+  wxString error;
+  if (!m_server->DownloadAndInstall(m_parent_window, &error) &&
+      !error.IsEmpty())
+    wxMessageBox(error, _("Mayara"), wxOK | wxICON_WARNING, m_parent_window);
+  SyncLocalServerUrl();
+}
+
+// Shown when no radar is found (first boot or after ~10 s): explain the search,
+// let the user point us at a Signal K (:3000) or Mayara (:6502) server, and --
+// when github.com is reachable and publishes a binary for this platform --
+// offer to run a mayara-server here instead.
 void mayara_pi::ShowSearchDialog() {
   if (m_search_dialog) return;
-  auto* dlg = new wxDialog(m_parent_window, wxID_ANY,
-                           _("Mayara Radar — no radar found yet"),
+  auto* dlg = new wxDialog(m_parent_window, wxID_ANY, _("Looking for Mayara"),
                            wxDefaultPosition, wxDefaultSize,
                            wxDEFAULT_DIALOG_STYLE);
   m_search_dialog = dlg;
@@ -438,6 +667,17 @@ void mayara_pi::ShowSearchDialog() {
 
   auto* status = new wxStaticText(dlg, wxID_ANY, _("Still searching…"));
   top->Add(status, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12);
+
+  // The local-server offer, with the "prefer Signal K" advice above the button
+  // so there is no need for a second "are you sure?" dialog.
+  auto* local = new MayaraServerPanel(dlg, m_server.get(), [this]() {
+    if (m_search_dialog) {
+      m_search_dialog->Layout();
+      m_search_dialog->Fit();
+    }
+    SyncLocalServerUrl();
+  });
+  top->Add(local, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
 
   auto* btns = new wxBoxSizer(wxHORIZONTAL);
   auto* connect = new wxButton(dlg, wxID_ANY, _("Connect"));
@@ -525,6 +765,14 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
         "server. A server set here overrides discovery."));
   shint->Wrap(360);
   top->Add(shint, 0, wxALL, 10);
+
+  // Same local-server box as the search dialog: install, update, run/stop.
+  auto* local = new MayaraServerPanel(&dlg, m_server.get(), [this, &dlg]() {
+    dlg.Layout();
+    dlg.Fit();
+    SyncLocalServerUrl();
+  });
+  top->Add(local, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
 
   top->Add(dlg.CreateButtonSizer(wxOK | wxCANCEL), 0,
            wxALIGN_RIGHT | wxALL, 10);

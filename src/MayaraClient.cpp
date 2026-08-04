@@ -134,6 +134,7 @@ void MayaraClient::Stop() {
   }
   if (m_control_ws) m_control_ws->stop();
   if (m_thread.joinable()) m_thread.join();
+  if (m_auth_thread.joinable()) m_auth_thread.join();
   {
     std::lock_guard<std::mutex> lock(m_radars_mutex);
     m_radars.clear();
@@ -272,19 +273,248 @@ void MayaraClient::SetServerUrl(std::string url) {
   m_manual = std::move(url);
 }
 
+void MayaraClient::SetLocalUrl(std::string url) {
+  StripTrailingSlash(url);
+  std::lock_guard<std::mutex> lock(m_status_mutex);
+  m_local = std::move(url);
+}
+
 std::string MayaraClient::ConnectedUrl() {
   std::lock_guard<std::mutex> lock(m_status_mutex);
   return m_connected_url;
+}
+
+// --- Signal K device access ------------------------------------------------
+
+void MayaraClient::SetClientId(std::string id) {
+  std::lock_guard<std::mutex> lock(m_status_mutex);
+  m_client_id = std::move(id);
+}
+
+void MayaraClient::SetAuthToken(std::string server, std::string token) {
+  StripTrailingSlash(server);
+  std::lock_guard<std::mutex> lock(m_status_mutex);
+  m_token_server = std::move(server);
+  m_token = std::move(token);
+  if (!m_token.empty()) m_auth = AuthState::kApproved;
+}
+
+std::string MayaraClient::AuthToken() {
+  std::lock_guard<std::mutex> lock(m_status_mutex);
+  return m_token;
+}
+
+std::string MayaraClient::AuthTokenServer() {
+  std::lock_guard<std::mutex> lock(m_status_mutex);
+  return m_token_server;
+}
+
+MayaraClient::AuthState MayaraClient::Auth() { return m_auth; }
+
+std::string MayaraClient::AuthMessage() {
+  std::lock_guard<std::mutex> lock(m_status_mutex);
+  return m_auth_message;
+}
+
+std::string MayaraClient::PendingHref() {
+  std::lock_guard<std::mutex> lock(m_status_mutex);
+  return m_pending_href;
+}
+
+std::string MayaraClient::PendingServer() {
+  std::lock_guard<std::mutex> lock(m_status_mutex);
+  return m_pending_server;
+}
+
+void MayaraClient::SetAuth(AuthState s, std::string message) {
+  m_auth = s;
+  std::lock_guard<std::mutex> lock(m_status_mutex);
+  m_auth_message = std::move(message);
+}
+
+// The token is signed by one specific server, so it is only offered back to
+// that server; against any other it would just be rejected.
+std::string MayaraClient::TokenFor(const std::string& base) {
+  std::lock_guard<std::mutex> lock(m_status_mutex);
+  if (m_token.empty()) return std::string();
+  if (!m_token_server.empty() && m_token_server != base) return std::string();
+  return m_token;
+}
+
+void MayaraClient::NoteWriteStatus(int status_code, const std::string& base) {
+  if (status_code == 401 || status_code == 403) {
+    SetAuth(AuthState::kNeeded,
+            TokenFor(base).empty()
+                ? "the server refuses radar control without permission"
+                : "the server rejected our token");
+  } else if (status_code >= 200 && status_code < 300) {
+    // Only clear an unproven state: an approved token stays approved.
+    if (m_auth == AuthState::kUnknown || m_auth == AuthState::kNeeded)
+      SetAuth(AuthState::kNotNeeded, std::string());
+  }
+}
+
+void MayaraClient::RequestAccess() {
+  if (m_auth_busy.exchange(true)) return;  // one flow at a time
+  if (m_auth_thread.joinable()) m_auth_thread.join();
+  m_auth_thread = std::thread([this] {
+    RunAccessRequest();
+    m_auth_busy = false;
+  });
+}
+
+void MayaraClient::ResumeAccessRequest(std::string server, std::string href) {
+  StripTrailingSlash(server);
+  if (server.empty() || href.empty()) return;
+  if (m_auth_busy.exchange(true)) return;
+  if (m_auth_thread.joinable()) m_auth_thread.join();
+  {
+    std::lock_guard<std::mutex> lock(m_status_mutex);
+    m_pending_server = server;
+    m_pending_href = href;
+  }
+  SetAuth(AuthState::kPending, "waiting for approval on " + server);
+  m_auth_thread = std::thread([this, server, href] {
+    PollAccessRequest(server, href);
+    m_auth_busy = false;
+  });
+}
+
+void MayaraClient::RunAccessRequest() {
+  std::string base, client_id;
+  {
+    std::lock_guard<std::mutex> lock(m_status_mutex);
+    base = m_connected_url.empty() ? m_base_url : m_connected_url;
+    client_id = m_client_id;
+  }
+  if (base.empty() || client_id.empty()) {
+    SetAuth(AuthState::kNeeded, "not connected to a server yet");
+    return;
+  }
+  SetAuth(AuthState::kRequesting, "asking " + base + " for permission…");
+
+  json body = {{"clientId", client_id},
+               {"description", "Mayara radar plugin for OpenCPN"},
+               {"permissions", "readwrite"}};
+  ix::HttpClient http(/*async=*/false);
+  auto args = http.createRequest();
+  args->connectTimeout = 5;
+  args->transferTimeout = 10;
+  args->extraHeaders["Content-Type"] = "application/json";
+  auto resp = http.post(base + "/signalk/v1/access/requests", body.dump(),
+                        args);
+  if (!resp || resp->statusCode == 0) {
+    SetAuth(AuthState::kNeeded, "no answer from " + base);
+    return;
+  }
+  if (resp->statusCode == 404) {
+    SetAuth(AuthState::kUnavailable,
+            "this server does not offer access requests; its security may be "
+            "configured some other way");
+    return;
+  }
+
+  std::string href, message;
+  int state_code = resp->statusCode;
+  bool pending = false;
+  try {
+    auto j = json::parse(resp->body);
+    href = j.value("href", std::string());
+    message = j.value("message", std::string());
+    pending = j.value("state", std::string()) == "PENDING";
+    state_code = j.value("statusCode", resp->statusCode);
+  } catch (const std::exception&) {
+    // Some errors come back as plain text; the status code still tells us.
+  }
+
+  if (!pending || href.empty()) {
+    if (state_code == 403)
+      SetAuth(AuthState::kUnavailable,
+              "this server does not allow device access requests" +
+                  (message.empty() ? std::string() : " (" + message + ")"));
+    else
+      SetAuth(AuthState::kNeeded,
+              message.empty() ? "the server refused the request" : message);
+    return;
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(m_status_mutex);
+    m_pending_server = base;
+    m_pending_href = href;
+  }
+  SetAuth(AuthState::kPending, "waiting for approval on " + base);
+  PollAccessRequest(base, href);
+}
+
+// Poll until someone approves or denies in the Signal K admin UI. Approval can
+// take a while -- the person doing it may be walking to another device -- so
+// this waits a long time, and the href is persisted for the next session.
+void MayaraClient::PollAccessRequest(std::string base, std::string href) {
+  const int kPollSeconds = 3;
+  const int kGiveUpSeconds = 3600;
+  for (int waited = 0; waited < kGiveUpSeconds && !m_stop;
+       waited += kPollSeconds) {
+    for (int i = 0; i < kPollSeconds * 10 && !m_stop; ++i)
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    if (m_stop) return;
+
+    ix::HttpClient http(/*async=*/false);
+    auto args = http.createRequest();
+    args->connectTimeout = 5;
+    args->transferTimeout = 10;
+    auto resp = http.get(base + href, args);
+    if (!resp || resp->statusCode != 200) continue;  // transient; keep waiting
+
+    std::string permission, token, message;
+    bool completed = false;
+    try {
+      auto j = json::parse(resp->body);
+      completed = j.value("state", std::string()) == "COMPLETED";
+      message = j.value("message", std::string());
+      if (j.contains("accessRequest") && j["accessRequest"].is_object()) {
+        permission = j["accessRequest"].value("permission", std::string());
+        token = j["accessRequest"].value("token", std::string());
+      }
+    } catch (const std::exception&) {
+      continue;
+    }
+    if (!completed) continue;
+
+    {
+      std::lock_guard<std::mutex> lock(m_status_mutex);
+      m_pending_href.clear();
+      m_pending_server.clear();
+    }
+    if (permission == "APPROVED" && !token.empty()) {
+      {
+        std::lock_guard<std::mutex> lock(m_status_mutex);
+        m_token = token;
+        m_token_server = base;
+      }
+      SetAuth(AuthState::kApproved, "approved by " + base);
+    } else if (permission == "DENIED") {
+      SetAuth(AuthState::kDenied, "the request was refused");
+    } else {
+      SetAuth(AuthState::kNeeded,
+              message.empty() ? "the request ended without a token" : message);
+    }
+    return;
+  }
+  if (!m_stop)
+    SetAuth(AuthState::kPending,
+            "still waiting for approval; it will be picked up again next time");
 }
 
 bool MayaraClient::Connected() { return RadarCount() > 0; }
 
 void MayaraClient::Run() {
   while (!m_stop) {
-    std::string manual;
+    std::string manual, local;
     {
       std::lock_guard<std::mutex> lock(m_status_mutex);
       manual = m_manual;
+      local = m_local;
     }
     std::vector<std::string> candidates;
     if (!manual.empty()) {
@@ -297,6 +527,9 @@ void MayaraClient::Run() {
       SetStatus("searching for a Signal K server with mayara…");
       std::string found = MayaraDiscovery::FindSignalK(2000);
       if (!found.empty() && found != m_remembered) candidates.push_back(found);
+      // A server we run ourselves is a fallback, not an override: someone with
+      // a boat server should keep using it even after downloading a local copy.
+      if (!local.empty()) candidates.push_back(local);
       if (!m_fallback.empty() && m_fallback != m_remembered)
         candidates.push_back(m_fallback);
     }
@@ -320,6 +553,10 @@ bool MayaraClient::DiscoverAndConnect() {
   auto args = http.createRequest();
   args->connectTimeout = 5;
   args->transferTimeout = 5;
+  {  // Reads are usually public, but a locked-down server wants the token too.
+    const std::string tok = TokenFor(m_base_url);
+    if (!tok.empty()) args->extraHeaders["Authorization"] = "Bearer " + tok;
+  }
 
   const std::string url = m_base_url + "/signalk/v2/api/vessels/self/radars";
   auto resp = http.get(url, args);
@@ -399,6 +636,10 @@ bool MayaraClient::FetchCapabilities(Radar* radar) {
   auto args = http.createRequest();
   args->connectTimeout = 5;
   args->transferTimeout = 5;
+  {  // Reads are usually public, but a locked-down server wants the token too.
+    const std::string tok = TokenFor(m_base_url);
+    if (!tok.empty()) args->extraHeaders["Authorization"] = "Bearer " + tok;
+  }
   const std::string url = m_base_url +
                           "/signalk/v2/api/vessels/self/radars/" + radar->id +
                           "/capabilities";
@@ -475,6 +716,10 @@ void MayaraClient::FetchControlValues(Radar* radar) {
   auto args = http.createRequest();
   args->connectTimeout = 5;
   args->transferTimeout = 5;
+  {  // Reads are usually public, but a locked-down server wants the token too.
+    const std::string tok = TokenFor(m_base_url);
+    if (!tok.empty()) args->extraHeaders["Authorization"] = "Bearer " + tok;
+  }
   const std::string url = m_base_url +
                           "/signalk/v2/api/vessels/self/radars/" + radar->id +
                           "/controls";
@@ -677,15 +922,20 @@ void MayaraClient::SetControlAt(int index, const std::string& control_id,
     radar_id = m_radars[index]->id;
   }
   const std::string base = m_base_url;
-  std::thread([base, radar_id, control_id, json_body] {
+  const std::string token = TokenFor(base);
+  std::thread([this, base, token, radar_id, control_id, json_body] {
     ix::HttpClient http(/*async=*/false);
     auto args = http.createRequest();
     args->connectTimeout = 5;
     args->transferTimeout = 5;
     args->extraHeaders["Content-Type"] = "application/json";
+    if (!token.empty()) args->extraHeaders["Authorization"] = "Bearer " + token;
     const std::string url = base + "/signalk/v2/api/vessels/self/radars/" +
                             radar_id + "/controls/" + control_id;
-    http.put(url, json_body, args);
+    auto resp = http.put(url, json_body, args);
+    // A refused control is otherwise invisible: the radar simply ignores the
+    // click. Fold the status in so the UI can explain and ask for permission.
+    if (resp) NoteWriteStatus(resp->statusCode, base);
   }).detach();
 }
 
@@ -703,15 +953,18 @@ void MayaraClient::AcquireTargetAt(int index, double bearing_deg,
   json body = {{"bearing", bearing_rad}, {"distance", distance_m}};
   const std::string json_body = body.dump();
   const std::string base = m_base_url;
-  std::thread([base, radar_id, json_body] {
+  const std::string token = TokenFor(base);
+  std::thread([this, base, token, radar_id, json_body] {
     ix::HttpClient http(/*async=*/false);
     auto args = http.createRequest();
     args->connectTimeout = 5;
     args->transferTimeout = 5;
     args->extraHeaders["Content-Type"] = "application/json";
+    if (!token.empty()) args->extraHeaders["Authorization"] = "Bearer " + token;
     const std::string url = base + "/signalk/v2/api/vessels/self/radars/" +
                             radar_id + "/targets";
-    http.post(url, json_body, args);
+    auto resp = http.post(url, json_body, args);
+    if (resp) NoteWriteStatus(resp->statusCode, base);
   }).detach();
 }
 
@@ -724,13 +977,17 @@ void MayaraClient::CancelTargetAt(int index, uint64_t target_id) {
   }
   const std::string base = m_base_url;
   const std::string tid = std::to_string(target_id);
-  std::thread([base, radar_id, tid] {
+  const std::string token = TokenFor(base);
+  std::thread([this, base, token, radar_id, tid] {
     ix::HttpClient http(/*async=*/false);
     auto args = http.createRequest();
     args->connectTimeout = 5;
     args->transferTimeout = 5;
+    if (!token.empty()) args->extraHeaders["Authorization"] = "Bearer " + token;
     const std::string url = base + "/signalk/v2/api/vessels/self/radars/" +
                             radar_id + "/targets/" + tid;
-    http.request(url, ix::HttpClient::kDelete, std::string(), args);
+    auto resp =
+        http.request(url, ix::HttpClient::kDelete, std::string(), args);
+    if (resp) NoteWriteStatus(resp->statusCode, base);
   }).detach();
 }
