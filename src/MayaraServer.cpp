@@ -161,6 +161,11 @@ void MayaraServer::LoadConfig() {
   cfg->SetPath(kConfigGroup);
   cfg->Read("LocalServerEnabled", &m_enabled, false);
   cfg->Read("LocalServerVersion", &m_installed_version);
+  cfg->Read("LocalServerEmulator", &m_opts.emulator, false);
+  cfg->Read("LocalServerAllowWifi", &m_opts.allow_wifi, false);
+  wxString brand;
+  cfg->Read("LocalServerBrand", &brand);
+  m_opts.brand = std::string(brand.mb_str());
   long last = 0;
   cfg->Read("LocalServerLastCheck", &last, 0);
   m_last_check = static_cast<time_t>(last);
@@ -174,6 +179,10 @@ void MayaraServer::SaveConfig() {
   cfg->SetPath(kConfigGroup);
   cfg->Write("LocalServerEnabled", m_enabled);
   cfg->Write("LocalServerVersion", m_installed_version);
+  cfg->Write("LocalServerEmulator", m_opts.emulator);
+  cfg->Write("LocalServerAllowWifi", m_opts.allow_wifi);
+  cfg->Write("LocalServerBrand",
+             wxString::FromUTF8(m_opts.brand.c_str()));
   cfg->Write("LocalServerLastCheck", static_cast<long>(m_last_check));
   cfg->Flush();
 }
@@ -381,11 +390,16 @@ bool MayaraServer::Start() {
   // No wxProcess callback object on purpose: that would be a vtable in this
   // plugin's shared library which OpenCPN's event loop could call into after we
   // are unloaded. Liveness is polled with wxProcess::Exists() instead.
-  //
-  // --allow-wifi: mayara-server skips WiFi interfaces by default, which is
-  // right on a wired boat server but finds nothing at all on the laptop this
-  // option exists for.
-  const wxString cmd = "\"" + BinaryPath() + "\" --allow-wifi";
+  wxString cmd = "\"" + BinaryPath() + "\"";
+  // mayara-server skips WiFi interfaces unless asked: right on a wired boat
+  // server, wrong on the laptop this whole option exists for -- hence the
+  // checkbox rather than a fixed choice either way.
+  if (m_opts.allow_wifi) cmd += " --allow-wifi";
+  if (m_opts.emulator) {
+    cmd += " --emulator";  // a fake radar; --brand would contradict it
+  } else if (!m_opts.brand.empty()) {
+    cmd += " --brand " + wxString::FromUTF8(m_opts.brand.c_str());
+  }
   const long pid = wxExecute(cmd, wxEXEC_ASYNC | wxEXEC_HIDE_CONSOLE);
   if (pid <= 0) return false;
   m_pid = pid;
@@ -402,6 +416,26 @@ void MayaraServer::Stop() {
     for (int i = 0; i < 20 && wxProcess::Exists(pid); ++i) wxMilliSleep(50);
     if (wxProcess::Exists(pid))
       wxKill(pid, wxSIGKILL, nullptr, wxKILL_CHILDREN);
+  }
+  Notify();
+}
+
+const std::vector<std::string>& MayaraServer::Brands() {
+  static const std::vector<std::string> kBrands = {
+      "navico", "furuno", "garmin", "koden", "raymarine"};
+  return kBrands;
+}
+
+void MayaraServer::SetOptions(const LocalOptions& o) {
+  if (o.emulator == m_opts.emulator && o.allow_wifi == m_opts.allow_wifi &&
+      o.brand == m_opts.brand)
+    return;
+  m_opts = o;
+  SaveConfig();
+  // These are command-line arguments, so they only take effect on a restart.
+  if (Running()) {
+    Stop();
+    Start();
   }
   Notify();
 }

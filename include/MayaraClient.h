@@ -63,6 +63,10 @@ class MayaraClient {
   // configured, remembered or discovered server has failed, so downloading a
   // local copy never takes a working boat server away. Empty clears it.
   void SetLocalUrl(std::string url);
+  // A Signal K server OpenCPN itself is configured to talk to. A guess, not a
+  // promise that mayara runs there, so it is tried after discovery -- but it
+  // works where mDNS does not (routed networks, mDNS blocked by the AP).
+  void SetHintUrl(std::string url);
   // The base URL currently streaming (empty until connected), for persisting.
   std::string ConnectedUrl();
   bool Connected();  // at least one radar is streaming
@@ -171,6 +175,7 @@ class MayaraClient {
   std::string m_server_api_version;  // from GET /radars `version`, if present
   std::string m_manual;              // user-entered server URL (guarded)
   std::string m_local;               // our own local server, if any (guarded)
+  std::string m_hint;                // OpenCPN's Signal K connection (guarded)
   std::string m_connected_url;       // base URL that connected (guarded)
   std::string m_remembered;          // last-known-good URL (set before Start)
 

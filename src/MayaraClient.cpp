@@ -279,6 +279,12 @@ void MayaraClient::SetLocalUrl(std::string url) {
   m_local = std::move(url);
 }
 
+void MayaraClient::SetHintUrl(std::string url) {
+  StripTrailingSlash(url);
+  std::lock_guard<std::mutex> lock(m_status_mutex);
+  m_hint = std::move(url);
+}
+
 std::string MayaraClient::ConnectedUrl() {
   std::lock_guard<std::mutex> lock(m_status_mutex);
   return m_connected_url;
@@ -510,11 +516,12 @@ bool MayaraClient::Connected() { return RadarCount() > 0; }
 
 void MayaraClient::Run() {
   while (!m_stop) {
-    std::string manual, local;
+    std::string manual, local, hint;
     {
       std::lock_guard<std::mutex> lock(m_status_mutex);
       manual = m_manual;
       local = m_local;
+      hint = m_hint;
     }
     std::vector<std::string> candidates;
     if (!manual.empty()) {
@@ -524,9 +531,14 @@ void MayaraClient::Run() {
     } else {
       // Try the last-known-good server first (fast reconnect), then discover.
       if (!m_remembered.empty()) candidates.push_back(m_remembered);
-      SetStatus("searching for a Signal K server with mayara…");
-      std::string found = MayaraDiscovery::FindSignalK(2000);
+      SetStatus("searching for a mayara or Signal K server…");
+      std::string found = MayaraDiscovery::FindServer(2000);
       if (!found.empty() && found != m_remembered) candidates.push_back(found);
+      // A Signal K server OpenCPN is already configured to talk to. Not proof
+      // that mayara runs there, but a better guess than nothing, and it works
+      // where mDNS does not (routed networks, mDNS blocked by the AP).
+      if (!hint.empty() && hint != m_remembered && hint != found)
+        candidates.push_back(hint);
       // A server we run ourselves is a fallback, not an override: someone with
       // a boat server should keep using it even after downloading a local copy.
       if (!local.empty()) candidates.push_back(local);

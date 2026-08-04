@@ -162,6 +162,7 @@ int mayara_pi::Init() {
   if (!m_explicit_server_url.empty())
     m_client->SetServerUrl(m_explicit_server_url);   // Settings override wins
   SyncLocalServerUrl();
+  m_client->SetHintUrl(OpenCpnSignalKUrl());
   m_client->SetClientId(m_client_id);
   if (!m_sk_token.empty())
     m_client->SetAuthToken(m_sk_token_server, m_sk_token);
@@ -620,6 +621,45 @@ void mayara_pi::SyncLocalServerUrl() {
   m_client->SetLocalUrl(use_local ? MayaraServer::LocalUrl() : std::string());
 }
 
+// The Signal K server OpenCPN is itself set up to talk to, if any. mayara is
+// commonly installed as a Signal K plugin on the same box, so an existing
+// connection is a good guess at where to find it -- and it works on networks
+// where mDNS does not.
+//
+// Read straight from OpenCPN's config: connections are a '|'-separated list of
+// ';'-separated ConnectionParams, and there is no plugin API for them. Only the
+// leading fields are needed, so extra trailing fields in future versions are
+// harmless. Field 23 is OpenCPN's own Signal K auth token; deliberately not
+// touched, since another component's credential is not ours to reuse.
+std::string mayara_pi::OpenCpnSignalKUrl() const {
+  wxFileConfig* cfg = GetOCPNConfigObject();
+  if (!cfg) return "";
+  cfg->SetPath("/Settings/NMEADataSource");
+  wxString all;
+  if (!cfg->Read("DataConnections", &all) || all.IsEmpty()) return "";
+
+  wxStringTokenizer conns(all, "|");
+  while (conns.HasMoreTokens()) {
+    const wxArrayString f = wxStringTokenize(conns.GetNextToken(), ";",
+                                             wxTOKEN_RET_EMPTY_ALL);
+    if (f.GetCount() < 18) continue;
+    const long type = wxAtoi(f[0]);      // ConnectionType: 1 = NETWORK
+    const long proto = wxAtoi(f[1]);     // NetworkProtocol: 3 = SIGNALK
+    const bool enabled = wxAtoi(f[17]) != 0;
+    if (type != 1 || proto != 3 || !enabled) continue;
+    wxString host = f[2];
+    host.Trim().Trim(false);
+    if (host.IsEmpty()) continue;
+    const long port = wxAtoi(f[3]);
+    wxString url = host;
+    if (!url.StartsWith("http://") && !url.StartsWith("https://"))
+      url = "http://" + url;
+    if (port > 0) url += wxString::Format(":%ld", port);
+    return std::string(url.mb_str());
+  }
+  return "";
+}
+
 // A newer mayara-server than the one we installed: ask once per release, then
 // leave it to the Settings dialog. Never asked when offline (there is no
 // release to compare against) and never while a dialog is already up.
@@ -732,87 +772,199 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   // With N radars you can spread them across 1..N windows; the per-window count
   // is N / windows (rounded up). Cap the spinner sensibly when nothing is found.
   const int max_windows = radar_count > 0 ? radar_count : 4;
+  const bool have_server = m_server != nullptr;
 
   wxDialog dlg(parent, wxID_ANY, _("Mayara Radar Settings"), wxDefaultPosition,
                wxDefaultSize, wxDEFAULT_DIALOG_STYLE);
   auto* top = new wxBoxSizer(wxVERTICAL);
+  auto* book = new wxNotebook(&dlg, wxID_ANY);
 
-  wxString summary =
-      radar_count > 0
-          ? wxString::Format(_("%d radar(s) discovered."), radar_count)
-          : _("No radars discovered yet.");
-  top->Add(new wxStaticText(&dlg, wxID_ANY, summary), 0, wxALL, 10);
+  // --- Server page ---------------------------------------------------------
+  // Where the radar data comes from: a copy we run here, or one on the network.
+  // The two are mutually exclusive as far as the user is concerned, so the
+  // irrelevant half is disabled rather than hidden -- hiding it makes the
+  // dialog jump around, and the greyed fields still say what the choice means.
+  auto* spage = new wxPanel(book);
+  auto* sbox = new wxBoxSizer(wxVERTICAL);
 
-  auto* row = new wxBoxSizer(wxHORIZONTAL);
-  row->Add(new wxStaticText(&dlg, wxID_ANY, _("Number of PPI windows:")), 0,
-           wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
-  auto* spin = new wxSpinCtrl(&dlg, wxID_ANY, wxEmptyString, wxDefaultPosition,
+  auto* r_local = new wxRadioButton(spage, wxID_ANY,
+                                    _("Run mayara-server on this computer"),
+                                    wxDefaultPosition, wxDefaultSize,
+                                    wxRB_GROUP);
+  auto* r_net = new wxRadioButton(spage, wxID_ANY,
+                                  _("Use a server on the network"));
+  sbox->Add(r_local, 0, wxALL, 8);
+
+  // Local sub-options, indented under the radio button.
+  auto* lbox = new wxBoxSizer(wxVERTICAL);
+  auto* lstatus = new wxStaticText(spage, wxID_ANY, wxEmptyString);
+  lbox->Add(lstatus, 0, wxBOTTOM, 6);
+  auto* dl = new wxButton(spage, wxID_ANY, _("Download mayara-server"));
+  lbox->Add(dl, 0, wxBOTTOM, 6);
+  auto* cb_emul =
+      new wxCheckBox(spage, wxID_ANY, _("Emulator instead of a real radar"));
+  auto* cb_wifi = new wxCheckBox(
+      spage, wxID_ANY, _("Allow WiFi interfaces (off by default)"));
+  lbox->Add(cb_emul, 0, wxBOTTOM, 4);
+  lbox->Add(cb_wifi, 0, wxBOTTOM, 6);
+  auto* brow = new wxBoxSizer(wxHORIZONTAL);
+  brow->Add(new wxStaticText(spage, wxID_ANY, _("Limit to brand:")), 0,
+            wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+  auto* brand = new wxChoice(spage, wxID_ANY);
+  brand->Append(_("Any"));
+  for (const std::string& b : MayaraServer::Brands())
+    brand->Append(wxString::FromUTF8(b.c_str()));
+  brow->Add(brand, 0, wxALIGN_CENTER_VERTICAL);
+  lbox->Add(brow, 0);
+  sbox->Add(lbox, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 24);
+
+  sbox->Add(r_net, 0, wxALL, 8);
+  auto* nbox = new wxBoxSizer(wxVERTICAL);
+  auto* nrow = new wxBoxSizer(wxHORIZONTAL);
+  nrow->Add(new wxStaticText(spage, wxID_ANY, _("Address:")), 0,
+            wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+  auto* server = new wxTextCtrl(
+      spage, wxID_ANY, wxString::FromUTF8(m_explicit_server_url.c_str()),
+      wxDefaultPosition, wxSize(240, -1));
+  nrow->Add(server, 1, wxALIGN_CENTER_VERTICAL);
+  nbox->Add(nrow, 0, wxEXPAND | wxBOTTOM, 4);
+  auto* shint = new wxStaticText(
+      spage, wxID_ANY,
+      _("Blank = find it automatically (mDNS, or the Signal K server OpenCPN "
+        "is set up for). Otherwise a host or host:port — :3000 for Signal K, "
+        ":6502 for mayara."));
+  shint->Wrap(330);
+  nbox->Add(shint, 0);
+  sbox->Add(nbox, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 24);
+  spage->SetSizer(sbox);
+  book->AddPage(spage, _("Server"));
+
+  // --- Display page --------------------------------------------------------
+  auto* dpage = new wxPanel(book);
+  auto* dbox = new wxBoxSizer(wxVERTICAL);
+  dbox->Add(new wxStaticText(
+                dpage, wxID_ANY,
+                radar_count > 0
+                    ? wxString::Format(_("%d radar(s) discovered."),
+                                       radar_count)
+                    : wxString(_("No radars discovered yet."))),
+            0, wxALL, 8);
+  auto* wrow = new wxBoxSizer(wxHORIZONTAL);
+  wrow->Add(new wxStaticText(dpage, wxID_ANY, _("Number of PPI windows:")), 0,
+            wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+  auto* spin = new wxSpinCtrl(dpage, wxID_ANY, wxEmptyString, wxDefaultPosition,
                               wxDefaultSize, wxSP_ARROW_KEYS, 1, max_windows,
                               m_windows_count);
-  row->Add(spin, 0, wxALIGN_CENTER_VERTICAL);
-  top->Add(row, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10);
-
-  auto* hint = new wxStaticText(
-      &dlg, wxID_ANY,
+  wrow->Add(spin, 0, wxALIGN_CENTER_VERTICAL);
+  dbox->Add(wrow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
+  auto* whint = new wxStaticText(
+      dpage, wxID_ANY,
       _("Radars are spread evenly across the windows. One window shows all "
         "radars; more windows split them (e.g. 8 radars across 2 windows = 4 "
         "per window)."));
-  hint->Wrap(360);
-  top->Add(hint, 0, wxLEFT | wxRIGHT | wxBOTTOM, 10);
+  whint->Wrap(330);
+  dbox->Add(whint, 0, wxALL, 8);
+  dpage->SetSizer(dbox);
+  book->AddPage(dpage, _("Display"));
 
-  // Explicit server, for setups where mDNS discovery is unavailable.
-  top->Add(new wxStaticLine(&dlg), 0, wxEXPAND | wxLEFT | wxRIGHT, 10);
-  auto* srow = new wxBoxSizer(wxHORIZONTAL);
-  srow->Add(new wxStaticText(&dlg, wxID_ANY, _("Server:")), 0,
-            wxALIGN_CENTER_VERTICAL | wxTOP | wxRIGHT, 8);
-  auto* server = new wxTextCtrl(
-      &dlg, wxID_ANY, wxString::FromUTF8(m_explicit_server_url.c_str()),
-      wxDefaultPosition, wxSize(240, -1));
-  srow->Add(server, 1, wxALIGN_CENTER_VERTICAL | wxTOP, 8);
-  top->Add(srow, 0, wxLEFT | wxRIGHT, 10);
-  auto* shint = new wxStaticText(
-      &dlg, wxID_ANY,
-      _("Blank = discover automatically (mDNS). Otherwise give a host or "
-        "host:port — use :3000 for a Signal K server, :6502 for a Mayara "
-        "server. A server set here overrides discovery."));
-  shint->Wrap(360);
-  top->Add(shint, 0, wxALL, 10);
+  top->Add(book, 1, wxEXPAND | wxALL, 8);
+  top->Add(dlg.CreateButtonSizer(wxOK | wxCANCEL), 0, wxALIGN_RIGHT | wxALL, 8);
 
-  // Same local-server box as the search dialog: install, update, run/stop.
-  auto* local = new MayaraServerPanel(&dlg, m_server.get(), [this, &dlg]() {
+  // Initial state from what is configured now.
+  const bool run_local = have_server && m_server->Enabled();
+  (run_local ? r_local : r_net)->SetValue(true);
+  if (have_server) {
+    const MayaraServer::LocalOptions& o = m_server->Options();
+    cb_emul->SetValue(o.emulator);
+    cb_wifi->SetValue(o.allow_wifi);
+    int sel = 0;
+    for (size_t i = 0; i < MayaraServer::Brands().size(); ++i)
+      if (MayaraServer::Brands()[i] == o.brand) sel = static_cast<int>(i) + 1;
+    brand->SetSelection(sel);
+  }
+
+  // Enable/disable each half, and reflect what the local server can do now.
+  auto sync = [&]() {
+    const bool local = r_local->GetValue();
+    const bool installed = have_server && m_server->Installed();
+    const bool supported = MayaraServer::PlatformSupported();
+    lstatus->SetLabel(
+        !supported ? _("There is no mayara-server download for this platform.")
+        : !installed
+            ? _("mayara-server is not installed here yet.")
+            : wxString::Format(m_server->Running()
+                                   ? _("mayara-server %s, running.")
+                                   : _("mayara-server %s, installed."),
+                               m_server->InstalledVersion()));
+    lstatus->Wrap(330);
+    lstatus->Enable(local);
+    // Offer the download when it is missing or a newer release exists.
+    const bool can_get =
+        local && supported && have_server &&
+        (!installed || m_server->UpdateAvailable());
+    dl->Show(can_get);
+    if (can_get && installed)
+      dl->SetLabel(wxString::Format(
+          _("Update to %s"), wxString::FromUTF8(m_server->Latest().tag.c_str())));
+    cb_emul->Enable(local && installed);
+    cb_wifi->Enable(local && installed);
+    // --brand is meaningless with --emulator: there is no hardware to filter.
+    brand->Enable(local && installed && !cb_emul->GetValue());
+    server->Enable(!local);
+    shint->Enable(!local);
     dlg.Layout();
     dlg.Fit();
-    SyncLocalServerUrl();
+  };
+  r_local->Bind(wxEVT_RADIOBUTTON, [&](wxCommandEvent&) { sync(); });
+  r_net->Bind(wxEVT_RADIOBUTTON, [&](wxCommandEvent&) { sync(); });
+  cb_emul->Bind(wxEVT_CHECKBOX, [&](wxCommandEvent&) { sync(); });
+  dl->Bind(wxEVT_BUTTON, [&](wxCommandEvent&) {
+    wxString error;
+    if (!m_server->DownloadAndInstall(&dlg, &error) && !error.IsEmpty())
+      wxMessageBox(error, _("Mayara"), wxOK | wxICON_WARNING, &dlg);
+    sync();
   });
-  top->Add(local, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
+  sync();
 
-  top->Add(dlg.CreateButtonSizer(wxOK | wxCANCEL), 0,
-           wxALIGN_RIGHT | wxALL, 10);
   dlg.SetSizerAndFit(top);
+  if (dlg.ShowModal() != wxID_OK) return;
 
-  if (dlg.ShowModal() == wxID_OK) {
-    const int chosen = spin->GetValue();
-    if (chosen != m_windows_count) {
-      m_windows_count = chosen;
-      SaveConfig();
-      // Re-lay-out the radars across the new number of windows, keeping the
-      // current show/hide intent.
-      if (!m_windows.empty() || m_windows_visible) RebuildWindows();
-    }
-    // Normalise the explicit server URL (add scheme, drop trailing slash).
-    wxString raw = server->GetValue();
-    raw.Trim().Trim(false);
-    std::string url(raw.mb_str());
-    if (!url.empty() && url.rfind("http://", 0) != 0 &&
-        url.rfind("https://", 0) != 0)
-      url = "http://" + url;
-    while (!url.empty() && url.back() == '/') url.pop_back();
-    if (url != m_explicit_server_url) {
-      m_explicit_server_url = url;
-      SaveConfig();
-      // Empty clears the override (back to discovery); a value wins immediately.
-      if (m_client) m_client->SetServerUrl(url);
-    }
+  const int chosen = spin->GetValue();
+  if (chosen != m_windows_count) {
+    m_windows_count = chosen;
+    SaveConfig();
+    // Re-lay-out the radars across the new number of windows, keeping the
+    // current show/hide intent.
+    if (!m_windows.empty() || m_windows_visible) RebuildWindows();
+  }
+
+  if (have_server) {
+    MayaraServer::LocalOptions o;
+    o.emulator = cb_emul->GetValue();
+    o.allow_wifi = cb_wifi->GetValue();
+    const int sel = brand->GetSelection();
+    if (sel > 0 && sel <= static_cast<int>(MayaraServer::Brands().size()))
+      o.brand = MayaraServer::Brands()[sel - 1];
+    m_server->SetOptions(o);  // restarts the server if it is running
+    m_server->SetEnabled(r_local->GetValue());
+    SyncLocalServerUrl();
+  }
+
+  // Normalise the address (add scheme, drop trailing slash). Running locally
+  // means no manual address: the local server is reached at a fixed loopback
+  // URL, and leaving a stale override set would quietly win over it.
+  wxString raw = r_local->GetValue() ? wxString() : server->GetValue();
+  raw.Trim().Trim(false);
+  std::string url(raw.mb_str());
+  if (!url.empty() && url.rfind("http://", 0) != 0 &&
+      url.rfind("https://", 0) != 0)
+    url = "http://" + url;
+  while (!url.empty() && url.back() == '/') url.pop_back();
+  if (url != m_explicit_server_url) {
+    m_explicit_server_url = url;
+    SaveConfig();
+    // Empty clears the override (back to discovery); a value wins immediately.
+    if (m_client) m_client->SetServerUrl(url);
   }
 }
 

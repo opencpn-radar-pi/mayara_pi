@@ -89,6 +89,8 @@ class mayara_pi : public opencpn_plugin_121 {
   void SyncAccessConfig();
   // Point the client at the mayara-server we run ourselves, or clear it.
   void SyncLocalServerUrl();
+  // OpenCPN's own Signal K connection, as a discovery hint. Empty if none.
+  std::string OpenCpnSignalKUrl() const;
   // Ask, once per release, whether to install a newer local mayara-server.
   void MaybeOfferServerUpdate();
   void LoadConfig();
