@@ -17,11 +17,16 @@ on:
   workflow_dispatch:
 
 env:
-  # Set these as repository secrets to enable Cloudsmith publishing.
+  # Set these as repository secrets to enable Cloudsmith publishing. Publishing
+  # is skipped for pull requests: those builds are unreviewed, and upstream's
+  # "was it a collaborator?" guard reads CircleCI variables that do not exist
+  # here, so it lets everything through.
   CLOUDSMITH_API_KEY: ${{ secrets.CLOUDSMITH_API_KEY }}
-  CLOUDSMITH_STABLE_REPO: ${{ secrets.CLOUDSMITH_STABLE_REPO }}
-  CLOUDSMITH_UNSTABLE_REPO: ${{ secrets.CLOUDSMITH_UNSTABLE_REPO }}
+  # The upload script reads PROD/BETA/ALPHA. Optional: each falls back to the
+  # name cmake baked in (opencpn-radar-pi/mayara-{prod,beta,alpha}).
+  CLOUDSMITH_PROD_REPO: ${{ secrets.CLOUDSMITH_PROD_REPO }}
   CLOUDSMITH_BETA_REPO: ${{ secrets.CLOUDSMITH_BETA_REPO }}
+  CLOUDSMITH_ALPHA_REPO: ${{ secrets.CLOUDSMITH_ALPHA_REPO }}
   CMAKE_BUILD_PARALLEL_LEVEL: '3'
 
 jobs:
@@ -32,13 +37,23 @@ jobs:
       OCPN_TARGET: macos
       WX_VER: '32'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { submodules: recursive, fetch-depth: 0 }
       - name: Build (arm64 + x86_64 universal)
         run: bash ci/circleci-build-macos-universal.sh
       - name: Publish to Cloudsmith
-        if: env.CLOUDSMITH_API_KEY != ''
-        run: bash ci/cloudsmith-upload.sh
+        if: env.CLOUDSMITH_API_KEY != '' && github.event_name != 'pull_request'
+        run: |
+          set -e
+          # The FE2 script installs cloudsmith-cli only under CircleCI/Travis.
+          # A venv keeps this identical everywhere: pip --user puts the scripts
+          # in a different place on macOS than on Linux, and the distro
+          # containers ship no pip at all.
+          python3 -m venv "$HOME/cs-venv"
+          "$HOME/cs-venv/bin/pip" install --quiet cloudsmith-cli
+          export PATH="$HOME/cs-venv/bin:$PATH"
+          cloudsmith --version
+          bash ci/cloudsmith-upload.sh
       - uses: actions/upload-artifact@v4
         with:
           name: mayara_pi-macos-universal
@@ -54,15 +69,21 @@ jobs:
       OCPN_TARGET: MSVC
       WX_VER: '32'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { submodules: recursive, fetch-depth: 0 }
       - name: Build
         shell: cmd
         run: ci\circleci-build-msvc.bat
       - name: Publish to Cloudsmith
-        if: env.CLOUDSMITH_API_KEY != ''
+        if: env.CLOUDSMITH_API_KEY != '' && github.event_name != 'pull_request'
         shell: bash
-        run: bash ci/cloudsmith-upload.sh
+        run: |
+          set -e
+          python -m venv "$HOME/cs-venv"
+          "$HOME/cs-venv/Scripts/pip" install --quiet cloudsmith-cli
+          export PATH="$HOME/cs-venv/Scripts:$PATH"
+          cloudsmith --version
+          bash ci/cloudsmith-upload.sh
       - uses: actions/upload-artifact@v4
         with:
           name: mayara_pi-windows-msvc
@@ -81,6 +102,8 @@ jobs:
         include:
           - { name: debian-bookworm-x86_64, runs-on: ubuntu-latest,    container: 'debian:bookworm', script: ci/circleci-build-debian.sh, target: bookworm, env: debian }
           - { name: debian-bookworm-arm64,  runs-on: ubuntu-24.04-arm, container: 'debian:bookworm', script: ci/circleci-build-debian.sh, target: bookworm, env: debian }
+          - { name: debian-trixie-x86_64,   runs-on: ubuntu-latest,    container: 'debian:trixie',   script: ci/circleci-build-debian.sh, target: trixie,   env: debian }
+          - { name: debian-trixie-arm64,    runs-on: ubuntu-24.04-arm, container: 'debian:trixie',   script: ci/circleci-build-debian.sh, target: trixie,   env: debian }
           # ubuntu-jammy (22.04) needs wx >= 3.2.2 which isn't in its repos
           # (only 3.2.1); it needs a wx PPA step. Noble covers modern Ubuntu.
           - { name: ubuntu-noble,           runs-on: ubuntu-24.04,     container: '',                script: ci/circleci-build-debian.sh, target: noble,    env: debian }
@@ -103,21 +126,32 @@ jobs:
             printf 'APT::Get::Assume-Yes "true";\n' \
               > /etc/apt/apt.conf.d/90noninteractive
             apt-get update
-            apt-get install -y --no-install-recommends git sudo ca-certificates
+            apt-get install -y --no-install-recommends git sudo ca-certificates \
+              python3 python3-venv python3-pip
           elif command -v dnf >/dev/null 2>&1; then
-            dnf install -y git sudo dnf-plugins-core
+            dnf install -y git sudo dnf-plugins-core python3 python3-pip
           fi
           # The workspace is owned by a different UID than root in the
           # container; let git operate on it (the FE2 scripts run submodule
           # update).
           git config --global --add safe.directory '*'
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { submodules: recursive, fetch-depth: 0 }
       - name: Build
         run: bash ${{ matrix.script }}
       - name: Publish to Cloudsmith
-        if: env.CLOUDSMITH_API_KEY != ''
-        run: bash ci/cloudsmith-upload.sh
+        if: env.CLOUDSMITH_API_KEY != '' && github.event_name != 'pull_request'
+        run: |
+          set -e
+          # The FE2 script installs cloudsmith-cli only under CircleCI/Travis.
+          # A venv keeps this identical everywhere: pip --user puts the scripts
+          # in a different place on macOS than on Linux, and the distro
+          # containers ship no pip at all.
+          python3 -m venv "$HOME/cs-venv"
+          "$HOME/cs-venv/bin/pip" install --quiet cloudsmith-cli
+          export PATH="$HOME/cs-venv/bin:$PATH"
+          cloudsmith --version
+          bash ci/cloudsmith-upload.sh
       - uses: actions/upload-artifact@v4
         with:
           name: mayara_pi-${{ matrix.name }}
@@ -128,32 +162,50 @@ jobs:
           if-no-files-found: warn
 
   # --------------------------------------------------------------- Flatpak --
-  # The FE2 flatpak/android scripts are CircleCI-tailored (SDK/NDK provisioning)
-  # and need porting; run them only on manual dispatch until then. See issue.
+  # Runs on the bare Ubuntu runner rather than a privileged Fedora container:
+  # the FE2 script installs its prerequisites with apt, which cannot work inside
+  # Fedora, and GitHub's runners already allow the user namespaces bubblewrap
+  # needs. The prerequisites are installed here instead, and CI is blanked for
+  # the build step so the script skips its own apt block -- that block also uses
+  # apt-key, which modern Ubuntu no longer ships.
   flatpak:
-    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    container:
-      image: fedora:41
-      options: --privileged  # flatpak-builder needs bubblewrap/user namespaces
     env:
       OCPN_TARGET: flatpak
       BUILD_ARCH: x86_64
-      SDK_VER: '24.08'
+      # Must match the runtime the OpenCPN flatpak is built on:
+      # flathub org.opencpn.OpenCPN (master and beta) is on
+      # org.freedesktop.Platform 25.08. Building the extension
+      # against an older SDK links it to a base OpenCPN is not on.
+      SDK_VER: '25.08'
       FLATPAK_BRANCH: beta
       WX_VER: '32'
     steps:
+      - uses: actions/checkout@v5
+        with: { submodules: recursive, fetch-depth: 0 }
       - name: Prerequisites
         run: |
-          dnf install -y git sudo flatpak flatpak-builder cmake
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            flatpak flatpak-builder ca-certificates
           git config --global --add safe.directory '*'
-      - uses: actions/checkout@v4
-        with: { submodules: recursive, fetch-depth: 0 }
       - name: Build
+        env:
+          CI: ''
         run: bash ci/circleci-build-flatpak.sh
       - name: Publish to Cloudsmith
-        if: env.CLOUDSMITH_API_KEY != ''
-        run: bash ci/cloudsmith-upload.sh
+        if: env.CLOUDSMITH_API_KEY != '' && github.event_name != 'pull_request'
+        run: |
+          set -e
+          # The FE2 script installs cloudsmith-cli only under CircleCI/Travis.
+          # A venv keeps this identical everywhere: pip --user puts the scripts
+          # in a different place on macOS than on Linux, and the distro
+          # containers ship no pip at all.
+          python3 -m venv "$HOME/cs-venv"
+          "$HOME/cs-venv/bin/pip" install --quiet cloudsmith-cli
+          export PATH="$HOME/cs-venv/bin:$PATH"
+          cloudsmith --version
+          bash ci/cloudsmith-upload.sh
       - uses: actions/upload-artifact@v4
         with:
           name: mayara_pi-flatpak
@@ -161,8 +213,11 @@ jobs:
           if-no-files-found: warn
 
   # --------------------------------------------------------------- Android --
+  # Disabled: the FE2 android scripts provision the SDK/NDK the CircleCI way
+  # and have not been ported, so these only ever fail. The jobs are kept (rather
+  # than deleted) so re-enabling is a one-line change once that work is done.
   android:
-    if: github.event_name == 'workflow_dispatch'
+    if: false
     strategy:
       fail-fast: false
       matrix:
@@ -172,13 +227,23 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { submodules: recursive, fetch-depth: 0 }
       - name: Build
         run: bash ${{ matrix.script }}
       - name: Publish to Cloudsmith
-        if: env.CLOUDSMITH_API_KEY != ''
-        run: bash ci/cloudsmith-upload.sh
+        if: env.CLOUDSMITH_API_KEY != '' && github.event_name != 'pull_request'
+        run: |
+          set -e
+          # The FE2 script installs cloudsmith-cli only under CircleCI/Travis.
+          # A venv keeps this identical everywhere: pip --user puts the scripts
+          # in a different place on macOS than on Linux, and the distro
+          # containers ship no pip at all.
+          python3 -m venv "$HOME/cs-venv"
+          "$HOME/cs-venv/bin/pip" install --quiet cloudsmith-cli
+          export PATH="$HOME/cs-venv/bin:$PATH"
+          cloudsmith --version
+          bash ci/cloudsmith-upload.sh
       - uses: actions/upload-artifact@v4
         with:
           name: mayara_pi-${{ matrix.name }}

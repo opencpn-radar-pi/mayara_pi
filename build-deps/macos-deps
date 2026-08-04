@@ -1,0 +1,8 @@
+# Homebrew packages the macOS build needs on top of a stock runner, one per
+# line. The FE2 script (ci/circleci-build-macos-universal.sh) reads this file;
+# without it the read fails with "No such file or directory" mid-build, which
+# looks alarming and is easy to mistake for the cause of a later failure.
+#
+# mayara_pi needs nothing extra: wxWidgets and OpenSSL both arrive in the
+# prebuilt macos_deps_universal tarball the same script downloads. Comment
+# lines are stripped, so an all-comment file is a well-formed empty list.
