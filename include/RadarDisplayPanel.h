@@ -28,7 +28,26 @@ struct PpiLayers {
   bool cog_line = true;
   bool north_marker = true;
   bool ais = true;
-  bool arpa = true;  // server-tracked radar targets
+  bool arpa = true;         // server-tracked radar targets
+  bool guard_zones = true;  // server guard zones (guardZone1/2)
+};
+
+// Everything the picture and the layers over it are placed by. Computed once
+// per use so the paint path, the hit tests and the layer drawing cannot
+// disagree about where the sweep origin is -- which they would, now that the
+// origin can be dragged away from the window centre.
+struct PpiGeometry {
+  wxPoint center;         // sweep origin on screen, pan offset included
+  wxPoint offset;         // pan away from the window centre (committed + drag)
+  double radius = 0;      // pixels the reported range maps to, at 1x zoom
+  double report_m = 0;    // reported (range control) range, metres
+  bool metric = false;    // reported range unit
+  double zoom = 1.0;      // free display zoom
+  double up_bearing = 0;  // true bearing shown at screen-up
+  double raster_rot = 0;  // clockwise rotation applied to the picture
+  double heading = 0;
+  bool has_heading = false;
+  bool valid = false;  // usable for placing anything geographic
 };
 
 class RadarDisplayPanel : public wxPanel {
@@ -67,23 +86,39 @@ class RadarDisplayPanel : public wxPanel {
   }
   void ApplyTheme(const MayaraTheme& theme);
 
+  // Recentre the picture and reset the free zoom ("look around" -> centred).
+  void CenterView();
+  bool IsOffCenter() const;
+
  private:
   void OnPaint(wxPaintEvent& event);
   void OnTimer(wxTimerEvent& event);
   void OnSize(wxSizeEvent& event);
   void OnLeftDown(wxMouseEvent& event);
+  void OnLeftUp(wxMouseEvent& event);      // click actions land here, not on
+                                           // down, so a drag is not a click
+  void OnMotion(wxMouseEvent& event);      // drag to pan + cursor readout
+  void OnLeave(wxMouseEvent& event);       // drop the cursor readout
   void OnLeftDClick(wxMouseEvent& event);  // acquire an ARPA target
   void OnMouseWheel(wxMouseEvent& event);  // free PPI display zoom
+  // Act on a click that was not a drag, at `p`.
+  void HandleClick(const wxPoint& p);
+  // The current picture placement; see PpiGeometry.
+  PpiGeometry Geometry() const;
   // Convert a click in the picture to a true bearing (deg) and distance (m)
   // from the radar. False if outside the picture or the range is unknown.
   bool PointToPolar(const wxPoint& p, double& bearing_deg,
                     double& distance_m) const;
   void DrawLozenges(wxDC& dc, const wxSize& sz);
   void DrawIconBar(wxDC& dc, const wxSize& sz);  // vertical hand-drawn toolbar
-  // Paint the extra layers over the picture. `center` is the sweep origin,
-  // `radius` the pixel radius of the reported range `report_m`.
-  void DrawLayers(wxDC& dc, wxPoint center, double radius, double report_m,
-                  bool metric, double disp_zoom);
+  // Paint the extra layers over the picture.
+  void DrawLayers(wxDC& dc, const PpiGeometry& g);
+  // Guard zones as the server reports them (bow-relative radians + metres).
+  void DrawGuardZones(wxDC& dc, const PpiGeometry& g, double geo);
+  // EBL/VRM: a bearing line and a range circle placed by clicking.
+  void DrawEblVrm(wxDC& dc, const PpiGeometry& g, double geo);
+  // Cursor crosshair + a bearing/range readout for the pointer position.
+  void DrawCursor(wxDC& dc, const PpiGeometry& g);
   // Reported range (range control value, metres) + whether the range unit is
   // metric. Leaves the passed default report_m/metric if unavailable.
   void EffectiveRange(double& report_m, bool& metric) const;
@@ -107,7 +142,25 @@ class RadarDisplayPanel : public wxPanel {
   int m_threshold = 0;          // display echo threshold (0 all/1 weak/2 strong)
   double m_display_zoom = 1.0;  // free PPI magnification (0.5x - 5x), transient
   int m_obscured_right = 0;  // px covered on the right by the open menu
-  bool m_ebl_on = false;  // EBL/VRM toggle (placeholder until implemented)
+
+  // Off-centre view ("look around"): drag the picture away from the window
+  // centre. m_drag is the in-flight delta, folded into m_off_center on release.
+  wxPoint m_off_center = wxPoint(0, 0);
+  wxPoint m_drag = wxPoint(0, 0);
+  wxPoint m_mouse_down = wxPoint(0, 0);
+  bool m_dragging = false;
+
+  // EBL/VRM. m_ebl_on shows them; the bearing/range are placed by clicking and
+  // survive being hidden, so toggling back shows the last mark.
+  bool m_ebl_on = false;
+  bool m_ebl_set = false;
+  double m_ebl_bearing = 0.0;  // true degrees
+  double m_vrm_m = 0.0;        // metres from the radar
+
+  // Pointer position, for the cursor readout. Only while over the picture.
+  wxPoint m_cursor = wxPoint(0, 0);
+  bool m_cursor_in = false;
+
   MayaraTheme m_theme;
 
   // Clickable overlay regions, updated each paint.
@@ -121,6 +174,7 @@ class RadarDisplayPanel : public wxPanel {
   wxRect m_power_rect;
   wxRect m_range_minus_rect;
   wxRect m_range_plus_rect;
+  wxRect m_recenter_rect;  // "centre" chip, only while off-centre or zoomed
 
   wxDECLARE_EVENT_TABLE();
 };

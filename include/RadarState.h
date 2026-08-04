@@ -61,9 +61,11 @@ class RadarState {
   // the cached (bow-up) disc. `zoom` > 1 magnifies about the centre so the inner
   // 1/zoom of the spoke range fills the square (the rest spills past the edge as
   // overzoom). `rot_deg` rotates the picture clockwise (0 = bow up, for
-  // north-up/course-up). Returns true if radar data is present.
+  // north-up/course-up). `off_x`/`off_y` move the sweep origin away from the
+  // window centre in pixels, for the off-centre ("look around") view.
+  // Returns true if radar data is present.
   bool RenderPPI(uint8_t* rgb, int w, int h, double zoom = 1.0,
-                 double rot_deg = 0.0);
+                 double rot_deg = 0.0, double off_x = 0.0, double off_y = 0.0);
 
   // Radar position stamped into the spoke data (best-effort). Used to place the
   // chart overlay when OpenCPN has no own-ship fix of its own.

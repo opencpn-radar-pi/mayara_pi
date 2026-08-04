@@ -124,6 +124,9 @@ wxBEGIN_EVENT_TABLE(RadarDisplayPanel, wxPanel)
     EVT_TIMER(kRadarTimerId, RadarDisplayPanel::OnTimer)
     EVT_SIZE(RadarDisplayPanel::OnSize)
     EVT_LEFT_DOWN(RadarDisplayPanel::OnLeftDown)
+    EVT_LEFT_UP(RadarDisplayPanel::OnLeftUp)
+    EVT_MOTION(RadarDisplayPanel::OnMotion)
+    EVT_LEAVE_WINDOW(RadarDisplayPanel::OnLeave)
     EVT_LEFT_DCLICK(RadarDisplayPanel::OnLeftDClick)
     EVT_MOUSEWHEEL(RadarDisplayPanel::OnMouseWheel)
 wxEND_EVENT_TABLE()
@@ -157,32 +160,22 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
   dc.Clear();
 
   RadarState* state = m_client ? m_client->StateAt(m_index) : nullptr;
-  // The picture fills the visible rectangle (the part not covered by the open
-  // menu). Range rings use the smaller half-dimension so they stay circular.
-  const int avail_w = std::max(16, sz.x - m_obscured_right);
-  const int side = std::max(16, std::min(avail_w, sz.y));
-  const wxPoint pctr(avail_w / 2, sz.y / 2);
+  const PpiGeometry g = Geometry();
 
   // The reported (nominal, round) range fills the window; the larger spoke
   // range spills past the edge as overzoom (zoom = spoke / report).
   const uint32_t spoke_m = state ? state->RangeMeters() : 0;
-  double report_m = spoke_m;
-  bool metric = false;
-  EffectiveRange(report_m, metric);
   // Base zoom fits the reported range to the window edge; the user's free
-  // display zoom magnifies about the centre on top of that.
+  // display zoom magnifies about the sweep origin on top of that.
   const double base_zoom =
-      (report_m > 0 && spoke_m > 0) ? spoke_m / report_m : 1.0;
-  const double zoom = base_zoom * m_display_zoom;
-
-  double up_bearing = 0, raster_rot = 0, heading = 0;
-  bool has_heading = false;
-  ResolveOrientation(up_bearing, raster_rot, heading, has_heading);
+      (g.report_m > 0 && spoke_m > 0) ? spoke_m / g.report_m : 1.0;
+  const double zoom = base_zoom * g.zoom;
 
   if (state) {
-    const int rw = avail_w, rh = sz.y;
+    const int rw = std::max(16, sz.x - m_obscured_right), rh = sz.y;
     std::vector<uint8_t> rgb(static_cast<size_t>(rw) * rh * 3);
-    if (state->RenderPPI(rgb.data(), rw, rh, zoom, raster_rot)) {
+    if (state->RenderPPI(rgb.data(), rw, rh, zoom, g.raster_rot, g.offset.x,
+                         g.offset.y)) {
       wxImage img(rw, rh, rgb.data(), true);
       wxBitmap bmp(img);
       dc.DrawBitmap(bmp, 0, 0, false);
@@ -191,7 +184,7 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
 
   // Extra layers over the picture. Radius maps to the reported range; layers
   // are placed relative to whatever bearing is shown at screen-up.
-  DrawLayers(dc, pctr, side / 2.0, report_m, metric, m_display_zoom);
+  DrawLayers(dc, g);
 
   DrawLozenges(dc, sz);
 
@@ -520,23 +513,43 @@ void RadarDisplayPanel::EffectiveRange(double& report_m, bool& metric) const {
       }
 }
 
-void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
-                                   double report_m, bool metric,
-                                   double disp_zoom) {
+PpiGeometry RadarDisplayPanel::Geometry() const {
+  PpiGeometry g;
+  const wxSize sz = GetClientSize();
+  // The picture fills the visible rectangle (the part not covered by the open
+  // menu). Range rings use the smaller half-dimension so they stay circular.
+  const int avail_w = std::max(16, sz.x - m_obscured_right);
+  const int side = std::max(16, std::min(avail_w, sz.y));
+  g.offset = wxPoint(m_off_center.x + m_drag.x, m_off_center.y + m_drag.y);
+  g.center = wxPoint(avail_w / 2 + g.offset.x, sz.y / 2 + g.offset.y);
+  g.radius = side / 2.0;
+  g.zoom = m_display_zoom > 0 ? m_display_zoom : 1.0;
+
+  RadarState* st = m_client ? m_client->StateAt(m_index) : nullptr;
+  g.report_m = st ? st->RangeMeters() : 0.0;
+  EffectiveRange(g.report_m, g.metric);
+  ResolveOrientation(g.up_bearing, g.raster_rot, g.heading, g.has_heading);
+  g.valid = g.radius >= 8 && g.report_m > 0;
+  return g;
+}
+
+void RadarDisplayPanel::DrawLayers(wxDC& dc, const PpiGeometry& g) {
+  const wxPoint c = g.center;
+  const double radius = g.radius, report_m = g.report_m,
+               disp_zoom = g.zoom;
+  const bool metric = g.metric;
   if (radius < 8) return;
-  if (disp_zoom <= 0) disp_zoom = 1.0;
   // Geographic layers (rings, AIS, ARPA) scale with the free display zoom;
   // window-fixed decorations (compass, heading, north, COG) do not. `geo`
   // maps a true geographic distance to screen pixels.
-  const double geo = disp_zoom / report_m * radius;
+  const double geo = report_m > 0 ? disp_zoom / report_m * radius : 0.0;
 
   NavState nav;
   if (m_nav) nav = m_nav();
   // `up_bearing` is the true bearing shown at screen-up for the current
   // orientation; every true-referenced layer is placed relative to it.
-  double up_bearing = 0, raster_rot = 0, heading = 0;
-  bool has_heading = false;
-  ResolveOrientation(up_bearing, raster_rot, heading, has_heading);
+  const double up_bearing = g.up_bearing, heading = g.heading;
+  const bool has_heading = g.has_heading;
 
   dc.SetBrush(*wxTRANSPARENT_BRUSH);
 
@@ -559,6 +572,9 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
                   c.y - static_cast<int>((rr + 3) * k) - th / 2);
     }
   }
+
+  // Guard zones sit under the targets: they are context, not contacts.
+  if (m_layers.guard_zones && geo > 0) DrawGuardZones(dc, g, geo);
 
   // Compass ring: bearing ticks every 10 deg, major ticks + labels every 30.
   // Placed by true bearing so (head-up) the labels stay geographic.
@@ -790,21 +806,214 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, wxPoint c, double radius,
     }
   }
 
-  // Free-zoom indicator, only while magnified/reduced.
-  if (std::fabs(disp_zoom - 1.0) > 0.02) {
+  // EBL/VRM and the cursor readout go on top of everything geographic.
+  if (m_ebl_on && m_ebl_set && geo > 0) DrawEblVrm(dc, g, geo);
+  if (m_cursor_in && !m_dragging) DrawCursor(dc, g);
+
+  // Zoom/recentre chip, only while magnified or panned. Clicking it undoes
+  // both, which is the only way back from a pan that ran off the window.
+  m_recenter_rect = wxRect();
+  if (IsOffCenter()) {
     dc.SetFont(GetFont());
-    dc.SetTextForeground(m_theme.text);
-    const wxString z = wxString::Format("%.1f×", disp_zoom);
+    const wxString z =
+        std::fabs(disp_zoom - 1.0) > 0.02
+            ? wxString::Format("%.1f× ⌖", disp_zoom)
+            : wxString("⌖");
     wxCoord tw, th;
     dc.GetTextExtent(z, &tw, &th);
-    dc.DrawText(z, c.x - tw / 2,
-                c.y + static_cast<int>(radius) - th - 4);
+    const wxSize sz = GetClientSize();
+    const int avail_w = std::max(16, sz.x - m_obscured_right);
+    // Window-fixed, not picture-fixed: a pan must not carry it off-screen.
+    const wxRect chip(avail_w / 2 - tw / 2 - 8, sz.y - th - 14, tw + 16,
+                      th + 8);
+    LozengeBg(dc, chip, (th + 8) / 2, m_theme);
+    dc.SetTextForeground(m_theme.text);
+    dc.DrawText(z, chip.x + 8, chip.y + 4);
+    m_recenter_rect = chip;
   }
 }
 
+// Guard zones as the server reports them: bow-relative angles in radians and
+// distances in metres (see mayara-server config::GuardZone). Bow-relative means
+// they rotate with the boat, so each edge is drawn at heading + zone angle.
+void RadarDisplayPanel::DrawGuardZones(wxDC& dc, const PpiGeometry& g,
+                                       double geo) {
+  RadarControls* ctrl = m_client ? m_client->ControlsAt(m_index) : nullptr;
+  if (!ctrl) return;
+  const wxColour zone_col(255, 190, 0);
+  for (const char* id : {"guardZone1", "guardZone2"}) {
+    const ControlValue v = ctrl->Value(id);
+    if (!v.has_enabled || !v.enabled) continue;
+    const double r_in = v.startDistance * geo, r_out = v.endDistance * geo;
+    if (v.endDistance <= v.startDistance || r_out < 2) continue;
+    // Radians, bow-relative -> true bearing for PolarPoint.
+    const double a0 = g.heading + v.value * 180.0 / M_PI;
+    const double a1 = g.heading + v.endValue * 180.0 / M_PI;
+    double sweep = a1 - a0;
+    while (sweep <= 0) sweep += 360.0;      // clockwise from start to end
+    if (sweep > 359.9) sweep = 359.9;       // a full circle needs no seam
+    const int seg = std::max(6, static_cast<int>(sweep / 3.0));
+
+    // One closed polygon: out along the outer arc, back along the inner one.
+    std::vector<wxPoint> poly;
+    poly.reserve(2 * (seg + 1));
+    for (int i = 0; i <= seg; ++i)
+      poly.push_back(
+          PolarPoint(g.center, r_out, a0 + sweep * i / seg, g.up_bearing));
+    for (int i = seg; i >= 0; --i)
+      poly.push_back(
+          PolarPoint(g.center, r_in, a0 + sweep * i / seg, g.up_bearing));
+
+    // Hatching rather than alpha: wxDC has no portable transparency, and a
+    // solid fill would bury the echoes the zone exists to watch.
+    dc.SetBrush(wxBrush(zone_col, wxBRUSHSTYLE_BDIAGONAL_HATCH));
+    dc.SetPen(wxPen(zone_col, 2));
+    dc.DrawPolygon(static_cast<int>(poly.size()), poly.data());
+    dc.SetBrush(*wxTRANSPARENT_BRUSH);
+  }
+}
+
+void RadarDisplayPanel::DrawEblVrm(wxDC& dc, const PpiGeometry& g, double geo) {
+  const wxColour col(0, 230, 160);
+  const double r = m_vrm_m * geo;
+  // The bearing line runs past the VRM to the picture edge, so it stays usable
+  // as a bearing reference when the marker itself is close in.
+  const double line_r = std::max(r, g.radius * 1.42);
+  dc.SetPen(wxPen(col, 1, wxPENSTYLE_SHORT_DASH));
+  dc.SetBrush(*wxTRANSPARENT_BRUSH);
+  const wxPoint e = PolarPoint(g.center, line_r, m_ebl_bearing, g.up_bearing);
+  dc.DrawLine(g.center.x, g.center.y, e.x, e.y);
+  if (r >= 2) dc.DrawCircle(g.center.x, g.center.y, static_cast<int>(r));
+
+  // Marker where the two meet, plus the readout beside it.
+  const wxPoint m = PolarPoint(g.center, r, m_ebl_bearing, g.up_bearing);
+  dc.SetPen(wxPen(col, 2));
+  dc.DrawLine(m.x - 5, m.y, m.x + 5, m.y);
+  dc.DrawLine(m.x, m.y - 5, m.x, m.y + 5);
+
+  wxFont f = GetFont();
+  f.SetPointSize(std::max(7, f.GetPointSize() - 1));
+  dc.SetFont(f);
+  dc.SetTextForeground(col);
+  // True bearing, and relative to the bow when we know where the bow points.
+  wxString txt = wxString::Format("EBL %03.0f°T", m_ebl_bearing);
+  if (g.has_heading) {
+    double rel = m_ebl_bearing - g.heading;
+    while (rel < 0) rel += 360;
+    while (rel >= 360) rel -= 360;
+    txt += wxString::Format("  %03.0f°R", rel);
+  }
+  dc.DrawText(txt, m.x + 8, m.y - 2);
+  dc.DrawText("VRM " + FormatRange(m_vrm_m, g.metric), m.x + 8,
+              m.y - 2 + f.GetPixelSize().y + 1);
+}
+
+void RadarDisplayPanel::DrawCursor(wxDC& dc, const PpiGeometry& g) {
+  double brg = 0, dist = 0;
+  if (!PointToPolar(m_cursor, brg, dist)) return;
+  const wxColour col = m_theme.dim_text;
+  dc.SetPen(wxPen(col, 1));
+  dc.SetBrush(*wxTRANSPARENT_BRUSH);
+  dc.DrawLine(m_cursor.x - 7, m_cursor.y, m_cursor.x - 2, m_cursor.y);
+  dc.DrawLine(m_cursor.x + 2, m_cursor.y, m_cursor.x + 7, m_cursor.y);
+  dc.DrawLine(m_cursor.x, m_cursor.y - 7, m_cursor.x, m_cursor.y - 2);
+  dc.DrawLine(m_cursor.x, m_cursor.y + 2, m_cursor.x, m_cursor.y + 7);
+
+  wxFont f = GetFont();
+  f.SetPointSize(std::max(7, f.GetPointSize() - 1));
+  dc.SetFont(f);
+  wxString txt = wxString::Format("%03.0f°T  %s", brg,
+                                  FormatRange(dist, g.metric));
+  if (g.has_heading) {
+    double rel = brg - g.heading;
+    while (rel < 0) rel += 360;
+    while (rel >= 360) rel -= 360;
+    txt = wxString::Format("%03.0f°T %03.0f°R  %s", brg, rel,
+                           FormatRange(dist, g.metric));
+  }
+  wxCoord tw, th;
+  dc.GetTextExtent(txt, &tw, &th);
+  // Bottom-left, window-fixed: a readout that follows the pointer covers the
+  // echoes being measured.
+  const wxRect chip(8, GetClientSize().y - th - 12, tw + 12, th + 6);
+  LozengeBg(dc, chip, (th + 6) / 2, m_theme);
+  dc.SetTextForeground(m_theme.text);
+  dc.DrawText(txt, chip.x + 6, chip.y + 3);
+}
+
+// A press only arms a possible drag; the action is decided on release, so
+// dragging the picture around does not also trigger whatever was under the
+// press. Matches how radar_pi separates the two.
 void RadarDisplayPanel::OnLeftDown(wxMouseEvent& event) {
+  m_mouse_down = event.GetPosition();
+  m_dragging = false;
+  m_drag = wxPoint(0, 0);
+  event.Skip();
+}
+
+// Slop before a press counts as a drag: below this it is a click with a shaky
+// hand, which is common on a boat.
+static const int kDragSlop = 6;
+
+void RadarDisplayPanel::OnMotion(wxMouseEvent& event) {
   const wxPoint p = event.GetPosition();
-  if (m_menu_rect.Contains(p)) {
+  if (event.Dragging() && event.LeftIsDown()) {
+    const wxPoint d(p.x - m_mouse_down.x, p.y - m_mouse_down.y);
+    if (!m_dragging && std::abs(d.x) + std::abs(d.y) > kDragSlop)
+      m_dragging = true;
+    if (m_dragging) {
+      m_drag = d;
+      Refresh(false);
+    }
+    return;
+  }
+  // Cursor readout. A repaint re-renders the whole picture, so hover is
+  // throttled to a few pixels of travel -- far below what the readout can
+  // resolve, and it keeps a slow drift across the window from pinning a core.
+  if (!m_cursor_in || std::abs(p.x - m_cursor.x) + std::abs(p.y - m_cursor.y) >= 3) {
+    m_cursor = p;
+    m_cursor_in = true;
+    Refresh(false);
+  }
+  event.Skip();
+}
+
+void RadarDisplayPanel::OnLeave(wxMouseEvent& event) {
+  if (m_cursor_in) {
+    m_cursor_in = false;
+    Refresh(false);
+  }
+  event.Skip();
+}
+
+void RadarDisplayPanel::OnLeftUp(wxMouseEvent& event) {
+  if (m_dragging) {  // commit the pan; not a click
+    m_off_center += m_drag;
+    m_drag = wxPoint(0, 0);
+    m_dragging = false;
+    Refresh(false);
+    return;
+  }
+  HandleClick(event.GetPosition());
+  event.Skip();
+}
+
+void RadarDisplayPanel::CenterView() {
+  m_off_center = wxPoint(0, 0);
+  m_drag = wxPoint(0, 0);
+  m_display_zoom = 1.0;
+  Refresh(false);
+}
+
+bool RadarDisplayPanel::IsOffCenter() const {
+  return m_off_center.x != 0 || m_off_center.y != 0 || m_drag.x != 0 ||
+         m_drag.y != 0 || std::fabs(m_display_zoom - 1.0) > 0.02;
+}
+
+void RadarDisplayPanel::HandleClick(const wxPoint& p) {
+  if (m_recenter_rect.Contains(p)) {
+    CenterView();
+  } else if (m_menu_rect.Contains(p)) {
     if (m_on_menu) m_on_menu();
   } else if (m_icon_view.Contains(p)) {
     if (m_on_view) m_on_view();
@@ -812,7 +1021,7 @@ void RadarDisplayPanel::OnLeftDown(wxMouseEvent& event) {
     m_layers.ais = !m_layers.ais;
     Refresh(false);
   } else if (m_icon_ebl.Contains(p)) {
-    m_ebl_on = !m_ebl_on;  // placeholder until EBL/VRM is implemented
+    m_ebl_on = !m_ebl_on;
     Refresh(false);
   } else if (m_icon_gain.Contains(p)) {
     if (m_on_control) m_on_control("gain");
@@ -827,8 +1036,18 @@ void RadarDisplayPanel::OnLeftDown(wxMouseEvent& event) {
   else if (m_range_plus_rect.Contains(p))
     StepRange(-1);  // "+" zooms in to a shorter range
   else {
+    // A click in the picture places the EBL/VRM while they are shown. The
+    // marker is what the click is for then; focus still follows.
+    if (m_ebl_on) {
+      double brg = 0, dist = 0;
+      if (PointToPolar(p, brg, dist)) {
+        m_ebl_bearing = brg;
+        m_vrm_m = dist;
+        m_ebl_set = true;
+        Refresh(false);
+      }
+    }
     if (m_on_focus) m_on_focus();
-    event.Skip();
   }
 }
 
@@ -846,27 +1065,13 @@ void RadarDisplayPanel::OnLeftDClick(wxMouseEvent& event) {
   if (!m_client) return;
 
   // Double-clicking on (or very near) a tracked target drops it; empty space
-  // acquires a new one. Recompute the picture geometry as OnPaint does.
-  const wxSize sz = GetClientSize();
-  const int avail_w = std::max(16, sz.x - m_obscured_right);
-  const int side = std::max(16, std::min(avail_w, sz.y));
-  const wxPoint c(avail_w / 2, sz.y / 2);
-  const double radius = side / 2.0;
-  RadarState* state = m_client->StateAt(m_index);
-  double report_m = state ? state->RangeMeters() : 0.0;
-  bool metric = false;
-  EffectiveRange(report_m, metric);
-  if (report_m > 0 && radius >= 8) {
-    double up_bearing = 0, raster_rot = 0, heading = 0;
-    bool has_heading = false;
-    ResolveOrientation(up_bearing, raster_rot, heading, has_heading);
-    const double dz = m_display_zoom > 0 ? m_display_zoom : 1.0;
+  // acquires a new one.
+  const PpiGeometry g = Geometry();
+  if (g.valid) {
     for (const RadarTarget& t : m_client->TargetsAt(m_index)) {
       if (t.distance_m <= 0 || t.status == RadarTarget::kLost) continue;
-      const double r = radius * t.distance_m / report_m * dz;
-      const double a = (t.bearing_deg - up_bearing) * M_PI / 180.0;
-      const wxPoint tp(c.x + static_cast<int>(std::lround(r * std::sin(a))),
-                       c.y - static_cast<int>(std::lround(r * std::cos(a))));
+      const double r = g.radius * t.distance_m / g.report_m * g.zoom;
+      const wxPoint tp = PolarPoint(g.center, r, t.bearing_deg, g.up_bearing);
       if (std::hypot(p.x - tp.x, p.y - tp.y) <= 12) {
         m_client->CancelTargetAt(m_index, t.id);
         return;
@@ -881,33 +1086,19 @@ void RadarDisplayPanel::OnLeftDClick(wxMouseEvent& event) {
 
 bool RadarDisplayPanel::PointToPolar(const wxPoint& p, double& bearing_deg,
                                      double& distance_m) const {
-  const wxSize sz = GetClientSize();
-  const int avail_w = std::max(16, sz.x - m_obscured_right);
-  const int side = std::max(16, std::min(avail_w, sz.y));
-  const wxPoint c(avail_w / 2, sz.y / 2);
-  const double radius = side / 2.0;
-  if (radius < 8) return false;
+  const PpiGeometry g = Geometry();
+  if (!g.valid) return false;
 
-  RadarState* state = m_client ? m_client->StateAt(m_index) : nullptr;
-  double report_m = state ? state->RangeMeters() : 0.0;
-  bool metric = false;
-  EffectiveRange(report_m, metric);
-  if (report_m <= 0) return false;
-
-  const double dx = p.x - c.x, dy = p.y - c.y;
+  const double dx = p.x - g.center.x, dy = p.y - g.center.y;
   const double pix = std::sqrt(dx * dx + dy * dy);
-  if (pix > radius * 1.45) return false;  // outside the visible picture
+  if (pix > g.radius * 1.45) return false;  // outside the visible picture
 
   // The reported range maps to `radius` at 1x; the free display zoom magnifies
-  // about the centre, so undo it to recover the geographic distance.
-  const double dz = m_display_zoom > 0 ? m_display_zoom : 1.0;
-  distance_m = (pix / (radius * dz)) * report_m;
+  // about the sweep origin, so undo it to recover the geographic distance.
+  distance_m = (pix / (g.radius * g.zoom)) * g.report_m;
 
-  double up_bearing = 0, raster_rot = 0, heading = 0;
-  bool has_heading = false;
-  ResolveOrientation(up_bearing, raster_rot, heading, has_heading);
   // Inverse of PolarPoint: screen up is `up_bearing`, x grows east.
-  bearing_deg = up_bearing + std::atan2(dx, -dy) * 180.0 / M_PI;
+  bearing_deg = g.up_bearing + std::atan2(dx, -dy) * 180.0 / M_PI;
   while (bearing_deg < 0) bearing_deg += 360;
   while (bearing_deg >= 360) bearing_deg -= 360;
   return true;
