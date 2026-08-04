@@ -26,8 +26,9 @@ ones that only look like gaps.
 | **Reverse zoom** | user option | — |
 | **Menu auto-hide** | off / 10 s / 30 s | — |
 
-The first four rows are addressed by the "PPI display improvements" change; this
-table is left as written so the rest stays readable as a to-do list.
+Every row above is addressed by the "PPI display improvements" change; the table
+is left as written so it still reads as the record of what was missing. The
+sections below are the open work.
 
 ## Alarms
 
