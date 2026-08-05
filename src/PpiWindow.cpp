@@ -423,6 +423,12 @@ void MayaraPpiWindow::WireZoneEditing() {
         [this](int i, const VrmEbl& m) {
           if (RadarDisplayPanel* p = FocusedPanel()) p->SetMarker(i, m);
         });
+  // Placing or clearing a marker changes nothing the radar reports, so tell
+  // the panel directly; its own updaters would never fire for this.
+  for (RadarDisplayPanel* p : m_radars)
+    p->SetMarkerChangedCallback([this]() {
+      if (m_controls) m_controls->SyncNow();
+    });
 }
 
 void MayaraPpiWindow::ApplyPrefs() {

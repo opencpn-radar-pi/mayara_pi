@@ -881,6 +881,9 @@ void ControlsPanel::FillVrmEblSection(wxSizer* content) {
     auto* val = new wxStaticText(this, wxID_ANY, wxEmptyString);
     row->Add(val, 1, wxALIGN_CENTER_VERTICAL | wxLEFT, 4);
     auto* off = new ThemedButton(this, _("Clear"), m_theme, /*toggle=*/false);
+    // ThemedButton has no best size of its own, so at proportion 0 it collapses
+    // to nothing -- which is why this button was not there at all.
+    off->SetMinSize(wxSize(56, 24));
     row->Add(off, 0, wxALIGN_CENTER_VERTICAL);
     content->Add(row, 0, wxEXPAND | wxALL, 4);
 
