@@ -1088,7 +1088,11 @@ void ControlsPanel::AddZone(wxSizer* outer, const ControlDef& def) {
     Set(id, buf);
   });
 
-  edit->Bind(wxEVT_BUTTON, [this, id, editing, apply_mode](wxCommandEvent&) {
+  // The shared edit is the only source of truth for whether we are editing:
+  // pushing it runs the updater, which sets *editing and applies the mode.
+  // Toggling *editing here as well used to undo what the updater had just
+  // done, leaving the handles up but the fields still read-only.
+  edit->Bind(wxEVT_BUTTON, [this, id, editing](wxCommandEvent&) {
     if (!m_zone_set) return;
     if (*editing) {
       m_zone_set(ZoneEdit(), /*commit=*/false);  // Cancel: drop the edit
@@ -1104,11 +1108,9 @@ void ControlsPanel::AddZone(wxSizer* outer, const ControlDef& def) {
       z.end_m = v.endDistance;
       m_zone_set(z, /*commit=*/false);
     }
-    *editing = !*editing;
-    apply_mode();
   });
 
-  auto commit = [this, id, en, maxDist, editing, apply_mode, from_fields]() {
+  auto commit = [this, id, en, maxDist, from_fields]() {
     ZoneEdit z = from_fields();
     if (z.start_m < 0) z.start_m = 0;
     if (z.end_m > maxDist) z.end_m = maxDist;
@@ -1120,8 +1122,6 @@ void ControlsPanel::AddZone(wxSizer* outer, const ControlDef& def) {
                   en->GetValue() ? "true" : "false");
     Set(id, buf);
     if (m_zone_set) m_zone_set(ZoneEdit(), /*commit=*/false);  // edit is over
-    *editing = false;
-    apply_mode();
   };
   save->Bind(wxEVT_BUTTON, [commit](wxCommandEvent&) { commit(); });
   for (wxTextCtrl* f : fields)
