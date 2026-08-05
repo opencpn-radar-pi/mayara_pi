@@ -341,7 +341,15 @@ void ControlsPanel::Rebuild() {
   const char* categories[] = {"base",         "targets",      "trails",
                               "advanced",     "installation", "info"};
 
+  bool vrm_done = false;
   for (const char* cat : categories) {
+    // Straight after Base, as the operator's own measuring tools rather than
+    // anything the radar reports.
+    if (!vrm_done && std::string(cat) != "base") {
+      AddCollapsibleSection(root, _("EBL/VRM"), "eblvrm",
+                            [this](wxSizer* c) { FillVrmEblSection(c); });
+      vrm_done = true;
+    }
     std::vector<const ControlDef*> group;
     for (const auto& d : defs)
       if (d.category == cat && !quick.count(d.id)) group.push_back(&d);
@@ -860,6 +868,51 @@ void ControlsPanel::AddButton(wxSizer* outer, const ControlDef& def) {
 // with the other "what am I actually looking at" facts, and it is what you want
 // to see when the radar is silent: whether we are on the copy we run ourselves
 // (loopback) or one on the network.
+// The two VRM/EBL markers. They are the plugin's own -- the radar has no such
+// control -- so this section is built by hand rather than from the schema, and
+// sits with the other things you look at rather than set.
+void ControlsPanel::FillVrmEblSection(wxSizer* content) {
+  for (int i = 0; i < kVrmEblCount; ++i) {
+    auto* row = new wxBoxSizer(wxHORIZONTAL);
+    auto* label = new wxStaticText(
+        this, wxID_ANY, wxString::Format(_("VRM/EBL %d"), i + 1),
+        wxDefaultPosition, wxSize(78, -1));
+    row->Add(label, 0, wxALIGN_CENTER_VERTICAL);
+    auto* val = new wxStaticText(this, wxID_ANY, wxEmptyString);
+    row->Add(val, 1, wxALIGN_CENTER_VERTICAL | wxLEFT, 4);
+    auto* off = new ThemedButton(this, _("Off"), m_theme, /*toggle=*/false);
+    row->Add(off, 0, wxALIGN_CENTER_VERTICAL);
+    content->Add(row, 0, wxEXPAND | wxALL, 4);
+
+    off->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&) {
+      if (!m_vrm_get || !m_vrm_set) return;
+      VrmEbl m = m_vrm_get(i);
+      m.enabled = false;
+      m_vrm_set(i, m);
+    });
+
+    m_updaters.push_back([this, i, val, off]() {
+      if (!m_vrm_get) return;
+      const VrmEbl m = m_vrm_get(i);
+      if (!m.enabled) {
+        val->SetLabel(_("not set"));
+        off->Enable(false);
+        return;
+      }
+      off->Enable(true);
+      double deg = m.bearing_rad * 180.0 / M_PI;
+      while (deg < 0) deg += 360.0;
+      val->SetLabel(wxString::Format("%.1f°  %s", deg,
+                                     FormatVal(m.distance_m, "m")));
+    });
+  }
+  content->Add(new wxStaticText(
+                   this, wxID_ANY,
+                   _("Click the EBL icon to arm a marker, then click the "
+                     "picture to place it.")),
+               0, wxALL, 4);
+}
+
 void ControlsPanel::AddServerRow(wxSizer* outer) {
   auto* row = new wxBoxSizer(wxHORIZONTAL);
   row->Add(new wxStaticText(this, wxID_ANY, _("Server:")), 0, wxRIGHT, 6);
