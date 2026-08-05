@@ -290,7 +290,9 @@ void RadarDisplayPanel::DrawIconBar(wxDC& dc, const wxSize& sz) {
       const wxString n = wxString::Format("%d", m_ebl_arm);
       wxCoord tw, th;
       dc.GetTextExtent(n, &tw, &th);
-      dc.DrawText(n, c.x - tw / 2, c.y - th / 2 + 1);
+      // Left of centre: the radial line leaves the middle towards the upper
+      // right, and the digit was sitting under it.
+      dc.DrawText(n, c.x - tw / 2 - 4, c.y - th / 2 + 1);
     }
     m_icon_ebl = cellRect(5);
   }
@@ -1266,7 +1268,7 @@ void RadarDisplayPanel::HandleClick(const wxPoint& p) {
     // Cycle: off -> arm marker 1 -> arm marker 2 -> off. One icon for both,
     // and an armed marker keeps the other one's placement untouched.
     m_ebl_arm = (m_ebl_arm + 1) % (kVrmEblCount + 1);
-    Refresh(false);
+    NotifyMarkers();
   } else if (m_icon_gain.Contains(p)) {
     if (m_on_control) m_on_control("gain");
   } else if (m_icon_sea.Contains(p)) {
@@ -1293,7 +1295,7 @@ void RadarDisplayPanel::HandleClick(const wxPoint& p) {
         m.enabled = true;
         m.bearing_rad = rel * M_PI / 180.0;
         m.distance_m = dist;
-        Refresh(false);
+        NotifyMarkers();
       }
     }
     if (m_on_focus) m_on_focus();

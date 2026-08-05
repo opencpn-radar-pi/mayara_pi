@@ -114,7 +114,11 @@ class RadarDisplayPanel : public wxPanel {
   const VrmEbl& Marker(int i) const { return m_vrmebl[i]; }
   void SetMarker(int i, const VrmEbl& m) {
     m_vrmebl[i] = m;
-    Refresh(false);
+    NotifyMarkers();
+  }
+  // Called whenever a marker changes, so the panel showing them can re-read.
+  void SetMarkerChangedCallback(std::function<void()> cb) {
+    m_on_markers = std::move(cb);
   }
 
   // Share the live guard-zone edit. `set` is called with commit=false while a
@@ -215,6 +219,14 @@ class RadarDisplayPanel : public wxPanel {
   // arming the other one does not disturb it.
   VrmEbl m_vrmebl[kVrmEblCount];
   int m_ebl_arm = 0;
+  std::function<void()> m_on_markers;
+  // A marker is the plugin's own, so nothing on the wire changes when one
+  // moves: the panel would otherwise never re-read it, because its updaters
+  // only run when the radar sends a control update.
+  void NotifyMarkers() {
+    Refresh(false);
+    if (m_on_markers) m_on_markers();
+  }
 
   // Pointer position, for the cursor readout. Only while over the picture.
   wxPoint m_cursor = wxPoint(0, 0);
