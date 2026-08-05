@@ -9,7 +9,10 @@
 #include <string>
 #include <vector>
 
+#include <memory>
+
 #include <wx/dcbuffer.h>
+#include <wx/graphics.h>
 #include <wx/image.h>
 
 #include "MayaraClient.h"
@@ -592,6 +595,14 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, const PpiGeometry& g) {
   // Guard zones sit under the targets: they are context, not contacts.
   if (m_layers.guard_zones && geo > 0) DrawGuardZones(dc, g, geo);
 
+  // The zone being edited is drawn from the uncommitted values, so a drag or a
+  // typed number shows immediately rather than after a round trip.
+  m_zone_pts_valid = false;
+  if (geo > 0 && m_zone_get) {
+    const ZoneEdit z = m_zone_get();
+    if (z.active && z.radar_index == m_index) DrawZoneHandles(dc, g, geo, z);
+  }
+
   // Compass ring: bearing ticks every 10 deg, major ticks + labels every 30.
   // Placed by true bearing so (head-up) the labels stay geographic.
   if (m_layers.compass) {
@@ -866,37 +877,163 @@ void RadarDisplayPanel::DrawGuardZones(wxDC& dc, const PpiGeometry& g,
                                        double geo) {
   RadarControls* ctrl = m_client ? m_client->ControlsAt(m_index) : nullptr;
   if (!ctrl) return;
-  const wxColour zone_col(255, 190, 0);
-  for (const char* id : {"guardZone1", "guardZone2"}) {
-    const ControlValue v = ctrl->Value(id);
+
+  // Styling copied from the mayara web GUI (web/gui/ppi.js #drawGuardZone): a
+  // hairline stroke over a barely-there fill, green for zone 1 and blue for
+  // zone 2. It reads as a tint over the picture rather than something drawn on
+  // top of it, which is the point -- a guard zone is context, and the echoes
+  // underneath are what you are actually looking at.
+  //
+  // That needs real translucency, which plain wxDC cannot do portably (hence
+  // the hatching this replaces), so the zones go through a graphics context.
+  struct Style {
+    const char* id;
+    wxColour fill;    // GUI: rgba(..., 0.25)
+    wxColour stroke;  // GUI: rgba(..., 0.6)
+  };
+  const Style styles[] = {
+      {"guardZone1", wxColour(144, 238, 144, 64), wxColour(0, 128, 0, 153)},
+      {"guardZone2", wxColour(173, 216, 230, 64), wxColour(0, 0, 255, 153)},
+  };
+
+  std::unique_ptr<wxGraphicsContext> gc(
+      wxGraphicsContext::CreateFromUnknownDC(dc));
+  if (!gc) return;  // no antialiased backend: better nothing than the old slab
+  gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
+
+  const ZoneEdit edit = m_zone_get ? m_zone_get() : ZoneEdit();
+  for (const Style& s : styles) {
+    ControlValue v = ctrl->Value(s.id);
+    // While a zone is being edited, draw the edit rather than the stored value
+    // -- otherwise the old shape shows through the new one.
+    const bool editing =
+        edit.active && edit.radar_index == m_index && edit.id == s.id;
+    if (editing) {
+      v.has_enabled = true;
+      v.enabled = true;
+      v.value = edit.start_rad;
+      v.endValue = edit.end_rad;
+      v.startDistance = edit.start_m;
+      v.endDistance = edit.end_m;
+    }
     if (!v.has_enabled || !v.enabled) continue;
     const double r_in = v.startDistance * geo, r_out = v.endDistance * geo;
     if (v.endDistance <= v.startDistance || r_out < 2) continue;
-    // Radians, bow-relative -> true bearing for PolarPoint.
-    const double a0 = g.heading + v.value * 180.0 / M_PI;
-    const double a1 = g.heading + v.endValue * 180.0 / M_PI;
-    double sweep = a1 - a0;
-    while (sweep <= 0) sweep += 360.0;      // clockwise from start to end
-    if (sweep > 359.9) sweep = 359.9;       // a full circle needs no seam
-    const int seg = std::max(6, static_cast<int>(sweep / 3.0));
 
-    // One closed polygon: out along the outer arc, back along the inner one.
-    std::vector<wxPoint> poly;
-    poly.reserve(2 * (seg + 1));
-    for (int i = 0; i <= seg; ++i)
-      poly.push_back(
-          PolarPoint(g.center, r_out, a0 + sweep * i / seg, g.up_bearing));
-    for (int i = seg; i >= 0; --i)
-      poly.push_back(
-          PolarPoint(g.center, r_in, a0 + sweep * i / seg, g.up_bearing));
+    // Zone angles are bow-relative radians. Screen angle is measured from the
+    // +x axis with y downwards, so it trails the bearing by 90 degrees -- the
+    // same "- PI/2" the GUI applies.
+    const double base =
+        (g.heading - g.up_bearing) * M_PI / 180.0 - M_PI / 2.0;
+    const double a0 = base + v.value;
+    const double a1 = base + v.endValue;
+    const double cx = g.center.x, cy = g.center.y;
 
-    // Hatching rather than alpha: wxDC has no portable transparency, and a
-    // solid fill would bury the echoes the zone exists to watch.
-    dc.SetBrush(wxBrush(zone_col, wxBRUSHSTYLE_BDIAGONAL_HATCH));
-    dc.SetPen(wxPen(zone_col, 2));
-    dc.DrawPolygon(static_cast<int>(poly.size()), poly.data());
-    dc.SetBrush(*wxTRANSPARENT_BRUSH);
+    wxGraphicsPath path = gc->CreatePath();
+    // Equal angles mean the whole circle, as in the GUI. Drawn as two full
+    // circles filled odd-even so the hole is a hole, not a seam.
+    const bool whole_circle = std::fabs(v.endValue - v.value) < 0.001;
+    if (whole_circle) {
+      path.AddCircle(cx, cy, r_out);
+      if (r_in > 0) path.AddCircle(cx, cy, r_in);
+    } else {
+      path.AddArc(cx, cy, r_out, a0, a1, /*clockwise=*/true);
+      if (r_in > 0)
+        path.AddArc(cx, cy, r_in, a1, a0, /*clockwise=*/false);
+      else
+        path.AddLineToPoint(cx, cy);  // a sector, not a degenerate annulus
+      path.CloseSubpath();
+    }
+
+    gc->SetBrush(gc->CreateBrush(wxBrush(s.fill)));
+    gc->FillPath(path, whole_circle ? wxODDEVEN_RULE : wxWINDING_RULE);
+    gc->SetPen(gc->CreatePen(wxPen(s.stroke, 1)));
+    gc->StrokePath(path);
   }
+}
+
+// Handle order: 0 start angle, 1 end angle, 2 inner distance, 3 outer distance.
+// Angle handles sit mid-depth on their edge, distance handles mid-sweep on
+// their arc -- the same places the mayara GUI puts them.
+bool RadarDisplayPanel::ZoneHandlePoints(const PpiGeometry& g, double geo,
+                                         const ZoneEdit& z,
+                                         wxPoint out[4]) const {
+  const double r_in = z.start_m * geo, r_out = z.end_m * geo;
+  if (r_out < 4) return false;
+  const double r_mid = (r_in + r_out) / 2.0;
+  const double a0 = g.heading + z.start_rad * 180.0 / M_PI;
+  double sweep = (z.end_rad - z.start_rad) * 180.0 / M_PI;
+  while (sweep < 0) sweep += 360.0;
+  const double a_mid = a0 + sweep / 2.0;
+  out[0] = PolarPoint(g.center, r_mid, a0, g.up_bearing);
+  out[1] = PolarPoint(g.center, r_mid, a0 + sweep, g.up_bearing);
+  out[2] = PolarPoint(g.center, r_in, a_mid, g.up_bearing);
+  out[3] = PolarPoint(g.center, r_out, a_mid, g.up_bearing);
+  return true;
+}
+
+void RadarDisplayPanel::DrawZoneHandles(wxDC& dc, const PpiGeometry& g,
+                                        double geo, const ZoneEdit& z) {
+  wxPoint pts[4];
+  if (!ZoneHandlePoints(g, geo, z, pts)) return;
+  for (int i = 0; i < 4; ++i) m_zone_pts[i] = pts[i];
+  m_zone_pts_valid = true;
+
+  // Translucent white discs with a grey rim, as in the GUI; the one being
+  // dragged is brighter so it is obvious which value is moving.
+  std::unique_ptr<wxGraphicsContext> gc(
+      wxGraphicsContext::CreateFromUnknownDC(dc));
+  if (!gc) return;
+  gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
+  const double kR = 9.0;
+  for (int i = 0; i < 4; ++i) {
+    const unsigned char a = (i == m_zone_drag) ? 230 : 128;
+    gc->SetBrush(gc->CreateBrush(wxBrush(wxColour(255, 255, 255, a))));
+    gc->SetPen(gc->CreatePen(wxPen(wxColour(100, 100, 100, 204), 2)));
+    wxGraphicsPath path = gc->CreatePath();
+    path.AddCircle(pts[i].x, pts[i].y, kR);
+    gc->FillPath(path);
+    gc->StrokePath(path);
+  }
+}
+
+// Move the grabbed handle to the pointer. Angles follow the bearing under the
+// cursor, distances its range; each handle moves exactly one of the zone's four
+// numbers, so a drag cannot quietly change something you were not aiming at.
+void RadarDisplayPanel::DragZoneHandle(const wxPoint& p, bool commit) {
+  if (!m_zone_get || !m_zone_set) return;
+  ZoneEdit z = m_zone_get();
+  if (!z.active || z.radar_index != m_index) return;
+
+  double brg = 0, dist = 0;
+  if (!PointToPolar(p, brg, dist)) return;
+  const PpiGeometry g = Geometry();
+  // Bearing is true; the zone speaks bow-relative.
+  double rel = brg - g.heading;
+  while (rel < -180.0) rel += 360.0;
+  while (rel > 180.0) rel -= 360.0;
+  const double rad = rel * M_PI / 180.0;
+
+  switch (m_zone_drag) {
+    case 0: z.start_rad = rad; break;
+    case 1: z.end_rad = rad; break;
+    case 2: z.start_m = std::max(0.0, dist); break;
+    case 3: z.end_m = std::max(0.0, dist); break;
+    default: return;
+  }
+  // Keep the ring the right way round rather than refusing the drag.
+  if (z.end_m < z.start_m) std::swap(z.start_m, z.end_m);
+  m_zone_set(z, commit);
+  Refresh(false);
+}
+
+int RadarDisplayPanel::ZoneHandleHit(const wxPoint& p) const {
+  if (!m_zone_pts_valid) return -1;
+  const double kHit = 14.0;  // a little larger than the disc, for fat fingers
+  for (int i = 0; i < 4; ++i)
+    if (std::hypot(p.x - m_zone_pts[i].x, p.y - m_zone_pts[i].y) <= kHit)
+      return i;
+  return -1;
 }
 
 void RadarDisplayPanel::DrawEblVrm(wxDC& dc, const PpiGeometry& g, double geo) {
@@ -974,6 +1111,9 @@ void RadarDisplayPanel::OnLeftDown(wxMouseEvent& event) {
   m_mouse_down = event.GetPosition();
   m_dragging = false;
   m_drag = wxPoint(0, 0);
+  // A zone handle takes precedence over panning: it is a much smaller target,
+  // and the press that grabs it would otherwise start dragging the picture.
+  m_zone_drag = ZoneHandleHit(m_mouse_down);
   event.Skip();
 }
 
@@ -983,6 +1123,10 @@ static const int kDragSlop = 6;
 
 void RadarDisplayPanel::OnMotion(wxMouseEvent& event) {
   const wxPoint p = event.GetPosition();
+  if (m_zone_drag >= 0 && event.Dragging() && event.LeftIsDown()) {
+    DragZoneHandle(p, /*commit=*/false);
+    return;
+  }
   if (event.Dragging() && event.LeftIsDown()) {
     const wxPoint d(p.x - m_mouse_down.x, p.y - m_mouse_down.y);
     if (!m_dragging && std::abs(d.x) + std::abs(d.y) > kDragSlop)
@@ -1013,6 +1157,14 @@ void RadarDisplayPanel::OnLeave(wxMouseEvent& event) {
 }
 
 void RadarDisplayPanel::OnLeftUp(wxMouseEvent& event) {
+  if (m_zone_drag >= 0) {
+    // One write per drag, on release: the radar does not need a control
+    // update for every mouse move.
+    DragZoneHandle(event.GetPosition(), /*commit=*/true);
+    m_zone_drag = -1;
+    Refresh(false);
+    return;
+  }
   if (m_dragging) {  // commit the pan; not a click
     m_off_center += m_drag;
     m_drag = wxPoint(0, 0);

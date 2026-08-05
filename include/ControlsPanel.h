@@ -72,6 +72,19 @@ class ControlsPanel : public wxScrolledWindow {
   // "Dock in OpenCPN" toggle for the View section.
   void SetDockControl(std::function<bool()> get, std::function<void(bool)> set);
 
+  // Share the live guard-zone edit with the picture, so a dragged handle and a
+  // typed number are one edit.
+  // Re-read every widget from the model now, rather than at the next timer
+  // tick. Used when a drag on the picture changes a value the panel shows.
+  void SyncNow() { ApplyValues(); }
+
+  void SetZoneEditHandlers(
+      std::function<ZoneEdit()> get,
+      std::function<void(const ZoneEdit&, bool commit)> set) {
+    m_zone_get = std::move(get);
+    m_zone_set = std::move(set);
+  }
+
   // Operator display preferences (refresh rate, wheel direction, menu
   // auto-hide) for the View section. Global, not per radar.
   void SetPrefsControl(std::function<PpiPrefs()> get,
@@ -138,6 +151,8 @@ class ControlsPanel : public wxScrolledWindow {
   std::function<void(int)> m_set_threshold;
   std::function<bool()> m_get_dock;
   std::function<void(bool)> m_set_dock;
+  std::function<ZoneEdit()> m_zone_get;
+  std::function<void(const ZoneEdit&, bool)> m_zone_set;
   std::function<PpiPrefs()> m_get_prefs;
   std::function<void(const PpiPrefs&)> m_set_prefs;
 

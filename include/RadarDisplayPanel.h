@@ -33,6 +33,18 @@ struct PpiLayers {
   bool extreme_range = true;  // ring at the outer edge of the spoke data
 };
 
+// A guard zone being edited on the picture. The controls panel and the picture
+// share one of these, so dragging a handle and typing in a field are the same
+// edit seen from two places. Values are the zone's own: bow-relative radians
+// and metres. Nothing is sent to the radar until the edit is committed.
+struct ZoneEdit {
+  bool active = false;
+  int radar_index = -1;
+  std::string id;  // "guardZone1" / "guardZone2"
+  double start_rad = 0, end_rad = 0;
+  double start_m = 0, end_m = 0;
+};
+
 // Display preferences that are the operator's, not the radar's, so they are
 // held by the plugin and pushed down rather than read from the control schema.
 struct PpiPrefs {
@@ -88,6 +100,14 @@ class RadarDisplayPanel : public wxPanel {
   int Threshold() const { return m_threshold; }
   // Repaint rate and wheel direction; the rest of PpiPrefs is the window's.
   void SetPrefs(const PpiPrefs& p);
+  // Share the live guard-zone edit. `set` is called with commit=false while a
+  // handle is being dragged (preview only) and commit=true on release.
+  void SetZoneEditHandlers(
+      std::function<ZoneEdit()> get,
+      std::function<void(const ZoneEdit&, bool commit)> set) {
+    m_zone_get = std::move(get);
+    m_zone_set = std::move(set);
+  }
   // Pixels obscured on the right by the open menu, so the picture re-centres in
   // the remaining space.
   void SetObscuredRight(int px) {
@@ -131,6 +151,17 @@ class RadarDisplayPanel : public wxPanel {
   void DrawEblVrm(wxDC& dc, const PpiGeometry& g, double geo);
   // Cursor crosshair + a bearing/range readout for the pointer position.
   void DrawCursor(wxDC& dc, const PpiGeometry& g);
+  // Drag handles for the zone being edited; mirrors the mayara GUI.
+  void DrawZoneHandles(wxDC& dc, const PpiGeometry& g, double geo,
+                       const ZoneEdit& z);
+  // Screen position of each handle, in the order start/end/inner/outer.
+  // Returns false when the zone cannot be placed.
+  bool ZoneHandlePoints(const PpiGeometry& g, double geo, const ZoneEdit& z,
+                        wxPoint out[4]) const;
+  // Which handle (0..3) is under `p`, or -1.
+  int ZoneHandleHit(const wxPoint& p) const;
+  // Move the grabbed handle to `p`; commit=true also writes it to the radar.
+  void DragZoneHandle(const wxPoint& p, bool commit);
   // Reported range (range control value, metres) + whether the range unit is
   // metric. Leaves the passed default report_m/metric if unavailable.
   void EffectiveRange(double& report_m, bool& metric) const;
@@ -174,6 +205,13 @@ class RadarDisplayPanel : public wxPanel {
   bool m_cursor_in = false;
 
   bool m_reverse_zoom = false;  // from PpiPrefs
+
+  // Live guard-zone edit, shared with the controls panel.
+  std::function<ZoneEdit()> m_zone_get;
+  std::function<void(const ZoneEdit&, bool)> m_zone_set;
+  int m_zone_drag = -1;        // handle being dragged, or -1
+  wxPoint m_zone_pts[4];       // last drawn handle positions, for hit testing
+  bool m_zone_pts_valid = false;
 
   MayaraTheme m_theme;
 
