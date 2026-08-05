@@ -928,6 +928,10 @@ void ControlsPanel::AddSector(wxSizer* outer, const ControlDef& def) {
   auto* en = new ThemedButton(this, _("Enabled"), m_theme, /*toggle=*/true);
   en->Bind(wxEVT_TOGGLEBUTTON, [dirty](wxCommandEvent&) { *dirty = true; });
   brow->Add(en, 1, wxALL, 2);
+  // Edit puts drag handles on the picture. Off by default: a zone you can move
+  // by brushing the display is a zone you will move by accident.
+  auto* edit = new ThemedButton(this, _("Edit"), m_theme, /*toggle=*/true);
+  brow->Add(edit, 1, wxALL, 2);
   auto* save = new ThemedButton(this, _("Save"), m_theme, /*toggle=*/false);
   brow->Add(save, 1, wxALL, 2);
   box->Add(brow, 0, wxEXPAND);
@@ -966,7 +970,6 @@ void ControlsPanel::AddZone(wxSizer* outer, const ControlDef& def) {
   box->Add(new wxStaticText(this, wxID_ANY,
                             wxString::FromUTF8(def.name.c_str())),
            0, wxLEFT | wxTOP, 4);
-  auto dirty = std::make_shared<bool>(false);
 
   // Typed fields, not sliders. An angle has 360 useful values and a distance
   // thousands; over a 90 px track a pixel is several degrees or tens of metres,
@@ -983,12 +986,6 @@ void ControlsPanel::AddZone(wxSizer* outer, const ControlDef& def) {
     row->Add(new wxStaticText(this, wxID_ANY, unit), 0,
              wxALIGN_CENTER_VERTICAL | wxLEFT, 4);
     box->Add(row, 0, wxEXPAND | wxLEFT | wxBOTTOM, 8);
-    // Editing holds off the updater until Save, so a refresh mid-edit cannot
-    // discard what has been typed into the other three fields.
-    field->Bind(wxEVT_SET_FOCUS, [dirty](wxFocusEvent& e) {
-      *dirty = true;
-      e.Skip();
-    });
     return field;
   };
 
@@ -996,11 +993,15 @@ void ControlsPanel::AddZone(wxSizer* outer, const ControlDef& def) {
   wxTextCtrl* fEnd = make_row(_("End"), wxT("°"));
   wxTextCtrl* fIn = make_row(_("Inner"), _("m"));
   wxTextCtrl* fOut = make_row(_("Outer"), _("m"));
+  wxTextCtrl* fields[4] = {fStart, fEnd, fIn, fOut};
 
   auto* brow = new wxBoxSizer(wxHORIZONTAL);
   auto* en = new ThemedButton(this, _("Enabled"), m_theme, /*toggle=*/true);
-  en->Bind(wxEVT_TOGGLEBUTTON, [dirty](wxCommandEvent&) { *dirty = true; });
   brow->Add(en, 1, wxALL, 2);
+  // One button with two jobs: it starts an edit, and abandons one. Save only
+  // exists while an edit does, so there is never a Save that means nothing.
+  auto* edit = new ThemedButton(this, _("Edit"), m_theme, /*toggle=*/false);
+  brow->Add(edit, 1, wxALL, 2);
   auto* save = new ThemedButton(this, _("Save"), m_theme, /*toggle=*/false);
   brow->Add(save, 1, wxALL, 2);
   box->Add(brow, 0, wxEXPAND);
@@ -1010,34 +1011,107 @@ void ControlsPanel::AddZone(wxSizer* outer, const ControlDef& def) {
     double d = 0;
     return f->GetValue().ToDouble(&d) ? d : fallback;
   };
-  auto commit = [this, id, dirty, fStart, fEnd, fIn, fOut, en, maxDist, num]() {
-    ControlValue cur = controls()->Value(id);
-    double in = num(fIn, cur.startDistance), out = num(fOut, cur.endDistance);
-    if (in < 0) in = 0;
-    if (out > maxDist) out = maxDist;
+
+  // Read-only until Edit is pressed: these four numbers aim a guard zone, and
+  // half-typed ones should not look like the radar's own.
+  auto editing = std::make_shared<bool>(false);
+  auto apply_mode = [fields, edit, save, en, editing, this]() {
+    for (wxTextCtrl* f : fields) f->SetEditable(*editing);
+    edit->SetLabel(*editing ? _("Cancel") : _("Edit"));
+    save->Show(*editing);
+    en->Enable(*editing);
+    Layout();
+  };
+  apply_mode();
+
+  // The zone as the fields currently read it.
+  auto from_fields = [this, id, num, fStart, fEnd, fIn, fOut, en]() {
+    const ControlValue cur = controls()->Value(id);
+    ZoneEdit z;
+    z.active = true;
+    z.radar_index = m_index;
+    z.id = id;
+    z.start_rad = DegToRad(num(fStart, RadToDeg(cur.value)));
+    z.end_rad = DegToRad(num(fEnd, RadToDeg(cur.endValue)));
+    z.start_m = num(fIn, cur.startDistance);
+    z.end_m = num(fOut, cur.endDistance);
+    return z;
+  };
+
+  edit->Bind(wxEVT_BUTTON, [this, id, editing, apply_mode](wxCommandEvent&) {
+    if (!m_zone_set) return;
+    if (*editing) {
+      m_zone_set(ZoneEdit(), /*commit=*/false);  // Cancel: drop the edit
+    } else {
+      const ControlValue v = controls()->Value(id);
+      ZoneEdit z;
+      z.active = true;
+      z.radar_index = m_index;
+      z.id = id;
+      z.start_rad = v.value;
+      z.end_rad = v.endValue;
+      z.start_m = v.startDistance;
+      z.end_m = v.endDistance;
+      m_zone_set(z, /*commit=*/false);
+    }
+    *editing = !*editing;
+    apply_mode();
+  });
+
+  auto commit = [this, id, en, maxDist, editing, apply_mode, from_fields]() {
+    ZoneEdit z = from_fields();
+    if (z.start_m < 0) z.start_m = 0;
+    if (z.end_m > maxDist) z.end_m = maxDist;
     char buf[256];
     std::snprintf(buf, sizeof(buf),
                   "{\"value\":%g,\"endValue\":%g,\"startDistance\":%g,"
                   "\"endDistance\":%g,\"enabled\":%s}",
-                  DegToRad(num(fStart, RadToDeg(cur.value))),
-                  DegToRad(num(fEnd, RadToDeg(cur.endValue))), in, out,
+                  z.start_rad, z.end_rad, z.start_m, z.end_m,
                   en->GetValue() ? "true" : "false");
     Set(id, buf);
-    *dirty = false;
+    if (m_zone_set) m_zone_set(ZoneEdit(), /*commit=*/false);  // edit is over
+    *editing = false;
+    apply_mode();
   };
   save->Bind(wxEVT_BUTTON, [commit](wxCommandEvent&) { commit(); });
-  // Enter in any field saves the lot, so the four values go over as one zone.
-  for (wxTextCtrl* f : {fStart, fEnd, fIn, fOut})
+  for (wxTextCtrl* f : fields)
     f->Bind(wxEVT_TEXT_ENTER, [commit](wxCommandEvent&) { commit(); });
 
-  m_updaters.push_back([this, id, dirty, fStart, fEnd, fIn, fOut, en]() {
-    if (*dirty) return;
-    ControlValue v = controls()->Value(id);
-    fStart->ChangeValue(wxString::Format("%ld", RoundL(RadToDeg(v.value))));
-    fEnd->ChangeValue(wxString::Format("%ld", RoundL(RadToDeg(v.endValue))));
-    fIn->ChangeValue(wxString::Format("%ld", RoundL(v.startDistance)));
-    fOut->ChangeValue(wxString::Format("%ld", RoundL(v.endDistance)));
-    if (v.has_enabled) en->SetValue(v.enabled);
+  // Every keystroke feeds the shared edit, so the handles on the picture follow
+  // the numbers. Nothing reaches the radar until Save.
+  for (wxTextCtrl* f : fields)
+    f->Bind(wxEVT_TEXT, [this, editing, from_fields](wxCommandEvent& e) {
+      if (*editing && m_zone_set) m_zone_set(from_fields(), /*commit=*/false);
+      e.Skip();
+    });
+
+  m_updaters.push_back([this, id, fields, en, editing, apply_mode]() {
+    // While editing, the shared edit is the truth -- a dragged handle writes it
+    // and the numbers must follow. Otherwise the radar's own values are.
+    const ZoneEdit z = m_zone_get ? m_zone_get() : ZoneEdit();
+    const bool mine = z.active && z.radar_index == m_index && z.id == id;
+    if (mine != *editing) {  // e.g. another zone took over the edit
+      *editing = mine;
+      apply_mode();
+    }
+    double vals[4];
+    if (mine) {
+      vals[0] = RadToDeg(z.start_rad);
+      vals[1] = RadToDeg(z.end_rad);
+      vals[2] = z.start_m;
+      vals[3] = z.end_m;
+    } else {
+      const ControlValue v = controls()->Value(id);
+      vals[0] = RadToDeg(v.value);
+      vals[1] = RadToDeg(v.endValue);
+      vals[2] = v.startDistance;
+      vals[3] = v.endDistance;
+      if (v.has_enabled) en->SetValue(v.enabled);
+    }
+    // Never overwrite the field being typed in; every other one follows.
+    for (int i = 0; i < 4; ++i)
+      if (fields[i] != FindFocus())
+        fields[i]->ChangeValue(wxString::Format("%ld", RoundL(vals[i])));
   });
 }
 

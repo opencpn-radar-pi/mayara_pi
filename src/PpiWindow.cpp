@@ -5,6 +5,7 @@
 #include "PpiWindow.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -110,6 +111,7 @@ MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client,
     HideControls();
     Layout();
   });
+  WireZoneEditing();
 }
 
 wxWindow* MayaraPpiWindow::HostWindow() {
@@ -385,6 +387,30 @@ void MayaraPpiWindow::SetPrefsHandlers(std::function<PpiPrefs()> get,
   };
   if (m_controls) m_controls->SetPrefsControl(m_prefs_get, m_prefs_set);
   ApplyPrefs();
+}
+
+// One ZoneEdit, handed to the controls and to every picture. A drag on the
+// picture and a keystroke in the panel both land here, and only a commit
+// reaches the radar.
+void MayaraPpiWindow::WireZoneEditing() {
+  auto get = [this]() { return m_zone_edit; };
+  auto set = [this](const ZoneEdit& z, bool commit) {
+    m_zone_edit = z;
+    if (commit && z.active && m_client) {
+      char buf[256];
+      std::snprintf(buf, sizeof(buf),
+                    "{\"value\":%g,\"endValue\":%g,\"startDistance\":%g,"
+                    "\"endDistance\":%g,\"enabled\":true}",
+                    z.start_rad, z.end_rad, z.start_m, z.end_m);
+      m_client->SetControlAt(z.radar_index, z.id, buf);
+    }
+    for (RadarDisplayPanel* p : m_radars) p->Refresh(false);
+    // Immediately, not at the next 400 ms tick: a handle being dragged should
+    // move the numbers with it, not a beat later.
+    if (m_controls) m_controls->SyncNow();
+  };
+  for (RadarDisplayPanel* p : m_radars) p->SetZoneEditHandlers(get, set);
+  if (m_controls) m_controls->SetZoneEditHandlers(get, set);
 }
 
 void MayaraPpiWindow::ApplyPrefs() {

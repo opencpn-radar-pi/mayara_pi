@@ -83,6 +83,10 @@ class MayaraPpiWindow : public wxPanel {
   // auto-hide). Pushed to every picture and to the auto-hide timer.
   void SetPrefsHandlers(std::function<PpiPrefs()> get,
                         std::function<void(const PpiPrefs&)> set);
+  // The guard-zone edit shared by the controls and every picture in this
+  // window. Owned here because both sides need the same one.
+  void WireZoneEditing();
+
   // Re-read the prefs and push them to the pictures + auto-hide timer. Public
   // because they are global: a change made in one window applies to them all.
   void ApplyPrefs();
@@ -118,6 +122,7 @@ class MayaraPpiWindow : public wxPanel {
   std::function<void(const std::string&, int)> m_thresh_set;
   std::function<PpiPrefs()> m_prefs_get;
   std::function<void(const PpiPrefs&)> m_prefs_set;
+  ZoneEdit m_zone_edit;      // live, uncommitted guard-zone edit
   wxTimer m_idle_timer;      // 1 Hz, only while auto-hide is on
   int m_idle_secs = 0;       // seconds the pointer has been off the controls
   int m_grid_cols = 0;      // current grid column count (-1 while soloed)
