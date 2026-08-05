@@ -35,6 +35,22 @@ std::string Num(double v) {
   return buf;
 }
 
+// How many distinct values a number control can take. A slider is fine for a
+// handful of steps and turns into guesswork for hundreds: over a 90 px track,
+// one pixel of travel can be several units, so the value you actually want is
+// unreachable. Above kStepperFrom the slider gets - / + buttons for the last
+// few units; above kEntryFrom it is replaced by a field you can type into.
+const double kStepperFrom = 20.0;
+const double kEntryFrom = 100.0;
+
+double NumberSteps(const ControlDef& d) {
+  const double mn = d.has_min ? d.minValue : 0.0;
+  const double mx = d.has_max ? d.maxValue : 100.0;
+  const double step = (d.has_step && d.stepValue > 0) ? d.stepValue : 1.0;
+  if (mx <= mn) return 1.0;
+  return (mx - mn) / step + 1.0;
+}
+
 std::string BodyValueAuto(double v, bool has_auto, bool a) {
   std::string s = "{\"value\":" + Num(v);
   if (has_auto) s += a ? ",\"auto\":true" : ",\"auto\":false";
@@ -550,15 +566,46 @@ void ControlsPanel::AddNumber(wxSizer* outer, const ControlDef& def) {
                             wxString::FromUTF8(def.name.c_str())),
            0, wxLEFT, 2);
 
-  // slider | value | Auto  — value has a fixed width so it never clips.
+  // How the value is edited depends on how many values there are; see
+  // NumberSteps. Layouts: [slider | value | Auto], [slider | - | value | + |
+  // Auto], or [field | Auto].
+  const double steps = NumberSteps(def);
+  const bool use_entry = steps > kEntryFrom;
+  const bool use_steppers = !use_entry && steps > kStepperFrom;
+
   auto* row = new wxBoxSizer(wxHORIZONTAL);
-  auto* slider = new ThemedSlider(this, m_theme);
-  slider->SetMinSize(wxSize(90, 24));
-  row->Add(slider, 1, wxALIGN_CENTER_VERTICAL);
-  auto* valtext = new wxStaticText(this, wxID_ANY, "", wxDefaultPosition,
-                                   wxSize(46, -1),
-                                   wxALIGN_RIGHT | wxST_NO_AUTORESIZE);
-  row->Add(valtext, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 4);
+  ThemedSlider* slider = nullptr;
+  wxTextCtrl* entry = nullptr;
+  wxStaticText* valtext = nullptr;
+  ThemedButton *minus = nullptr, *plus = nullptr;
+
+  if (use_entry) {
+    entry = new wxTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition,
+                           wxSize(80, -1), wxTE_PROCESS_ENTER);
+    row->Add(entry, 0, wxALIGN_CENTER_VERTICAL);
+    if (!def.units.empty())
+      row->Add(new wxStaticText(this, wxID_ANY,
+                                wxString::FromUTF8(def.units.c_str())),
+               0, wxALIGN_CENTER_VERTICAL | wxLEFT, 4);
+  } else {
+    slider = new ThemedSlider(this, m_theme);
+    slider->SetMinSize(wxSize(90, 24));
+    row->Add(slider, 1, wxALIGN_CENTER_VERTICAL);
+    if (use_steppers) {
+      minus = new ThemedButton(this, "-", m_theme, /*toggle=*/false);
+      minus->SetMinSize(wxSize(24, 24));
+      row->Add(minus, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 2);
+    }
+    valtext = new wxStaticText(this, wxID_ANY, "", wxDefaultPosition,
+                               wxSize(46, -1),
+                               wxALIGN_RIGHT | wxST_NO_AUTORESIZE);
+    row->Add(valtext, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 4);
+    if (use_steppers) {
+      plus = new ThemedButton(this, "+", m_theme, /*toggle=*/false);
+      plus->SetMinSize(wxSize(24, 24));
+      row->Add(plus, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
+    }
+  }
   ThemedButton* autobtn = nullptr;
   if (def.hasAuto) {
     autobtn = new ThemedButton(this, _("Auto"), m_theme, /*toggle=*/true);
@@ -580,51 +627,104 @@ void ControlsPanel::AddNumber(wxSizer* outer, const ControlDef& def) {
   auto dragging = std::make_shared<bool>(false);
 
   std::function<void(const ControlValue&)> refresh =
-      [slider, valtext, autobtn, def, mn, mx, units,
+      [slider, entry, valtext, minus, plus, autobtn, def, mn, mx, units,
        dragging](const ControlValue& v) {
         const bool adj = def.hasAutoAdjustable && v.auto_;
         const double lo = adj ? def.autoAdjustMin : mn;
         const double hi = adj ? def.autoAdjustMax : mx;
         const double cur = adj ? v.autoValue : v.value;
-        if (!*dragging && hi > lo)
+        // *dragging also covers "the field has focus": overwriting what
+        // someone is halfway through typing is worse than a stale display.
+        if (slider && !*dragging && hi > lo)
           slider->SetValue(Clampi(
               static_cast<int>((cur - lo) / (hi - lo) * 1000.0 + 0.5), 0,
               1000));
-        if (adj) {
-          const long a = std::lround(cur);
-          valtext->SetLabel(a == 0 ? wxString("A")
-                                   : wxString::Format("A%+ld", a));
-        } else {
-          valtext->SetLabel(FormatVal(v.value, units));
+        if (entry && !*dragging)
+          entry->ChangeValue(wxString::FromUTF8(Num(cur).c_str()));
+        if (valtext) {
+          if (adj) {
+            const long a = std::lround(cur);
+            valtext->SetLabel(a == 0 ? wxString("A")
+                                     : wxString::Format("A%+ld", a));
+          } else {
+            valtext->SetLabel(FormatVal(v.value, units));
+          }
         }
         if (autobtn) {
           autobtn->SetValue(v.auto_);
-          slider->Enable(!v.auto_ || def.hasAutoAdjustable);
+          const bool on = !v.auto_ || def.hasAutoAdjustable;
+          if (slider) slider->Enable(on);
+          if (entry) entry->Enable(on);
+          if (minus) minus->Enable(on);
+          if (plus) plus->Enable(on);
         }
       };
 
-  auto send = [this, id, mn, mx, def, slider]() {
+  // One place that writes a value, whatever the widget was.
+  auto send_value = [this, id, mn, mx, def](double val) {
     ControlValue v = controls()->Value(id);
     const bool adj = def.hasAutoAdjustable && v.auto_;
     const double lo = adj ? def.autoAdjustMin : mn;
     const double hi = adj ? def.autoAdjustMax : mx;
-    const double val = lo + (hi - lo) * slider->GetValue() / 1000.0;
+    if (val < lo) val = lo;
+    if (val > hi) val = hi;
     if (adj)
       Set(id, "{\"auto\":true,\"autoValue\":" + Num(val) + "}");
     else
       Set(id, BodyValueAuto(val, def.hasAuto, false));  // manual -> auto off
   };
 
-  slider->Bind(wxEVT_SCROLL_THUMBTRACK,
-               [dragging](wxScrollEvent&) { *dragging = true; });
-  slider->Bind(wxEVT_SCROLL_THUMBRELEASE, [dragging, send](wxScrollEvent&) {
-    *dragging = false;
-    send();
-  });
-  slider->Bind(wxEVT_SCROLL_CHANGED, [dragging, send](wxScrollEvent&) {
-    *dragging = false;
-    send();
-  });
+  if (slider) {
+    auto send = [this, id, mn, mx, def, slider, send_value]() {
+      ControlValue v = controls()->Value(id);
+      const bool adj = def.hasAutoAdjustable && v.auto_;
+      const double lo = adj ? def.autoAdjustMin : mn;
+      const double hi = adj ? def.autoAdjustMax : mx;
+      send_value(lo + (hi - lo) * slider->GetValue() / 1000.0);
+    };
+    slider->Bind(wxEVT_SCROLL_THUMBTRACK,
+                 [dragging](wxScrollEvent&) { *dragging = true; });
+    slider->Bind(wxEVT_SCROLL_THUMBRELEASE, [dragging, send](wxScrollEvent&) {
+      *dragging = false;
+      send();
+    });
+    slider->Bind(wxEVT_SCROLL_CHANGED, [dragging, send](wxScrollEvent&) {
+      *dragging = false;
+      send();
+    });
+  }
+
+  // Steppers move by the schema's own step, which is the whole point: the
+  // slider cannot reliably land on one when there are hundreds of them.
+  const double stepv = (def.has_step && def.stepValue > 0) ? def.stepValue : 1.0;
+  auto nudge = [this, id, def, stepv, send_value](int dir) {
+    ControlValue v = controls()->Value(id);
+    const bool adj = def.hasAutoAdjustable && v.auto_;
+    send_value((adj ? v.autoValue : v.value) + dir * stepv);
+  };
+  if (minus)
+    minus->Bind(wxEVT_BUTTON, [nudge](wxCommandEvent&) { nudge(-1); });
+  if (plus) plus->Bind(wxEVT_BUTTON, [nudge](wxCommandEvent&) { nudge(+1); });
+
+  if (entry) {
+    // Typing holds off the updater until the value is committed or the field
+    // loses focus, so a 400 ms refresh cannot eat a half-typed number.
+    entry->Bind(wxEVT_SET_FOCUS, [dragging](wxFocusEvent& e) {
+      *dragging = true;
+      e.Skip();
+    });
+    auto commit = [entry, dragging, send_value]() {
+      double d = 0;
+      if (entry->GetValue().ToDouble(&d)) send_value(d);
+      *dragging = false;
+    };
+    entry->Bind(wxEVT_TEXT_ENTER,
+                [commit](wxCommandEvent&) { commit(); });
+    entry->Bind(wxEVT_KILL_FOCUS, [commit](wxFocusEvent& e) {
+      commit();
+      e.Skip();
+    });
+  }
 
   if (autobtn) {
     autobtn->Bind(wxEVT_TOGGLEBUTTON, [this, id, refresh,
@@ -868,40 +968,34 @@ void ControlsPanel::AddZone(wxSizer* outer, const ControlDef& def) {
            0, wxLEFT | wxTOP, 4);
   auto dirty = std::make_shared<bool>(false);
 
-  auto make_row = [&](const wxString& label, bool is_dist) {
+  // Typed fields, not sliders. An angle has 360 useful values and a distance
+  // thousands; over a 90 px track a pixel is several degrees or tens of metres,
+  // so a slider cannot express "start at 47 degrees, 250 m out" at all.
+  auto make_row = [&](const wxString& label, const wxString& unit) {
     auto* row = new wxBoxSizer(wxHORIZONTAL);
     row->Add(new wxStaticText(this, wxID_ANY, label, wxDefaultPosition,
                               wxSize(52, -1)),
              0, wxALIGN_CENTER_VERTICAL);
-    auto* sl = new ThemedSlider(this, m_theme);
-    sl->SetMinSize(wxSize(90, 24));
-    row->Add(sl, 1, wxALIGN_CENTER_VERTICAL);
-    auto* val = new wxStaticText(this, wxID_ANY, "", wxDefaultPosition,
-                                 wxSize(52, -1),
-                                 wxALIGN_RIGHT | wxST_NO_AUTORESIZE);
-    row->Add(val, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 4);
-    box->Add(row, 0, wxEXPAND | wxLEFT, 8);
-    auto self = [sl, val, is_dist, maxDist]() {
-      if (is_dist)
-        val->SetLabel(
-            wxString::Format("%ld m", RoundL(sl->GetValue() / 1000.0 * maxDist)));
-      else
-        val->SetLabel(
-            wxString::Format("%ld°", RoundL(SliderToDeg(sl->GetValue()))));
-    };
-    sl->Bind(wxEVT_SCROLL_THUMBTRACK,
-             [dirty, self](wxScrollEvent&) { *dirty = true; self(); });
-    sl->Bind(wxEVT_SCROLL_CHANGED,
-             [dirty, self](wxScrollEvent&) { *dirty = true; self(); });
-    return std::make_pair(sl, val);
+    auto* field = new wxTextCtrl(this, wxID_ANY, wxEmptyString,
+                                 wxDefaultPosition, wxSize(70, -1),
+                                 wxTE_PROCESS_ENTER);
+    row->Add(field, 0, wxALIGN_CENTER_VERTICAL);
+    row->Add(new wxStaticText(this, wxID_ANY, unit), 0,
+             wxALIGN_CENTER_VERTICAL | wxLEFT, 4);
+    box->Add(row, 0, wxEXPAND | wxLEFT | wxBOTTOM, 8);
+    // Editing holds off the updater until Save, so a refresh mid-edit cannot
+    // discard what has been typed into the other three fields.
+    field->Bind(wxEVT_SET_FOCUS, [dirty](wxFocusEvent& e) {
+      *dirty = true;
+      e.Skip();
+    });
+    return field;
   };
 
-  ThemedSlider *sStart, *sEnd, *sIn, *sOut;
-  wxStaticText *vStart, *vEnd, *vIn, *vOut;
-  std::tie(sStart, vStart) = make_row(_("Start°"), false);
-  std::tie(sEnd, vEnd) = make_row(_("End°"), false);
-  std::tie(sIn, vIn) = make_row(_("Inner"), true);
-  std::tie(sOut, vOut) = make_row(_("Outer"), true);
+  wxTextCtrl* fStart = make_row(_("Start"), wxT("°"));
+  wxTextCtrl* fEnd = make_row(_("End"), wxT("°"));
+  wxTextCtrl* fIn = make_row(_("Inner"), _("m"));
+  wxTextCtrl* fOut = make_row(_("Outer"), _("m"));
 
   auto* brow = new wxBoxSizer(wxHORIZONTAL);
   auto* en = new ThemedButton(this, _("Enabled"), m_theme, /*toggle=*/true);
@@ -912,36 +1006,37 @@ void ControlsPanel::AddZone(wxSizer* outer, const ControlDef& def) {
   box->Add(brow, 0, wxEXPAND);
   outer->Add(box, 0, wxEXPAND | wxALL, 4);
 
-  save->Bind(wxEVT_BUTTON, [this, id, dirty, sStart, sEnd, sIn, sOut, en,
-                            maxDist](wxCommandEvent&) {
+  auto num = [](wxTextCtrl* f, double fallback) {
+    double d = 0;
+    return f->GetValue().ToDouble(&d) ? d : fallback;
+  };
+  auto commit = [this, id, dirty, fStart, fEnd, fIn, fOut, en, maxDist, num]() {
+    ControlValue cur = controls()->Value(id);
+    double in = num(fIn, cur.startDistance), out = num(fOut, cur.endDistance);
+    if (in < 0) in = 0;
+    if (out > maxDist) out = maxDist;
     char buf[256];
-    std::snprintf(
-        buf, sizeof(buf),
-        "{\"value\":%g,\"endValue\":%g,\"startDistance\":%g,"
-        "\"endDistance\":%g,\"enabled\":%s}",
-        DegToRad(SliderToDeg(sStart->GetValue())),
-        DegToRad(SliderToDeg(sEnd->GetValue())),
-        sIn->GetValue() / 1000.0 * maxDist, sOut->GetValue() / 1000.0 * maxDist,
-        en->GetValue() ? "true" : "false");
+    std::snprintf(buf, sizeof(buf),
+                  "{\"value\":%g,\"endValue\":%g,\"startDistance\":%g,"
+                  "\"endDistance\":%g,\"enabled\":%s}",
+                  DegToRad(num(fStart, RadToDeg(cur.value))),
+                  DegToRad(num(fEnd, RadToDeg(cur.endValue))), in, out,
+                  en->GetValue() ? "true" : "false");
     Set(id, buf);
     *dirty = false;
-  });
+  };
+  save->Bind(wxEVT_BUTTON, [commit](wxCommandEvent&) { commit(); });
+  // Enter in any field saves the lot, so the four values go over as one zone.
+  for (wxTextCtrl* f : {fStart, fEnd, fIn, fOut})
+    f->Bind(wxEVT_TEXT_ENTER, [commit](wxCommandEvent&) { commit(); });
 
-  m_updaters.push_back([this, id, dirty, sStart, vStart, sEnd, vEnd, sIn, vIn,
-                        sOut, vOut, en, maxDist]() {
+  m_updaters.push_back([this, id, dirty, fStart, fEnd, fIn, fOut, en]() {
     if (*dirty) return;
     ControlValue v = controls()->Value(id);
-    const double sd = RadToDeg(v.value), ed = RadToDeg(v.endValue);
-    sStart->SetValue(DegToSlider(sd));
-    vStart->SetLabel(wxString::Format("%ld°", RoundL(sd)));
-    sEnd->SetValue(DegToSlider(ed));
-    vEnd->SetLabel(wxString::Format("%ld°", RoundL(ed)));
-    sIn->SetValue(Clampi(
-        static_cast<int>(RoundL(v.startDistance / maxDist * 1000.0)), 0, 1000));
-    vIn->SetLabel(wxString::Format("%ld m", RoundL(v.startDistance)));
-    sOut->SetValue(Clampi(
-        static_cast<int>(RoundL(v.endDistance / maxDist * 1000.0)), 0, 1000));
-    vOut->SetLabel(wxString::Format("%ld m", RoundL(v.endDistance)));
+    fStart->ChangeValue(wxString::Format("%ld", RoundL(RadToDeg(v.value))));
+    fEnd->ChangeValue(wxString::Format("%ld", RoundL(RadToDeg(v.endValue))));
+    fIn->ChangeValue(wxString::Format("%ld", RoundL(v.startDistance)));
+    fOut->ChangeValue(wxString::Format("%ld", RoundL(v.endDistance)));
     if (v.has_enabled) en->SetValue(v.enabled);
   });
 }
