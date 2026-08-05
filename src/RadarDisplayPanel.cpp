@@ -271,7 +271,7 @@ void RadarDisplayPanel::DrawIconBar(wxDC& dc, const wxSize& sz) {
   // 5: EBL/VRM (ring + radial). Placeholder toggle.
   {
     wxPoint c = ctr(5);
-    const wxColour col = m_ebl_on ? m_theme.accent : dim;
+    const wxColour col = m_ebl_arm ? m_theme.accent : dim;
     dc.SetBrush(*wxTRANSPARENT_BRUSH);
     dc.SetPen(wxPen(col, 2));
     dc.DrawCircle(c.x, c.y, 9);
@@ -844,7 +844,7 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, const PpiGeometry& g) {
   dc.DrawLine(c.x, c.y + 5, c.x, c.y + 7);
 
   // EBL/VRM and the cursor readout go on top of everything geographic.
-  if (m_ebl_on && m_ebl_set && geo > 0) DrawEblVrm(dc, g, geo);
+  if (geo > 0) DrawVrmEbl(dc, g, geo);
   if (m_cursor_in && !m_dragging) DrawCursor(dc, g);
 
   // Zoom/recentre chip, only while magnified or panned. Clicking it undoes
@@ -1036,39 +1036,89 @@ int RadarDisplayPanel::ZoneHandleHit(const wxPoint& p) const {
   return -1;
 }
 
-void RadarDisplayPanel::DrawEblVrm(wxDC& dc, const PpiGeometry& g, double geo) {
-  const wxColour col(0, 230, 160);
-  const double r = m_vrm_m * geo;
-  // The bearing line runs past the VRM to the picture edge, so it stays usable
-  // as a bearing reference when the marker itself is close in.
-  const double line_r = std::max(r, g.radius * 1.42);
-  dc.SetPen(wxPen(col, 1, wxPENSTYLE_SHORT_DASH));
-  dc.SetBrush(*wxTRANSPARENT_BRUSH);
-  const wxPoint e = PolarPoint(g.center, line_r, m_ebl_bearing, g.up_bearing);
-  dc.DrawLine(g.center.x, g.center.y, e.x, e.y);
-  if (r >= 2) dc.DrawCircle(g.center.x, g.center.y, static_cast<int>(r));
+// Styled after the mayara GUI (web/gui/ppi.js #drawVrmEblMarker): a dashed
+// bearing line run out to the picture edge so it stays visible when the ring is
+// off-screen, a range ring, a filled dot where they cross, and a boxed readout
+// set out along the bearing.
+void RadarDisplayPanel::DrawVrmEbl(wxDC& dc, const PpiGeometry& g, double geo) {
+  static const wxColour kColours[kVrmEblCount] = {wxColour(0, 255, 255),
+                                                  wxColour(255, 0, 255)};
+  std::unique_ptr<wxGraphicsContext> gc(
+      wxGraphicsContext::CreateFromUnknownDC(dc));
+  if (!gc) return;
+  gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
 
-  // Marker where the two meet, plus the readout beside it.
-  const wxPoint m = PolarPoint(g.center, r, m_ebl_bearing, g.up_bearing);
-  dc.SetPen(wxPen(col, 2));
-  dc.DrawLine(m.x - 5, m.y, m.x + 5, m.y);
-  dc.DrawLine(m.x, m.y - 5, m.x, m.y + 5);
+  for (int i = 0; i < kVrmEblCount; ++i) {
+    const VrmEbl& m = m_vrmebl[i];
+    if (!m.enabled) continue;
+    const wxColour col = kColours[i];
+    const double brg = g.heading + m.bearing_rad * 180.0 / M_PI;
+    const double r = m.distance_m * geo;
+    const double line_r = std::max(r, g.radius * 1.42);
 
-  wxFont f = GetFont();
-  f.SetPointSize(std::max(7, f.GetPointSize() - 1));
-  dc.SetFont(f);
-  dc.SetTextForeground(col);
-  // True bearing, and relative to the bow when we know where the bow points.
-  wxString txt = wxString::Format("EBL %03.0f°T", m_ebl_bearing);
-  if (g.has_heading) {
-    double rel = m_ebl_bearing - g.heading;
-    while (rel < 0) rel += 360;
-    while (rel >= 360) rel -= 360;
-    txt += wxString::Format("  %03.0f°R", rel);
+    wxPen pen(col, 2, wxPENSTYLE_SHORT_DASH);
+    gc->SetPen(gc->CreatePen(pen));
+    const wxPoint e = PolarPoint(g.center, line_r, brg, g.up_bearing);
+    gc->StrokeLine(g.center.x, g.center.y, e.x, e.y);
+
+    if (r > 0 && r < g.radius * 3) {
+      gc->SetPen(gc->CreatePen(wxPen(col, 2)));
+      gc->SetBrush(*wxTRANSPARENT_BRUSH);
+      wxGraphicsPath ring = gc->CreatePath();
+      ring.AddCircle(g.center.x, g.center.y, r);
+      gc->StrokePath(ring);
+    }
+
+    // The point the marker actually measures.
+    const wxPoint p = PolarPoint(g.center, r, brg, g.up_bearing);
+    gc->SetBrush(gc->CreateBrush(wxBrush(col)));
+    gc->SetPen(gc->CreatePen(wxPen(*wxBLACK, 1)));
+    wxGraphicsPath dot = gc->CreatePath();
+    dot.AddCircle(p.x, p.y, 6);
+    gc->FillPath(dot);
+    gc->StrokePath(dot);
+
+    // Readout: which marker, the bearing (true when we know the heading,
+    // otherwise relative) and the range.
+    wxFont f = GetFont();
+    f.SetPointSize(std::max(7, f.GetPointSize() - 1));
+    f.MakeBold();
+    dc.SetFont(f);
+    double shown = g.has_heading ? brg : m.bearing_rad * 180.0 / M_PI;
+    while (shown < 0) shown += 360.0;
+    while (shown >= 360.0) shown -= 360.0;
+    const wxString lines[3] = {
+        wxString::Format(_("VRM/EBL %d"), i + 1),
+        wxString::Format(g.has_heading ? "%.1f° T" : "%.1f° R", shown),
+        FormatRange(m.distance_m, g.metric)};
+    wxCoord tw = 0, th = 0, w1, h1;
+    for (const wxString& l : lines) {
+      dc.GetTextExtent(l, &w1, &h1);
+      tw = std::max(tw, w1);
+      th = h1;
+    }
+    const int padx = 6, pady = 4, lh = th + 2;
+    const int bw = tw + padx * 2, bh = lh * 3 + pady * 2;
+    // Anchored past the crossing point, then pushed clear of the bearing line
+    // so the box never sits on top of what it describes.
+    const wxPoint a = PolarPoint(g.center, r + 24, brg, g.up_bearing);
+    int bx = a.x - bw / 2, by = a.y - bh / 2;
+    bx += (a.x >= g.center.x) ? 12 : -(bw / 2 + 12);
+    by += (a.y >= g.center.y) ? 12 : -12;
+    const wxSize sz = GetClientSize();
+    bx = std::max(4, std::min(sz.x - bw - 4, bx));
+    by = std::max(4, std::min(sz.y - bh - 4, by));
+
+    gc->SetBrush(gc->CreateBrush(wxBrush(wxColour(0, 0, 0, 191))));
+    gc->SetPen(gc->CreatePen(wxPen(col, 1)));
+    wxGraphicsPath box = gc->CreatePath();
+    box.AddRectangle(bx, by, bw, bh);
+    gc->FillPath(box);
+    gc->StrokePath(box);
+    dc.SetTextForeground(col);
+    for (int k = 0; k < 3; ++k)
+      dc.DrawText(lines[k], bx + padx, by + pady + k * lh);
   }
-  dc.DrawText(txt, m.x + 8, m.y - 2);
-  dc.DrawText("VRM " + FormatRange(m_vrm_m, g.metric), m.x + 8,
-              m.y - 2 + f.GetPixelSize().y + 1);
 }
 
 void RadarDisplayPanel::DrawCursor(wxDC& dc, const PpiGeometry& g) {
@@ -1199,7 +1249,9 @@ void RadarDisplayPanel::HandleClick(const wxPoint& p) {
     m_layers.ais = !m_layers.ais;
     Refresh(false);
   } else if (m_icon_ebl.Contains(p)) {
-    m_ebl_on = !m_ebl_on;
+    // Cycle: off -> arm marker 1 -> arm marker 2 -> off. One icon for both,
+    // and an armed marker keeps the other one's placement untouched.
+    m_ebl_arm = (m_ebl_arm + 1) % (kVrmEblCount + 1);
     Refresh(false);
   } else if (m_icon_gain.Contains(p)) {
     if (m_on_control) m_on_control("gain");
@@ -1214,14 +1266,19 @@ void RadarDisplayPanel::HandleClick(const wxPoint& p) {
   else if (m_range_plus_rect.Contains(p))
     StepRange(-1);  // "+" zooms in to a shorter range
   else {
-    // A click in the picture places the EBL/VRM while they are shown. The
-    // marker is what the click is for then; focus still follows.
-    if (m_ebl_on) {
+    // A click in the picture places the armed marker. Bearings are stored
+    // bow-relative so a marker stays on the target as the boat turns.
+    if (m_ebl_arm > 0) {
       double brg = 0, dist = 0;
       if (PointToPolar(p, brg, dist)) {
-        m_ebl_bearing = brg;
-        m_vrm_m = dist;
-        m_ebl_set = true;
+        const PpiGeometry g = Geometry();
+        double rel = brg - g.heading;
+        while (rel < -180.0) rel += 360.0;
+        while (rel > 180.0) rel -= 360.0;
+        VrmEbl& m = m_vrmebl[m_ebl_arm - 1];
+        m.enabled = true;
+        m.bearing_rad = rel * M_PI / 180.0;
+        m.distance_m = dist;
         Refresh(false);
       }
     }
