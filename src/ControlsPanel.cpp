@@ -880,12 +880,14 @@ void ControlsPanel::FillVrmEblSection(wxSizer* content) {
     row->Add(label, 0, wxALIGN_CENTER_VERTICAL);
     auto* val = new wxStaticText(this, wxID_ANY, wxEmptyString);
     row->Add(val, 1, wxALIGN_CENTER_VERTICAL | wxLEFT, 4);
-    auto* off = new ThemedButton(this, _("Clear"), m_theme, /*toggle=*/false);
-    // ThemedButton has no best size of its own, so at proportion 0 it collapses
-    // to nothing -- which is why this button was not there at all.
-    off->SetMinSize(wxSize(56, 24));
-    row->Add(off, 0, wxALIGN_CENTER_VERTICAL);
     content->Add(row, 0, wxEXPAND | wxALL, 4);
+    // Its own full-width row, added at proportion 1 -- the same shape as the
+    // guard-zone button row, which lays out reliably. Sharing a row with a
+    // proportion-1 label left it with no room to appear in.
+    auto* brow = new wxBoxSizer(wxHORIZONTAL);
+    auto* off = new ThemedButton(this, _("Clear"), m_theme, /*toggle=*/false);
+    brow->Add(off, 1, wxALL, 2);
+    content->Add(brow, 0, wxEXPAND | wxLEFT | wxRIGHT, 4);
 
     off->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&) {
       if (!m_vrm_get || !m_vrm_set) return;

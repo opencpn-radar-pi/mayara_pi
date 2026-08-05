@@ -235,6 +235,17 @@ void RadarDisplayPanel::DrawIconBar(wxDC& dc, const wxSize& sz) {
 
   const wxColour ink(220, 220, 225), dim(115, 115, 122);
   auto cellRect = [&](int i) { return wxRect(bx, by + i * cell, bw, cell); };
+  // A caption under an icon whose glyph does not say what it is. Tiny, and
+  // centred in the cell so it reads as part of the icon.
+  auto caption = [&](int i, const wxString& text, const wxColour& col) {
+    wxFont f = dc.GetFont();
+    f.SetPointSize(6);
+    dc.SetFont(f);
+    dc.SetTextForeground(col);
+    wxCoord tw, th;
+    dc.GetTextExtent(text, &tw, &th);
+    dc.DrawText(text, bx + (bw - tw) / 2, by + i * cell + cell - th - 2);
+  };
   auto ctr = [&](int i) {
     return wxPoint(bx + bw / 2, by + i * cell + cell / 2);
   };
@@ -257,6 +268,7 @@ void RadarDisplayPanel::DrawIconBar(wxDC& dc, const wxSize& sz) {
                       wxPoint(c.x + 7, c.y + 8)};
     dc.DrawPolygon(3, tri);
     m_icon_ais = cellRect(1);
+    caption(1, "AIS", m_layers.ais ? col : dim);
   }
   // 2,3,4: Gain / Sea / Rain gauges.
   {
@@ -295,6 +307,7 @@ void RadarDisplayPanel::DrawIconBar(wxDC& dc, const wxSize& sz) {
       dc.DrawText(n, c.x - tw / 2 - 4, c.y - th / 2 + 1);
     }
     m_icon_ebl = cellRect(5);
+    caption(5, "EBL/VRM", col);
   }
   // 6: View (mini hamburger over an eye).
   {
