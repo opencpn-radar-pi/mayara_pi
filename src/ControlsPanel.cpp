@@ -974,28 +974,53 @@ void ControlsPanel::AddZone(wxSizer* outer, const ControlDef& def) {
   // Typed fields, not sliders. An angle has 360 useful values and a distance
   // thousands; over a 90 px track a pixel is several degrees or tens of metres,
   // so a slider cannot express "start at 47 degrees, 250 m out" at all.
-  auto make_row = [&](const wxString& label, const wxString& unit) {
+  // Two rows rather than four: a zone is a pair of ranges, so the pairs read as
+  // pairs.  Angles: <from> - <to>   Range: <from> - <to>
+  wxTextCtrl *fStart, *fEnd, *fIn, *fOut;
+  auto make_pair = [&](const wxString& label, const wxString& unit,
+                       wxTextCtrl** lo, wxTextCtrl** hi) {
     auto* row = new wxBoxSizer(wxHORIZONTAL);
     row->Add(new wxStaticText(this, wxID_ANY, label, wxDefaultPosition,
                               wxSize(52, -1)),
              0, wxALIGN_CENTER_VERTICAL);
-    auto* field = new wxTextCtrl(this, wxID_ANY, wxEmptyString,
-                                 wxDefaultPosition, wxSize(70, -1),
-                                 wxTE_PROCESS_ENTER);
-    row->Add(field, 0, wxALIGN_CENTER_VERTICAL);
+    auto field = [this]() {
+      return new wxTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition,
+                            wxSize(54, -1),
+                            wxTE_PROCESS_ENTER | wxTE_RIGHT);
+    };
+    *lo = field();
+    row->Add(*lo, 0, wxALIGN_CENTER_VERTICAL);
+    row->Add(new wxStaticText(this, wxID_ANY, wxT(" – ")), 0,
+             wxALIGN_CENTER_VERTICAL);
+    *hi = field();
+    row->Add(*hi, 0, wxALIGN_CENTER_VERTICAL);
     row->Add(new wxStaticText(this, wxID_ANY, unit), 0,
              wxALIGN_CENTER_VERTICAL | wxLEFT, 4);
-    box->Add(row, 0, wxEXPAND | wxLEFT | wxBOTTOM, 8);
-    return field;
+    box->Add(row, 0, wxEXPAND | wxLEFT | wxBOTTOM, 4);
   };
-
-  wxTextCtrl* fStart = make_row(_("Start"), wxT("°"));
-  wxTextCtrl* fEnd = make_row(_("End"), wxT("°"));
-  wxTextCtrl* fIn = make_row(_("Inner"), _("m"));
-  wxTextCtrl* fOut = make_row(_("Outer"), _("m"));
+  make_pair(_("Angles:"), wxT("°"), &fStart, &fEnd);
+  make_pair(_("Range:"), _("m"), &fIn, &fOut);
   wxTextCtrl* fields[4] = {fStart, fEnd, fIn, fOut};
+  // Which field is being typed in, or -1. Tracked by hand: FindFocus() reports
+  // the native text view inside a wxTextCtrl on macOS, never the wxTextCtrl,
+  // so comparing pointers never matched and the updater overwrote the field
+  // under the caret four times a second -- which looked like being unable to
+  // type at all.
+  auto focused = std::make_shared<int>(-1);
+  for (int i = 0; i < 4; ++i) {
+    fields[i]->Bind(wxEVT_SET_FOCUS, [focused, i](wxFocusEvent& e) {
+      *focused = i;
+      e.Skip();
+    });
+    fields[i]->Bind(wxEVT_KILL_FOCUS, [focused, i](wxFocusEvent& e) {
+      if (*focused == i) *focused = -1;
+      e.Skip();
+    });
+  }
 
   auto* brow = new wxBoxSizer(wxHORIZONTAL);
+  // Enabled acts immediately and independently of an edit: switching a zone on
+  // or off is not a change of shape, and should not need Save.
   auto* en = new ThemedButton(this, _("Enabled"), m_theme, /*toggle=*/true);
   brow->Add(en, 1, wxALL, 2);
   // One button with two jobs: it starts an edit, and abandons one. Save only
@@ -1015,11 +1040,17 @@ void ControlsPanel::AddZone(wxSizer* outer, const ControlDef& def) {
   // Read-only until Edit is pressed: these four numbers aim a guard zone, and
   // half-typed ones should not look like the radar's own.
   auto editing = std::make_shared<bool>(false);
-  auto apply_mode = [fields, edit, save, en, editing, this]() {
-    for (wxTextCtrl* f : fields) f->SetEditable(*editing);
+  auto apply_mode = [fields, edit, save, editing, this]() {
+    for (wxTextCtrl* f : fields) {
+      f->SetEditable(*editing);
+      // Read-only has to look read-only: SetEditable alone changes nothing you
+      // can see, which is how the fields came across as broken.
+      f->SetBackgroundColour(*editing ? m_theme.lozenge_bg : m_theme.panel_bg);
+      f->SetForegroundColour(*editing ? m_theme.text : m_theme.dim_text);
+      f->Refresh();
+    }
     edit->SetLabel(*editing ? _("Cancel") : _("Edit"));
     save->Show(*editing);
-    en->Enable(*editing);
     Layout();
   };
   apply_mode();
@@ -1037,6 +1068,19 @@ void ControlsPanel::AddZone(wxSizer* outer, const ControlDef& def) {
     z.end_m = num(fOut, cur.endDistance);
     return z;
   };
+
+  en->Bind(wxEVT_TOGGLEBUTTON, [this, id, en](wxCommandEvent&) {
+    // Send the zone back unchanged except for the flag, so flipping it cannot
+    // quietly reshape the zone.
+    const ControlValue v = controls()->Value(id);
+    char buf[256];
+    std::snprintf(buf, sizeof(buf),
+                  "{\"value\":%g,\"endValue\":%g,\"startDistance\":%g,"
+                  "\"endDistance\":%g,\"enabled\":%s}",
+                  v.value, v.endValue, v.startDistance, v.endDistance,
+                  en->GetValue() ? "true" : "false");
+    Set(id, buf);
+  });
 
   edit->Bind(wxEVT_BUTTON, [this, id, editing, apply_mode](wxCommandEvent&) {
     if (!m_zone_set) return;
@@ -1085,12 +1129,17 @@ void ControlsPanel::AddZone(wxSizer* outer, const ControlDef& def) {
       e.Skip();
     });
 
-  m_updaters.push_back([this, id, fields, en, editing, apply_mode]() {
+  m_updaters.push_back(
+      [this, id, fields, en, save, editing, focused, apply_mode]() {
     // While editing, the shared edit is the truth -- a dragged handle writes it
     // and the numbers must follow. Otherwise the radar's own values are.
     const ZoneEdit z = m_zone_get ? m_zone_get() : ZoneEdit();
     const bool mine = z.active && z.radar_index == m_index && z.id == id;
-    if (mine != *editing) {  // e.g. another zone took over the edit
+    // Re-assert rather than assume: expanding this control's section calls
+    // Show() recursively over every child (which un-hides Save), and a rebuild
+    // re-themes the fields, so the mode has to be reapplied when it has drifted.
+    if (mine != *editing || save->IsShown() != *editing ||
+        fields[0]->IsEditable() != *editing) {
       *editing = mine;
       apply_mode();
     }
@@ -1106,11 +1155,13 @@ void ControlsPanel::AddZone(wxSizer* outer, const ControlDef& def) {
       vals[1] = RadToDeg(v.endValue);
       vals[2] = v.startDistance;
       vals[3] = v.endDistance;
-      if (v.has_enabled) en->SetValue(v.enabled);
     }
+    // Enabled belongs to the radar, not to the edit, so it tracks either way.
+    const ControlValue cv = controls()->Value(id);
+    if (cv.has_enabled) en->SetValue(cv.enabled);
     // Never overwrite the field being typed in; every other one follows.
     for (int i = 0; i < 4; ++i)
-      if (fields[i] != FindFocus())
+      if (i != *focused)
         fields[i]->ChangeValue(wxString::Format("%ld", RoundL(vals[i])));
   });
 }
