@@ -387,6 +387,12 @@ void ControlsPanel::AddCollapsibleSection(wxSizer* root, const wxString& title,
     m_collapsed[key] = c;
     header->SetCollapsed(c);
     root->Show(content, !c, true);
+    // That Show is recursive, so it un-hides children a control had
+    // deliberately hidden -- a guard zone's Save button, say. Re-push the model
+    // into the widgets so each control restates what it wants to be visible.
+    // The timer cannot do it: it only calls ApplyValues() when the radar sends
+    // a control update, which may be never.
+    ApplyValues();
     Layout();
     FitInside();
   });
