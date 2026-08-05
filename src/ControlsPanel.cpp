@@ -880,7 +880,7 @@ void ControlsPanel::FillVrmEblSection(wxSizer* content) {
     row->Add(label, 0, wxALIGN_CENTER_VERTICAL);
     auto* val = new wxStaticText(this, wxID_ANY, wxEmptyString);
     row->Add(val, 1, wxALIGN_CENTER_VERTICAL | wxLEFT, 4);
-    auto* off = new ThemedButton(this, _("Off"), m_theme, /*toggle=*/false);
+    auto* off = new ThemedButton(this, _("Clear"), m_theme, /*toggle=*/false);
     row->Add(off, 0, wxALIGN_CENTER_VERTICAL);
     content->Add(row, 0, wxEXPAND | wxALL, 4);
 
@@ -908,8 +908,9 @@ void ControlsPanel::FillVrmEblSection(wxSizer* content) {
   }
   content->Add(new wxStaticText(
                    this, wxID_ANY,
-                   _("Click the EBL icon to arm a marker, then click the "
-                     "picture to place it.")),
+                   _("The EBL icon cycles 1 / 2 / off and takes the colour of "
+                     "the marker it will place; click the picture to place it, "
+                     "and Clear to remove it.")),
                0, wxALL, 4);
 }
 

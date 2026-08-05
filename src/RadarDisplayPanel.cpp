@@ -107,6 +107,9 @@ void DrawGauge(wxDC& dc, wxPoint c, const wxString& letter, double frac,
   dc.DrawText(letter, c.x - tw / 2, c.y + yoff + 3);
 }
 
+// The two VRM/EBL markers, as in the mayara GUI.
+const wxColour kVrmEblColours[2] = {wxColour(0, 255, 255), wxColour(255, 0, 255)};
+
 // Sorted settable ranges for the "range" control.
 std::vector<int> RangeValues(RadarControls* c) {
   std::vector<int> vals;
@@ -268,14 +271,27 @@ void RadarDisplayPanel::DrawIconBar(wxDC& dc, const wxSize& sz) {
               m_theme.accent);
     m_icon_rain = cellRect(4);
   }
-  // 5: EBL/VRM (ring + radial). Placeholder toggle.
+  // 5: VRM/EBL (ring + radial). Takes the colour of the marker a click would
+  // place, and carries its number, so which one is armed is never a guess.
   {
     wxPoint c = ctr(5);
-    const wxColour col = m_ebl_arm ? m_theme.accent : dim;
+    const bool armed = m_ebl_arm > 0;
+    const wxColour col = armed ? kVrmEblColours[m_ebl_arm - 1] : dim;
     dc.SetBrush(*wxTRANSPARENT_BRUSH);
     dc.SetPen(wxPen(col, 2));
     dc.DrawCircle(c.x, c.y, 9);
     dc.DrawLine(c.x, c.y, c.x + 8, c.y - 5);
+    if (armed) {
+      wxFont f = dc.GetFont();
+      f.SetPointSize(8);
+      f.MakeBold();
+      dc.SetFont(f);
+      dc.SetTextForeground(col);
+      const wxString n = wxString::Format("%d", m_ebl_arm);
+      wxCoord tw, th;
+      dc.GetTextExtent(n, &tw, &th);
+      dc.DrawText(n, c.x - tw / 2, c.y - th / 2 + 1);
+    }
     m_icon_ebl = cellRect(5);
   }
   // 6: View (mini hamburger over an eye).
@@ -1041,8 +1057,6 @@ int RadarDisplayPanel::ZoneHandleHit(const wxPoint& p) const {
 // off-screen, a range ring, a filled dot where they cross, and a boxed readout
 // set out along the bearing.
 void RadarDisplayPanel::DrawVrmEbl(wxDC& dc, const PpiGeometry& g, double geo) {
-  static const wxColour kColours[kVrmEblCount] = {wxColour(0, 255, 255),
-                                                  wxColour(255, 0, 255)};
   std::unique_ptr<wxGraphicsContext> gc(
       wxGraphicsContext::CreateFromUnknownDC(dc));
   if (!gc) return;
@@ -1051,7 +1065,7 @@ void RadarDisplayPanel::DrawVrmEbl(wxDC& dc, const PpiGeometry& g, double geo) {
   for (int i = 0; i < kVrmEblCount; ++i) {
     const VrmEbl& m = m_vrmebl[i];
     if (!m.enabled) continue;
-    const wxColour col = kColours[i];
+    const wxColour col = kVrmEblColours[i];
     const double brg = g.heading + m.bearing_rad * 180.0 / M_PI;
     const double r = m.distance_m * geo;
     const double line_r = std::max(r, g.radius * 1.42);
