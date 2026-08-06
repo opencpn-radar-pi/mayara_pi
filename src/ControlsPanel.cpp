@@ -911,12 +911,6 @@ void ControlsPanel::FillVrmEblSection(wxSizer* content) {
                                      FormatVal(m.distance_m, "m")));
     });
   }
-  content->Add(new wxStaticText(
-                   this, wxID_ANY,
-                   _("The EBL icon cycles 1 / 2 / off and takes the colour of "
-                     "the marker it will place; click the picture to place it, "
-                     "and Clear to remove it.")),
-               0, wxALL, 4);
 }
 
 void ControlsPanel::AddServerRow(wxSizer* outer) {
