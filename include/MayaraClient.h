@@ -77,6 +77,18 @@ class MayaraClient {
   std::string ConnectedUrl();
   bool Connected();  // at least one radar is streaming
 
+  // A guard-zone alarm as the server reports it. The server does the
+  // detection and publishes notifications.radar.<key>.guardZone.<n>; the
+  // plugin only has to notice and say so.
+  struct GuardAlarm {
+    std::string radar_id;
+    int zone = 0;          // 1 or 2
+    bool active = false;   // anything but the "normal" state
+    std::string message;
+  };
+  // Every zone we have heard about, active or not.
+  std::vector<GuardAlarm> Alarms();
+
   // --- Signal K access -----------------------------------------------------
   // A Signal K server with security enabled answers 401 to every control write
   // until the plugin holds a device token. Signal K issues one through its
@@ -188,6 +200,8 @@ class MayaraClient {
   std::string m_manual;              // user-entered server URL (guarded)
   std::string m_local;               // our own local server, if any (guarded)
   std::string m_hint;                // OpenCPN's Signal K connection (guarded)
+  std::mutex m_alarm_mutex;
+  std::vector<GuardAlarm> m_alarms;  // keyed by radar id + zone
   std::string m_connected_url;       // base URL that connected (guarded)
   std::string m_remembered;          // last-known-good URL (set before Start)
 

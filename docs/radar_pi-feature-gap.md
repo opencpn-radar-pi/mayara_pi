@@ -32,11 +32,20 @@ sections below are the open work.
 
 ## Alarms
 
-**Guard-zone bogey alarm.** radar_pi has a bogey dialog with a blob-count
-threshold, a re-warn timeout and a configurable WAV. mayara-server *already
-emits* `notifications.radar.<key>.guardZone.<n>` as Signal K alerts
-(`radar/target/manager.rs`) — the plugin simply never subscribes. The cheapest
-large win on this list: the detection half is done.
+**Guard-zone bogey alarm.** The plugin now subscribes to
+`notifications.radar.<key>.guardZone.<n>` and raises an OpenCPN notification
+for each new one, which is where the operator already looks for alerts.
+
+Still missing next to radar_pi: a blob-count threshold, a re-warn timeout and a
+configurable WAV. OpenCPN's own notification handles the presentation, so those
+are only worth adding if its behaviour proves too quiet in practice.
+
+**Unverified:** no notification has been observed arriving. Watching the stream
+against `--emulator` for over a minute, with a guard zone deliberately widened
+to 300-600 m to cover the targets it was continuously acquiring, produced
+targets but no `notifications.*` delta. Either the emulator does not exercise
+that path or the server does not broadcast it; worth settling before relying on
+the alarm.
 
 ## Chart overlay
 

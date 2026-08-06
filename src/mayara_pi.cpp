@@ -195,6 +195,8 @@ int mayara_pi::Init() {
     // save the full-screen rects).
     if (AnyWindowShown() && !m_ocpn_fullscreen) CaptureWindowState();
 
+    PollGuardAlarms();
+
     // Remember the server that answered (fast reconnect next boot). Not gated
     // on a radar streaming: a server with nothing attached is still the right
     // address, and waiting for a radar meant a stale one that never answers
@@ -645,6 +647,28 @@ void mayara_pi::SyncLocalServerUrl() {
 // leading fields are needed, so extra trailing fields in future versions are
 // harmless. Field 23 is OpenCPN's own Signal K auth token; deliberately not
 // touched, since another component's credential is not ours to reuse.
+// The server detects guard-zone breaches and publishes them; this turns a new
+// one into an OpenCPN notification, which is where the operator already looks
+// for alerts -- rather than a dialog of our own that has to be dismissed.
+void mayara_pi::PollGuardAlarms() {
+  if (!m_client) return;
+  for (const auto& a : m_client->Alarms()) {
+    const std::string key = a.radar_id + "/" + std::to_string(a.zone);
+    const bool raised = m_alarms_raised.count(key) > 0;
+    if (a.active && !raised) {
+      const std::string msg =
+          a.message.empty()
+              ? "Radar guard zone " + std::to_string(a.zone) + ": target"
+              : a.message;
+      RaiseNotification(PI_NotificationSeverity::PI_kWarning, msg);
+      m_alarms_raised.insert(key);
+    } else if (!a.active && raised) {
+      // Let it be raised again next time the zone trips.
+      m_alarms_raised.erase(key);
+    }
+  }
+}
+
 std::string mayara_pi::OpenCpnSignalKUrl() const {
   wxFileConfig* cfg = GetOCPNConfigObject();
   if (!cfg) return "";
