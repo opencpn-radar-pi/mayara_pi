@@ -72,6 +72,14 @@ class ControlsPanel : public wxScrolledWindow {
   // "Dock in OpenCPN" toggle for the View section.
   void SetDockControl(std::function<bool()> get, std::function<void(bool)> set);
 
+  // The picture's two VRM/EBL markers. Local to the plugin, so they are read
+  // and written straight on the focused picture rather than through a control.
+  void SetVrmEblHandlers(std::function<VrmEbl(int)> get,
+                         std::function<void(int, const VrmEbl&)> set) {
+    m_vrm_get = std::move(get);
+    m_vrm_set = std::move(set);
+  }
+
   // Share the live guard-zone edit with the picture, so a dragged handle and a
   // typed number are one edit.
   // Re-read every widget from the model now, rather than at the next timer
@@ -98,6 +106,7 @@ class ControlsPanel : public wxScrolledWindow {
                              std::function<void(wxSizer*)> fill);
   void AddControl(wxSizer* content, const ControlDef& def);
   void AddServerRow(wxSizer* content);  // active server URL, in Info
+  void FillVrmEblSection(wxSizer* content);  // the two local markers
   void FillViewSection(wxSizer* content);
   // A labelled row of mutually exclusive buttons over an int, kept in sync by
   // an updater. The View section is made of these.
@@ -151,6 +160,8 @@ class ControlsPanel : public wxScrolledWindow {
   std::function<void(int)> m_set_threshold;
   std::function<bool()> m_get_dock;
   std::function<void(bool)> m_set_dock;
+  std::function<VrmEbl(int)> m_vrm_get;
+  std::function<void(int, const VrmEbl&)> m_vrm_set;
   std::function<ZoneEdit()> m_zone_get;
   std::function<void(const ZoneEdit&, bool)> m_zone_set;
   std::function<PpiPrefs()> m_get_prefs;

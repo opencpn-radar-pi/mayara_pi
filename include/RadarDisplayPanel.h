@@ -45,6 +45,16 @@ struct ZoneEdit {
   double start_m = 0, end_m = 0;
 };
 
+// One VRM/EBL marker: a bearing line and a range ring that cross at the point
+// being measured. Bow-relative radians and metres, like a guard zone -- but
+// these live only in the plugin; the radar knows nothing about them.
+struct VrmEbl {
+  bool enabled = false;
+  double bearing_rad = 0;
+  double distance_m = 0;
+};
+const int kVrmEblCount = 2;
+
 // Display preferences that are the operator's, not the radar's, so they are
 // held by the plugin and pushed down rather than read from the control schema.
 struct PpiPrefs {
@@ -100,6 +110,17 @@ class RadarDisplayPanel : public wxPanel {
   int Threshold() const { return m_threshold; }
   // Repaint rate and wheel direction; the rest of PpiPrefs is the window's.
   void SetPrefs(const PpiPrefs& p);
+  // The two VRM/EBL markers, for the controls panel to show and switch off.
+  const VrmEbl& Marker(int i) const { return m_vrmebl[i]; }
+  void SetMarker(int i, const VrmEbl& m) {
+    m_vrmebl[i] = m;
+    NotifyMarkers();
+  }
+  // Called whenever a marker changes, so the panel showing them can re-read.
+  void SetMarkerChangedCallback(std::function<void()> cb) {
+    m_on_markers = std::move(cb);
+  }
+
   // Share the live guard-zone edit. `set` is called with commit=false while a
   // handle is being dragged (preview only) and commit=true on release.
   void SetZoneEditHandlers(
@@ -147,8 +168,8 @@ class RadarDisplayPanel : public wxPanel {
   void DrawLayers(wxDC& dc, const PpiGeometry& g);
   // Guard zones as the server reports them (bow-relative radians + metres).
   void DrawGuardZones(wxDC& dc, const PpiGeometry& g, double geo);
-  // EBL/VRM: a bearing line and a range circle placed by clicking.
-  void DrawEblVrm(wxDC& dc, const PpiGeometry& g, double geo);
+  // VRM/EBL markers, styled after the mayara GUI.
+  void DrawVrmEbl(wxDC& dc, const PpiGeometry& g, double geo);
   // Cursor crosshair + a bearing/range readout for the pointer position.
   void DrawCursor(wxDC& dc, const PpiGeometry& g);
   // Drag handles for the zone being edited; mirrors the mayara GUI.
@@ -193,12 +214,19 @@ class RadarDisplayPanel : public wxPanel {
   wxPoint m_mouse_down = wxPoint(0, 0);
   bool m_dragging = false;
 
-  // EBL/VRM. m_ebl_on shows them; the bearing/range are placed by clicking and
-  // survive being hidden, so toggling back shows the last mark.
-  bool m_ebl_on = false;
-  bool m_ebl_set = false;
-  double m_ebl_bearing = 0.0;  // true degrees
-  double m_vrm_m = 0.0;        // metres from the radar
+  // VRM/EBL markers. m_ebl_arm is which one a click places: 0 none, 1 or 2 for
+  // the marker of that number. A placed marker stays until switched off, so
+  // arming the other one does not disturb it.
+  VrmEbl m_vrmebl[kVrmEblCount];
+  int m_ebl_arm = 0;
+  std::function<void()> m_on_markers;
+  // A marker is the plugin's own, so nothing on the wire changes when one
+  // moves: the panel would otherwise never re-read it, because its updaters
+  // only run when the radar sends a control update.
+  void NotifyMarkers() {
+    Refresh(false);
+    if (m_on_markers) m_on_markers();
+  }
 
   // Pointer position, for the cursor readout. Only while over the picture.
   wxPoint m_cursor = wxPoint(0, 0);

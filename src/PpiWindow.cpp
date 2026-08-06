@@ -411,6 +411,24 @@ void MayaraPpiWindow::WireZoneEditing() {
   };
   for (RadarDisplayPanel* p : m_radars) p->SetZoneEditHandlers(get, set);
   if (m_controls) m_controls->SetZoneEditHandlers(get, set);
+
+  // VRM/EBL markers belong to the picture showing them, so the panel reads and
+  // writes whichever picture its controls are currently bound to.
+  if (m_controls)
+    m_controls->SetVrmEblHandlers(
+        [this](int i) {
+          RadarDisplayPanel* p = FocusedPanel();
+          return p ? p->Marker(i) : VrmEbl();
+        },
+        [this](int i, const VrmEbl& m) {
+          if (RadarDisplayPanel* p = FocusedPanel()) p->SetMarker(i, m);
+        });
+  // Placing or clearing a marker changes nothing the radar reports, so tell
+  // the panel directly; its own updaters would never fire for this.
+  for (RadarDisplayPanel* p : m_radars)
+    p->SetMarkerChangedCallback([this]() {
+      if (m_controls) m_controls->SyncNow();
+    });
 }
 
 void MayaraPpiWindow::ApplyPrefs() {
