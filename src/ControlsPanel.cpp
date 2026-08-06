@@ -878,16 +878,16 @@ void ControlsPanel::FillVrmEblSection(wxSizer* content) {
         this, wxID_ANY, wxString::Format(_("VRM/EBL %d"), i + 1),
         wxDefaultPosition, wxSize(78, -1));
     row->Add(label, 0, wxALIGN_CENTER_VERTICAL);
-    auto* val = new wxStaticText(this, wxID_ANY, wxEmptyString);
-    row->Add(val, 1, wxALIGN_CENTER_VERTICAL | wxLEFT, 4);
-    content->Add(row, 0, wxEXPAND | wxALL, 4);
-    // Its own full-width row, added at proportion 1 -- the same shape as the
-    // guard-zone button row, which lays out reliably. Sharing a row with a
-    // proportion-1 label left it with no room to appear in.
-    auto* brow = new wxBoxSizer(wxHORIZONTAL);
+    auto* val = new wxStaticText(this, wxID_ANY, wxEmptyString,
+                                 wxDefaultPosition, wxSize(112, -1));
+    row->Add(val, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 4);
+    // Nothing here stretches. The panel is a scrolled window whose virtual
+    // width can exceed the width you can see, so a proportion-1 item grows past
+    // the right edge -- which first hid this button off-screen entirely, then
+    // made it far too wide to fit.
     auto* off = new ThemedButton(this, _("Clear"), m_theme, /*toggle=*/false);
-    brow->Add(off, 1, wxALL, 2);
-    content->Add(brow, 0, wxEXPAND | wxLEFT | wxRIGHT, 4);
+    row->Add(off, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 6);
+    content->Add(row, 0, wxALL, 4);
 
     off->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&) {
       if (!m_vrm_get || !m_vrm_set) return;
