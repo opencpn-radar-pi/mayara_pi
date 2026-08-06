@@ -1301,6 +1301,24 @@ void RadarDisplayPanel::HandleClick(const wxPoint& p) {
       double brg = 0, dist = 0;
       if (PointToPolar(p, brg, dist)) {
         const PpiGeometry g = Geometry();
+        // Clicking where the marker already is takes it away: placing and
+        // clearing are then the same gesture, and the marker itself is the
+        // target, which is easier to hit than a button in another panel.
+        VrmEbl& cur = m_vrmebl[m_ebl_arm - 1];
+        const double geo =
+            g.report_m > 0 ? g.zoom / g.report_m * g.radius : 0.0;
+        if (cur.enabled && geo > 0) {
+          const wxPoint mp =
+              PolarPoint(g.center, cur.distance_m * geo,
+                         g.heading + cur.bearing_rad * 180.0 / M_PI,
+                         g.up_bearing);
+          if (std::hypot(p.x - mp.x, p.y - mp.y) <= 10) {
+            cur.enabled = false;
+            NotifyMarkers();
+            if (m_on_focus) m_on_focus();
+            return;
+          }
+        }
         double rel = brg - g.heading;
         while (rel < -180.0) rel += 360.0;
         while (rel > 180.0) rel -= 360.0;
