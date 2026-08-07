@@ -399,9 +399,10 @@ void MayaraPpiWindow::WireZoneEditing() {
     if (commit && z.active && m_client) {
       char buf[256];
       std::snprintf(buf, sizeof(buf),
-                    "{\"value\":%g,\"endValue\":%g,\"startDistance\":%g,"
-                    "\"endDistance\":%g,\"enabled\":true}",
-                    z.start_rad, z.end_rad, z.start_m, z.end_m);
+                    "{\"value\":%s,\"endValue\":%s,\"startDistance\":%s,"
+                    "\"endDistance\":%s,\"enabled\":true}",
+                    JsonNum(z.start_rad).c_str(), JsonNum(z.end_rad).c_str(),
+                    JsonNum(z.start_m).c_str(), JsonNum(z.end_m).c_str());
       m_client->SetControlAt(z.radar_index, z.id, buf);
     }
     for (RadarDisplayPanel* p : m_radars) p->Refresh(false);
