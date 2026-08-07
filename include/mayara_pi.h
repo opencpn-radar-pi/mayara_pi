@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <map>
+#include <set>
 #include <memory>
 #include <string>
 #include <vector>
@@ -91,6 +92,8 @@ class mayara_pi : public opencpn_plugin_121 {
   void SyncLocalServerUrl();
   // OpenCPN's own Signal K connection, as a discovery hint. Empty if none.
   std::string OpenCpnSignalKUrl() const;
+  // Raise a guard-zone alarm with OpenCPN when the server reports a new one.
+  void PollGuardAlarms();
   // Ask, once per release, whether to install a newer local mayara-server.
   void MaybeOfferServerUpdate();
   void LoadConfig();
@@ -152,6 +155,9 @@ class mayara_pi : public opencpn_plugin_121 {
   wxButton* m_access_button = nullptr;
   bool m_access_dismissed = false;
   wxString m_access_last_line;  // avoids re-laying out the dialog every tick
+  // Guard-zone alarms already raised with OpenCPN, keyed "radarid/zone", so a
+  // standing alarm is reported once rather than every heartbeat.
+  std::set<std::string> m_alarms_raised;
   int m_no_radar_ticks = 0;          // heartbeat ticks with no radar
   bool m_search_dismissed = false;   // user closed the search dialog
 

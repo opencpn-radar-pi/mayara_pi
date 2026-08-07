@@ -293,6 +293,11 @@ void MayaraClient::SetLocalUrl(std::string url) {
   m_local = std::move(url);
 }
 
+std::vector<MayaraClient::GuardAlarm> MayaraClient::Alarms() {
+  std::lock_guard<std::mutex> lock(m_alarm_mutex);
+  return m_alarms;
+}
+
 void MayaraClient::SetHintUrl(std::string url) {
   StripTrailingSlash(url);
   std::lock_guard<std::mutex> lock(m_status_mutex);
@@ -849,7 +854,8 @@ void MayaraClient::ConnectControlStream() {
       m_control_ws->send(
           "{\"subscribe\":["
           "{\"path\":\"radars.*.controls.*\",\"period\":1000},"
-          "{\"path\":\"radars.*.targets.*\",\"policy\":\"instant\"}]}");
+          "{\"path\":\"radars.*.targets.*\",\"policy\":\"instant\"},"
+          "{\"path\":\"notifications.*\",\"policy\":\"instant\"}]}");
       return;
     }
     if (msg->type != ix::WebSocketMessageType::Message || msg->binary) return;
@@ -859,6 +865,31 @@ void MayaraClient::ConnectControlStream() {
       for (const auto& upd : j["updates"]) {
         auto route = [&](const std::string& path, const json& value,
                          bool is_meta) {
+          // notifications.radar.<key>.guardZone.<n> -> a guard-zone alarm.
+          // The server decides when one starts and stops; "normal" clears it.
+          const std::string kNote = "notifications.radar.";
+          if (path.rfind(kNote, 0) == 0) {
+            const std::string rest = path.substr(kNote.size());
+            const std::string kZone = ".guardZone.";
+            const size_t z = rest.find(kZone);
+            if (z == std::string::npos) return;
+            GuardAlarm a;
+            a.radar_id = rest.substr(0, z);
+            a.zone = std::atoi(rest.substr(z + kZone.size()).c_str());
+            if (value.is_object()) {
+              const std::string st = value.value("state", std::string("normal"));
+              a.active = st != "normal";
+              a.message = value.value("message", std::string());
+            }
+            std::lock_guard<std::mutex> lock(m_alarm_mutex);
+            for (auto& e : m_alarms)
+              if (e.radar_id == a.radar_id && e.zone == a.zone) {
+                e = a;
+                return;
+              }
+            m_alarms.push_back(a);
+            return;
+          }
           // path = radars.{id}.controls.{ctrl}
           const std::string kPre = "radars.";
           const std::string kMid = ".controls.";
