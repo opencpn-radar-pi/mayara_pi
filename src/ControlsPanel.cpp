@@ -241,11 +241,15 @@ void ControlsPanel::OnTimer(wxTimerEvent&) {
     m_last_gen = c->Generation();
     return;
   }
-  const uint64_t gen = c->Generation();
-  if (gen != m_last_gen) {
-    m_last_gen = gen;
-    ApplyValues();
-  }
+  // Unconditionally, not only when the radar reports a change. A widget can
+  // differ from the model for reasons the generation counter never sees: a
+  // write that was lost on the way to the radar (leaving a toggle showing what
+  // was clicked rather than what is true), a section expanded by a recursive
+  // Show, or a value the plugin owns rather than the radar. Every one of those
+  // has bitten already. Pushing the model into the widgets four times a second
+  // is cheap, and the fields being typed in are skipped.
+  m_last_gen = c->Generation();
+  ApplyValues();
 }
 
 void ControlsPanel::ApplyValues() {
