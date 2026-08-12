@@ -34,6 +34,7 @@
 #include "MayaraClient.h"
 #include "MayaraServer.h"
 #include "MayaraTheme.h"
+#include "ControlsPanel.h"
 #include "PpiWindow.h"
 
 namespace {
@@ -216,6 +217,9 @@ int mayara_pi::Init() {
 
     PollGuardAlarms();
     SyncAutoRange();
+    const int under = CanvasUnderMouse();
+    if (under >= 0) m_menu_canvas = under;
+    RefreshContextMenu(m_menu_canvas);
 
     // Remember the server that answered (fast reconnect next boot). Not gated
     // on a radar streaming: a server with nothing attached is still the right
@@ -259,6 +263,7 @@ int mayara_pi::Init() {
 }
 
 bool mayara_pi::DeInit() {
+  DestroyChartMenu();
   // Destroy the window first (synchronously) so its panels' timers stop calling
   // into the client before we free it.
   if (m_heartbeat) {
@@ -779,18 +784,124 @@ void mayara_pi::SyncAutoRange() {
                          "{\"value\":" + std::to_string(best) + "}");
 }
 
-// The menu on its own. The window can already collapse to just its controls;
-// this is that state reached deliberately rather than as a side effect of
-// switching the picture off.
-void mayara_pi::ShowRadarMenu() {
-  if (m_windows.empty()) RebuildWindows();
-  m_windows_visible = true;
-  for (MayaraPpiWindow* win : m_windows)
-    if (win) {
-      win->ShowWindow(true);
-      win->ShowMenuOnly();
+// The controls on their own, drawn over the chart itself: a real child window
+// of the canvas, so it floats above the chart without being a window of its
+// own to manage, and it goes away with one click. Clicking the menu entry for
+// the canvas it is already on closes it again.
+void mayara_pi::ShowRadarMenu(int canvas) {
+  const int was = m_chart_menu ? m_chart_menu_canvas : -1;
+  DestroyChartMenu();
+  if (was == canvas) return;  // second click on the same canvas: toggle off
+  if (!m_client || m_client->RadarCount() == 0) return;
+
+  wxWindow* cw = GetCanvasByIndex(canvas);
+  if (!cw) cw = GetOCPNCanvasWindow();
+  if (!cw) return;
+
+  auto* p = new ControlsPanel(cw, m_client.get(), m_client->ActiveIndex());
+  m_chart_menu = p;
+  m_chart_menu_canvas = canvas;
+
+  std::vector<int> all;
+  for (int i = 0; i < m_client->RadarCount(); ++i) all.push_back(i);
+  p->SetRadarList(all);
+  p->ApplyTheme(ThemeFor(m_color_scheme));
+
+  // Destroying a panel from inside its own button handler would unwind the
+  // handler's own window, so let the event finish first.
+  p->SetCloseCallback([this]() {
+    if (m_parent_window)
+      m_parent_window->CallAfter([this]() { DestroyChartMenu(); });
+  });
+  p->SetSettingsCallback([this]() { ShowSettings(m_parent_window); });
+  p->SetViewControls([this]() { return OverlayOnAny(); },
+                     [this](bool on) {
+                       SetOverlayAll(on);
+                       GetOCPNCanvasWindow()->Refresh(false);
+                     },
+                     [this]() { return AnyWindowShown(); },
+                     [this](bool show) {
+                       if (show) {
+                         RaisePpiWindows();
+                       } else {
+                         m_windows_visible = false;
+                         for (MayaraPpiWindow* w : m_windows)
+                           if (w) w->ShowWindow(false);
+                         SetToolbarItemState(m_tool_id, false);
+                       }
+                     });
+  p->SetOrientationControl(
+      [this, p]() { return OrientationFor(m_client->RadarId(p->RadarIndex())); },
+      [this, p](int o) {
+        SetOrientationFor(m_client->RadarId(p->RadarIndex()), o);
+      });
+  p->SetThresholdControl(
+      [this, p]() { return ThresholdFor(m_client->RadarId(p->RadarIndex())); },
+      [this, p](int l) {
+        SetThresholdFor(m_client->RadarId(p->RadarIndex()), l);
+      });
+  p->SetDockControl([this]() { return m_docked; },
+                    [this](bool on) {
+                      if (on == m_docked) return;
+                      m_docked = on;
+                      SaveConfig();
+                      if (m_parent_window)
+                        m_parent_window->CallAfter([this]() { RebuildWindows(); });
+                    });
+  p->SetPrefsControl([this]() { return m_prefs; },
+                     [this](const PpiPrefs& q) {
+                       m_prefs = q;
+                       SaveConfig();
+                       for (MayaraPpiWindow* w : m_windows)
+                         if (w) w->ApplyPrefs();
+                       GetOCPNCanvasWindow()->Refresh(false);
+                     });
+  // Guard zones can still be edited from here; there is no picture to drag
+  // handles on, so this edit is the panel's own and is drawn on the chart.
+  p->SetZoneEditHandlers(
+      [this]() { return m_chart_zone; },
+      [this](const ZoneEdit& z, bool commit) {
+        m_chart_zone = z;
+        if (commit && z.active && m_client) {
+          char buf[256];
+          std::snprintf(buf, sizeof(buf),
+                        "{\"value\":%s,\"endValue\":%s,\"startDistance\":%s,"
+                        "\"endDistance\":%s,\"enabled\":true}",
+                        JsonNum(z.start_rad).c_str(), JsonNum(z.end_rad).c_str(),
+                        JsonNum(z.start_m).c_str(), JsonNum(z.end_m).c_str());
+          m_client->SetControlAt(z.radar_index, z.id, buf);
+        }
+        if (m_chart_menu) m_chart_menu->SyncNow();
+        GetOCPNCanvasWindow()->Refresh(false);
+      });
+
+  // Top-left, clear of the chart bar along the bottom. Height is capped to the
+  // canvas so a long control list scrolls rather than running off the chart.
+  const wxSize cs = cw->GetClientSize();
+  const wxSize best = p->GetEffectiveMinSize();
+  const int w = std::max(320, best.x);
+  const int h = std::min(cs.y - 2 * kChartMenuMargin,
+                         std::max(320, best.y));
+  // The canvas owns its children, so a canvas that goes away (a layout change,
+  // shutdown) takes the panel with it. Notice, rather than keep a dead pointer.
+  p->Bind(wxEVT_DESTROY, [this](wxWindowDestroyEvent& e) {
+    if (e.GetWindow() == m_chart_menu) {
+      m_chart_menu = nullptr;
+      m_chart_menu_canvas = -1;
     }
-  SetToolbarItemState(m_tool_id, true);
+    e.Skip();
+  });
+  p->SetSize(kChartMenuMargin, kChartMenuMargin, w, h);
+  p->Show();
+  p->Raise();
+}
+
+void mayara_pi::DestroyChartMenu() {
+  if (!m_chart_menu) return;
+  ControlsPanel* p = m_chart_menu;  // clear first: Destroy() is deferred
+  m_chart_menu = nullptr;
+  m_chart_menu_canvas = -1;
+  p->Destroy();
 }
 
 // Shown *and* in front. A window buried behind the chart is not showing as far
@@ -1256,7 +1367,7 @@ void mayara_pi::OnContextMenuItemCallback(int id) {
     return;
   }
   if (id == m_mi_menu) {
-    ShowRadarMenu();
+    ShowRadarMenu(m_menu_canvas);
   } else if (id == m_mi_ppi) {
     // "Show" also means "bring to the front": a window hidden behind the chart
     // is not showing as far as anyone looking at the screen is concerned.
@@ -1273,20 +1384,25 @@ void mayara_pi::PrepareContextMenu(int canvasIndex) {
   // The menu item acts on the canvas whose menu this is, so remember it: the
   // callback that follows is not told which canvas it came from.
   m_menu_canvas = canvasIndex;
+  RefreshContextMenu(canvasIndex);
+}
+
+// OpenCPN copies our items' labels and check marks when it builds the popup,
+// so everything shown here has to be right before the menu opens. It calls
+// PrepareContextMenu for that, but only for API versions it knows about, so
+// the heartbeat runs this as well against the canvas under the pointer.
+void mayara_pi::RefreshContextMenu(int canvas) {
   const std::vector<std::string> names =
       m_client ? m_client->RadarNames() : std::vector<std::string>();
-  const int sel = OverlaySel(canvasIndex);
+  const int sel = OverlaySel(canvas);
   if (m_mi_overlay_item) {
     // Name the canvas only when there is more than one, so the single-canvas
     // case does not carry a number that means nothing.
     m_mi_overlay_item->SetItemLabel(
         GetCanvasCount() > 1
-            ? wxString::Format(_("Mayara radar overlay (chart %d)"),
-                               canvasIndex + 1)
+            ? wxString::Format(_("Mayara radar overlay (chart %d)"), canvas + 1)
             : wxString(_("Mayara radar overlay")));
     if (wxMenu* sub = m_mi_overlay_item->GetSubMenu()) {
-      if (wxMenuItem* it = sub->FindItem(m_mi_ov_none))
-        it->Check(sel == kOverlayNone);
       for (int i = 0; i < kMaxMenuRadars; ++i) {
         wxMenuItem* it = sub->FindItem(m_mi_ov_radar[i]);
         if (!it) continue;
@@ -1294,18 +1410,35 @@ void mayara_pi::PrepareContextMenu(int canvasIndex) {
         it->SetItemLabel(have ? wxString::FromUTF8(names[i].c_str())
                               : wxString::Format(_("Radar %d"), i + 1));
         it->Enable(have);
-        it->Check(sel == i);
       }
-      // "All" only means something with more than one radar.
-      if (wxMenuItem* it = sub->FindItem(m_mi_ov_all)) {
-        it->Enable(names.size() > 1);
-        it->Check(sel == kOverlayAll);
-      }
+      // Check only the selected one: they are one radio group, so checking it
+      // clears the others. Checking a radio item false is not portable.
+      const int on = sel == kOverlayNone
+                         ? m_mi_ov_none
+                         : (sel == kOverlayAll ? m_mi_ov_all
+                                               : m_mi_ov_radar[sel < kMaxMenuRadars
+                                                                   ? sel
+                                                                   : 0]);
+      if (wxMenuItem* it = sub->FindItem(on))
+        if (!it->IsChecked()) it->Check(true);
     }
   }
   if (m_mi_ppi_item)
     m_mi_ppi_item->SetItemLabel(PpiFrontmost() ? _("Hide Mayara PPI")
                                                : _("Show Mayara PPI"));
+}
+
+// Right-clicking pops the menu where the pointer is, so the canvas under the
+// pointer is the canvas the menu belongs to.
+int mayara_pi::CanvasUnderMouse() const {
+  const wxPoint p = wxGetMousePosition();
+  const int n = GetCanvasCount();
+  for (int i = 0; i < n; ++i) {
+    wxWindow* w = GetCanvasByIndex(i);
+    if (!w) continue;
+    if (wxRect(w->GetScreenPosition(), w->GetSize()).Contains(p)) return i;
+  }
+  return -1;
 }
 
 // Split the discovered radars into m_windows_count near-even groups. Window w

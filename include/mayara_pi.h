@@ -20,9 +20,10 @@
 #include "ocpn_plugin.h"
 
 #include "NavState.h"
-#include "RadarDisplayPanel.h"  // PpiPrefs
+#include "RadarDisplayPanel.h"  // PpiPrefs, ZoneEdit
 
 // Forward declarations keep implementation types out of this header.
+class ControlsPanel;
 class MayaraPpiWindow;
 class MayaraClient;
 class MayaraServer;
@@ -140,6 +141,10 @@ class mayara_pi : public opencpn_plugin_121 {
   // Absent means kOverlayAll, so the default needs no entry. Persisted.
   std::map<int, int> m_overlay_sel;
   int m_menu_canvas = 0;  // canvas whose context menu is open
+  static const int kChartMenuMargin = 10;
+  ControlsPanel* m_chart_menu = nullptr;  // controls over the chart, not owned
+  int m_chart_menu_canvas = -1;
+  ZoneEdit m_chart_zone;  // the chart menu's own live guard-zone edit
   int OverlaySel(int canvas) const;
   bool OverlayOn(int canvas) const { return OverlaySel(canvas) != kOverlayNone; }
   bool OverlayOnAny() const;
@@ -149,7 +154,15 @@ class mayara_pi : public opencpn_plugin_121 {
   // Keep the shorter-range radar at a quarter of the longer one's range.
   void SyncAutoRange();
   // Open the controls with no picture, for someone who only wants the menu.
-  void ShowRadarMenu();
+  // The controls drawn over the chart canvas, without a picture.
+  void ShowRadarMenu(int canvas);
+  void DestroyChartMenu();
+  // Which canvas the pointer is over, or -1. PrepareContextMenu is told this
+  // by OpenCPN, but only on versions that dispatch it for our API level.
+  int CanvasUnderMouse() const;
+  // Push the current radar names and per-canvas selection into the context
+  // menu items. OpenCPN copies their labels and checks when it pops the menu.
+  void RefreshContextMenu(int canvas);
   bool PpiFrontmost() const;   // shown and in front, not buried under the chart
   void RaisePpiWindows();
   PpiPrefs m_prefs;  // global display prefs, shared by every radar window
