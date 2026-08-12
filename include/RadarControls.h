@@ -9,10 +9,23 @@
 #define MAYARA_RADAR_CONTROLS_H_
 
 #include <cstdint>
+#include <cstdio>
 #include <map>
 #include <mutex>
 #include <string>
 #include <vector>
+
+// A double as JSON always writes it: with a full stop, whatever the process
+// locale says. printf's %g follows LC_NUMERIC, so under a locale that uses a
+// comma it emits 1,919 -- which turns {"value":1,919,...} into malformed JSON
+// and loses the whole body, not just that field.
+inline std::string JsonNum(double v) {
+  char buf[32];
+  std::snprintf(buf, sizeof(buf), "%g", v);
+  for (char* p = buf; *p; ++p)
+    if (*p == ',') *p = '.';
+  return buf;
+}
 
 struct ControlDef {
   std::string id;  // key, e.g. "gain"

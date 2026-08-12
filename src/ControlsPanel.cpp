@@ -29,11 +29,7 @@ namespace {
 const int kRates[] = {1, 2, 5, 10};
 const int kRateCount = static_cast<int>(sizeof(kRates) / sizeof(kRates[0]));
 
-std::string Num(double v) {
-  char buf[32];
-  std::snprintf(buf, sizeof(buf), "%g", v);
-  return buf;
-}
+std::string Num(double v) { return JsonNum(v); }
 
 // How many distinct values a number control can take. A slider is fine for a
 // handful of steps and turns into guesswork for hundreds: over a 90 px track,
@@ -245,11 +241,15 @@ void ControlsPanel::OnTimer(wxTimerEvent&) {
     m_last_gen = c->Generation();
     return;
   }
-  const uint64_t gen = c->Generation();
-  if (gen != m_last_gen) {
-    m_last_gen = gen;
-    ApplyValues();
-  }
+  // Unconditionally, not only when the radar reports a change. A widget can
+  // differ from the model for reasons the generation counter never sees: a
+  // write that was lost on the way to the radar (leaving a toggle showing what
+  // was clicked rather than what is true), a section expanded by a recursive
+  // Show, or a value the plugin owns rather than the radar. Every one of those
+  // has bitten already. Pushing the model into the widgets four times a second
+  // is cheap, and the fields being typed in are skipped.
+  m_last_gen = c->Generation();
+  ApplyValues();
 }
 
 void ControlsPanel::ApplyValues() {
@@ -258,8 +258,12 @@ void ControlsPanel::ApplyValues() {
 }
 
 void ControlsPanel::Rebuild() {
+  // Destroying a focused text control fires KILL_FOCUS, whose handler would
+  // otherwise run against widgets that are already going away.
+  m_rebuilding = true;
   DestroyChildren();
   m_updaters.clear();
+  m_rebuilding = false;
 
   RadarControls* c = controls();
   if (!c) {
@@ -653,8 +657,15 @@ void ControlsPanel::AddNumber(wxSizer* outer, const ControlDef& def) {
           slider->SetValue(Clampi(
               static_cast<int>((cur - lo) / (hi - lo) * 1000.0 + 0.5), 0,
               1000));
-        if (entry && !*dragging)
-          entry->ChangeValue(wxString::FromUTF8(Num(cur).c_str()));
+        if (entry && !*dragging && !entry->HasFocus()) {
+          // Only when it would actually change: rewriting identical text still
+          // moves the caret, which is enough to make typing impossible.
+          const wxString want = wxString::FromUTF8(Num(cur).c_str());
+          double have = 0;
+          if (entry->GetValue() != want &&
+              !(entry->GetValue().ToDouble(&have) && have == cur))
+            entry->ChangeValue(want);
+        }
         if (valtext) {
           if (adj) {
             const long a = std::lround(cur);
@@ -727,9 +738,14 @@ void ControlsPanel::AddNumber(wxSizer* outer, const ControlDef& def) {
       *dragging = true;
       e.Skip();
     });
-    auto commit = [entry, dragging, send_value]() {
+    auto commit = [this, id, entry, dragging, send_value]() {
+      if (m_rebuilding || !controls()) return;  // widgets are going away
       double d = 0;
-      if (entry->GetValue().ToDouble(&d)) send_value(d);
+      // Only send a value that differs from the model. A focus change alone is
+      // not an edit, and echoing the same number back churns the control for
+      // no reason.
+      if (entry->GetValue().ToDouble(&d) && d != controls()->Value(id).value)
+        send_value(d);
       *dragging = false;
     };
     entry->Bind(wxEVT_TEXT_ENTER,
@@ -999,9 +1015,9 @@ void ControlsPanel::AddSector(wxSizer* outer, const ControlDef& def) {
   save->Bind(wxEVT_BUTTON, [this, id, dirty, sStart, sEnd, en](wxCommandEvent&) {
     char buf[160];
     std::snprintf(buf, sizeof(buf),
-                  "{\"value\":%g,\"endValue\":%g,\"enabled\":%s}",
-                  DegToRad(SliderToDeg(sStart->GetValue())),
-                  DegToRad(SliderToDeg(sEnd->GetValue())),
+                  "{\"value\":%s,\"endValue\":%s,\"enabled\":%s}",
+                  JsonNum(DegToRad(SliderToDeg(sStart->GetValue()))).c_str(),
+                  JsonNum(DegToRad(SliderToDeg(sEnd->GetValue()))).c_str(),
                   en->GetValue() ? "true" : "false");
     Set(id, buf);
     *dirty = false;
@@ -1134,9 +1150,11 @@ void ControlsPanel::AddZone(wxSizer* outer, const ControlDef& def) {
     const ControlValue v = controls()->Value(id);
     char buf[256];
     std::snprintf(buf, sizeof(buf),
-                  "{\"value\":%g,\"endValue\":%g,\"startDistance\":%g,"
-                  "\"endDistance\":%g,\"enabled\":%s}",
-                  v.value, v.endValue, v.startDistance, v.endDistance,
+                  "{\"value\":%s,\"endValue\":%s,\"startDistance\":%s,"
+                  "\"endDistance\":%s,\"enabled\":%s}",
+                  JsonNum(v.value).c_str(), JsonNum(v.endValue).c_str(),
+                  JsonNum(v.startDistance).c_str(),
+                  JsonNum(v.endDistance).c_str(),
                   en->GetValue() ? "true" : "false");
     Set(id, buf);
   });
@@ -1169,11 +1187,25 @@ void ControlsPanel::AddZone(wxSizer* outer, const ControlDef& def) {
     if (z.end_m > maxDist) z.end_m = maxDist;
     char buf[256];
     std::snprintf(buf, sizeof(buf),
-                  "{\"value\":%g,\"endValue\":%g,\"startDistance\":%g,"
-                  "\"endDistance\":%g,\"enabled\":%s}",
-                  z.start_rad, z.end_rad, z.start_m, z.end_m,
+                  "{\"value\":%s,\"endValue\":%s,\"startDistance\":%s,"
+                  "\"endDistance\":%s,\"enabled\":%s}",
+                  JsonNum(z.start_rad).c_str(), JsonNum(z.end_rad).c_str(),
+                  JsonNum(z.start_m).c_str(), JsonNum(z.end_m).c_str(),
                   en->GetValue() ? "true" : "false");
     Set(id, buf);
+    // Show what was just sent rather than what the radar last said. The PUT is
+    // asynchronous, so ending the edit here would drop the fields back to the
+    // old values for as long as the round trip takes -- which reads as the save
+    // having been ignored. The stream corrects this within a second if the
+    // radar disagrees.
+    ControlValue local = controls()->Value(id);
+    local.value = z.start_rad;
+    local.endValue = z.end_rad;
+    local.startDistance = z.start_m;
+    local.endDistance = z.end_m;
+    local.has_enabled = true;
+    local.enabled = en->GetValue();
+    if (controls()) controls()->SetValue(id, local);
     if (m_zone_set) m_zone_set(ZoneEdit(), /*commit=*/false);  // edit is over
   };
   save->Bind(wxEVT_BUTTON, [commit](wxCommandEvent&) { commit(); });

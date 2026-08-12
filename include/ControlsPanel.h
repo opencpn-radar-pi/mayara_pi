@@ -160,6 +160,7 @@ class ControlsPanel : public wxScrolledWindow {
   std::function<void(int)> m_set_threshold;
   std::function<bool()> m_get_dock;
   std::function<void(bool)> m_set_dock;
+  bool m_rebuilding = false;  // true while widgets are being destroyed
   std::function<VrmEbl(int)> m_vrm_get;
   std::function<void(int, const VrmEbl&)> m_vrm_set;
   std::function<ZoneEdit()> m_zone_get;
