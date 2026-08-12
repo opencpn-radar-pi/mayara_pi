@@ -61,6 +61,8 @@ struct PpiPrefs {
   int refresh_hz = 5;       // PPI repaint rate, 1..15
   bool reverse_zoom = false;  // invert the wheel's zoom direction
   int menu_autohide = 0;    // 0 = never, 1 = 10 s, 2 = 30 s
+  int overlay_alpha = 100;  // chart-overlay opacity, 25/50/75/100 %
+  bool overlay_zones = true;  // draw guard zones on the chart too
 };
 
 // Everything the picture and the layers over it are placed by. Computed once

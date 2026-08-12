@@ -288,14 +288,34 @@ void mayara_pi::LoadConfig() {
   int windows = 1;
   cfg->Read("WindowsCount", &windows, 1);
   m_windows_count = windows < 1 ? 1 : windows;
+  // "OverlayOffCanvases" is a comma list; the old single OverlayEnabled flag is
+  // still honoured so an existing config does not silently switch the overlay
+  // back on.
+  m_overlay_off.clear();
   bool overlay = true;
   cfg->Read("OverlayEnabled", &overlay, true);
-  m_overlay_enabled = overlay;
+  wxString off;
+  if (cfg->Read("OverlayOffCanvases", &off) && !off.IsEmpty()) {
+    wxStringTokenizer tok(off, ",");
+    while (tok.HasMoreTokens()) {
+      long c = 0;
+      if (tok.GetNextToken().ToLong(&c)) m_overlay_off.insert(static_cast<int>(c));
+    }
+  } else if (!overlay) {
+    m_overlay_off.insert(0);
+  }
   long hz = 5, autohide = 0;
   bool reverse_zoom = false;
   cfg->Read("RefreshHz", &hz, 5);
   cfg->Read("ReverseZoom", &reverse_zoom, false);
   cfg->Read("MenuAutoHide", &autohide, 0);
+  long alpha = 100;
+  bool ozones = true;
+  cfg->Read("OverlayAlpha", &alpha, 100);
+  cfg->Read("OverlayZones", &ozones, true);
+  m_prefs.overlay_alpha =
+      static_cast<int>(alpha < 25 ? 25 : (alpha > 100 ? 100 : alpha));
+  m_prefs.overlay_zones = ozones;
   m_prefs.refresh_hz = static_cast<int>(hz < 1 ? 1 : (hz > 15 ? 15 : hz));
   m_prefs.reverse_zoom = reverse_zoom;
   m_prefs.menu_autohide =
@@ -471,10 +491,15 @@ void mayara_pi::SaveConfig() {
   if (!cfg) return;
   cfg->SetPath(kConfigGroup);
   cfg->Write("WindowsCount", m_windows_count);
-  cfg->Write("OverlayEnabled", m_overlay_enabled);
+  cfg->Write("OverlayEnabled", OverlayOnAny());
+  wxString off;
+  for (int c : m_overlay_off) off += wxString::Format("%d,", c);
+  cfg->Write("OverlayOffCanvases", off);
   cfg->Write("RefreshHz", static_cast<long>(m_prefs.refresh_hz));
   cfg->Write("ReverseZoom", m_prefs.reverse_zoom);
   cfg->Write("MenuAutoHide", static_cast<long>(m_prefs.menu_autohide));
+  cfg->Write("OverlayAlpha", static_cast<long>(m_prefs.overlay_alpha));
+  cfg->Write("OverlayZones", m_prefs.overlay_zones);
   wxString orient;
   for (const auto& kv : m_orient)
     orient += wxString::Format("%s=%d;", kv.first.c_str(), kv.second);
@@ -630,6 +655,26 @@ void mayara_pi::UpdateAccessDialog() {
 
 // The client tries our own server ahead of mDNS, but only while we actually
 // have one; otherwise it must fall back to the network as before.
+// True when the overlay is on for at least one canvas. The View toggle shows
+// this, and switching it flips every canvas together -- a panel button has no
+// canvas of its own to act on, and "some are on" is not a state a checkbox can
+// express honestly.
+bool mayara_pi::OverlayOnAny() const {
+  const int n = GetCanvasCount();
+  for (int c = 0; c < (n > 0 ? n : 1); ++c)
+    if (OverlayOn(c)) return true;
+  return false;
+}
+
+void mayara_pi::SetOverlayAll(bool on) {
+  m_overlay_off.clear();
+  if (!on) {
+    const int n = GetCanvasCount();
+    for (int c = 0; c < (n > 0 ? n : 1); ++c) m_overlay_off.insert(c);
+  }
+  SaveConfig();
+}
+
 void mayara_pi::SyncLocalServerUrl() {
   if (!m_client) return;
   const bool use_local = m_server && m_server->Enabled() &&
@@ -1047,7 +1092,10 @@ void mayara_pi::OnToolbarToolCallback(int id) {
 
 void mayara_pi::OnContextMenuItemCallback(int id) {
   if (id == m_mi_overlay) {
-    m_overlay_enabled = !m_overlay_enabled;
+    if (OverlayOn(m_menu_canvas))
+      m_overlay_off.insert(m_menu_canvas);
+    else
+      m_overlay_off.erase(m_menu_canvas);
     SaveConfig();
     GetOCPNCanvasWindow()->Refresh(false);
   } else if (id == m_mi_ppi) {
@@ -1057,8 +1105,15 @@ void mayara_pi::OnContextMenuItemCallback(int id) {
 
 // Called just before the canvas context menu is shown; sync the check marks
 // to the live state.
-void mayara_pi::PrepareContextMenu(int /*canvasIndex*/) {
-  if (m_mi_overlay_item) m_mi_overlay_item->Check(m_overlay_enabled);
+void mayara_pi::PrepareContextMenu(int canvasIndex) {
+  // The menu item acts on the canvas whose menu this is, so remember it: the
+  // callback that follows is not told which canvas it came from.
+  m_menu_canvas = canvasIndex;
+  if (m_mi_overlay_item) m_mi_overlay_item->Check(OverlayOn(canvasIndex));
+  if (m_mi_overlay_item && GetCanvasCount() > 1)
+    m_mi_overlay_item->SetItemLabel(
+        wxString::Format(_("Mayara radar overlay on this chart (%d)"),
+                         canvasIndex + 1));
   if (m_mi_ppi_item)
     m_mi_ppi_item->Check(AnyWindowShown());
 }
@@ -1175,9 +1230,9 @@ void mayara_pi::RebuildWindows() {
       });
     }
     win->ApplyTheme(ThemeFor(m_color_scheme));
-    win->SetOverlayControl([this]() { return m_overlay_enabled; },
+    win->SetOverlayControl([this]() { return OverlayOnAny(); },
                            [this](bool on) {
-                             m_overlay_enabled = on;
+                             SetOverlayAll(on);
                              SaveConfig();
                              GetOCPNCanvasWindow()->Refresh(false);
                            });
@@ -1332,7 +1387,8 @@ void mayara_pi::TogglePpiWindow() {
 bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
                                            PlugIn_ViewPort* vp, int canvasIndex,
                                            int priority) {
-  if (!m_overlay_enabled || !m_client || !vp || !vp->bValid) return false;
+  if (!OverlayOn(canvasIndex) || !m_client || !vp || !vp->bValid)
+    return false;
   // OpenCPN calls this once per priority level per frame. Draw only at the
   // legacy chart-overlay layer; the higher passes (OVER_EMBOSS/OVER_UI) render
   // on top of the toolbar and chart bar, so drawing there paints over them.
@@ -1361,7 +1417,8 @@ bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glEnable(GL_TEXTURE_2D);
-  glColor4f(m_radar_intensity, m_radar_intensity, m_radar_intensity, 1.0f);
+  const float alpha = m_prefs.overlay_alpha / 100.0f;
+  glColor4f(m_radar_intensity, m_radar_intensity, m_radar_intensity, alpha);
 
   // Each radar is drawn as an annulus from the next-shorter shown radar's range
   // out to its own range; the shortest is a full disc. So the shorter radar
@@ -1377,6 +1434,10 @@ bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
 
   glBindTexture(GL_TEXTURE_2D, 0);
   glDisable(GL_TEXTURE_2D);
+  // Guard zones over the chart, in the same colours as the PPI so a zone reads
+  // as the same thing in both places.
+  if (m_prefs.overlay_zones)
+    for (const Item& it : items) DrawZonesOverlay(it.idx, vp);
   glDisable(GL_BLEND);
   return drew;
 }
@@ -1463,6 +1524,71 @@ bool mayara_pi::DrawRadarOverlay(int index, PlugIn_ViewPort* vp,
   }
   glPopMatrix();
   return true;
+}
+
+// The guard zones of one radar, drawn on the chart. Geometry matches
+// DrawGuardZones on the PPI: bow-relative radians, metres, and the same
+// 1/cos(lat) correction the echo disc uses -- without it a zone would sit at a
+// different distance from the echoes it is watching.
+void mayara_pi::DrawZonesOverlay(int index, PlugIn_ViewPort* vp) {
+  RadarControls* ctrl = m_client ? m_client->ControlsAt(index) : nullptr;
+  RadarState* state = m_client ? m_client->StateAt(index) : nullptr;
+  if (!ctrl || !state) return;
+
+  double lat = m_ownship_lat, lon = m_ownship_lon;
+  if (lat == 0.0 && lon == 0.0)
+    if (!state->Position(lat, lon)) return;
+  wxPoint centre;
+  GetCanvasPixLL(vp, &centre, lat, lon);
+  const double coslat = std::max(0.02, std::cos(lat * M_PI / 180.0));
+  const double ppm = vp->view_scale_ppm / coslat;
+
+  double heading = m_heading_true, sh = 0.0;
+  if (heading == 0.0 && state->Heading(sh)) heading = sh;
+  // Screen angle trails the bearing by 90 degrees, and the chart may be
+  // rotated under us.
+  const double base = (heading + vp->rotation * 180.0 / M_PI) * M_PI / 180.0 -
+                      M_PI / 2.0;
+
+  const float fill[2][4] = {{144 / 255.f, 238 / 255.f, 144 / 255.f, 0.25f},
+                            {173 / 255.f, 216 / 255.f, 230 / 255.f, 0.25f}};
+  const float line[2][4] = {{0.0f, 128 / 255.f, 0.0f, 0.6f},
+                            {0.0f, 0.0f, 1.0f, 0.6f}};
+  const char* ids[2] = {"guardZone1", "guardZone2"};
+
+  for (int z = 0; z < 2; ++z) {
+    const ControlValue v = ctrl->Value(ids[z]);
+    if (!v.has_enabled || !v.enabled) continue;
+    if (v.endDistance <= v.startDistance) continue;
+    const double r_in = v.startDistance * ppm, r_out = v.endDistance * ppm;
+    if (r_out < 2) continue;
+    double a0 = base + v.value, a1 = base + v.endValue;
+    if (std::fabs(v.endValue - v.value) < 0.001) a1 = a0 + 2.0 * M_PI;
+    if (a1 < a0) a1 += 2.0 * M_PI;
+    const int seg = std::max(8, static_cast<int>((a1 - a0) * 24));
+
+    glColor4fv(fill[z]);
+    glBegin(GL_TRIANGLE_STRIP);
+    for (int i = 0; i <= seg; ++i) {
+      const double a = a0 + (a1 - a0) * i / seg;
+      const double c = std::cos(a), sn = std::sin(a);
+      glVertex2f(centre.x + r_in * c, centre.y + r_in * sn);
+      glVertex2f(centre.x + r_out * c, centre.y + r_out * sn);
+    }
+    glEnd();
+
+    glColor4fv(line[z]);
+    glLineWidth(1.0f);
+    for (double r : {r_in, r_out}) {
+      glBegin(GL_LINE_STRIP);
+      for (int i = 0; i <= seg; ++i) {
+        const double a = a0 + (a1 - a0) * i / seg;
+        glVertex2f(centre.x + r * std::cos(a), centre.y + r * std::sin(a));
+      }
+      glEnd();
+    }
+  }
+  glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 }
 
 void mayara_pi::SetPositionFixEx(PlugIn_Position_Fix_Ex& pfix) {

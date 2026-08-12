@@ -47,11 +47,17 @@ fixed server-side once the two endpoints were compared.
 
 ## Chart overlay
 
-- **Per-canvas overlay** (`CT_OVERLAY_CANVAS`). `RenderGLOverlayMultiCanvas`
-  takes `canvasIndex` and ignores it, so the overlay is all-canvases-or-none.
-- **Overlay transparency** as a user control. mayara_pi derives intensity from
-  the colour scheme theme only.
-- **Toggles**: guard zones on overlay, trails on overlay, overlay-on-standby.
+- **Per-canvas overlay** (`CT_OVERLAY_CANVAS`) — done. The canvas context menu
+  switches the overlay for the canvas it was opened from; the View toggle acts
+  on all of them, since a panel button has no canvas of its own.
+- **Overlay opacity** — done, 25/50/75/100% in the View section.
+- **Guard zones on the overlay** — done, in the PPI's colours.
+- **Trails on overlay** — not applicable. mayara-server bakes trails into the
+  spoke legend as history colours, so they are part of the echo texture and
+  cannot be drawn or suppressed separately.
+- **Overlay on standby** — not applicable as radar_pi means it. Standby clears
+  the picture (`RadarState::Clear`), so there is nothing to keep showing; the
+  guard zones now drawn on the chart cover the case it existed for.
 
 ## Feeding OpenCPN
 

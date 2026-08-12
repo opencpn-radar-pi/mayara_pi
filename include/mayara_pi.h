@@ -124,7 +124,14 @@ class mayara_pi : public opencpn_plugin_121 {
   std::string m_update_declined;  // release tag the user said "later" to
   PI_ColorScheme m_color_scheme = PI_GLOBAL_COLOR_SCHEME_DAY;
   float m_radar_intensity = 1.0f;
-  bool m_overlay_enabled = true;
+  // Which canvases show the overlay. Empty means all of them, so the default
+  // and the single-canvas case need no special handling; only a canvas the
+  // user has switched off is recorded. Persisted.
+  std::set<int> m_overlay_off;
+  int m_menu_canvas = 0;  // canvas whose context menu is open
+  bool OverlayOn(int canvas) const { return !m_overlay_off.count(canvas); }
+  bool OverlayOnAny() const;
+  void SetOverlayAll(bool on);
   PpiPrefs m_prefs;  // global display prefs, shared by every radar window
 
   // Presentation: how many PPI windows to spread the discovered radars across.
@@ -175,6 +182,8 @@ class mayara_pi : public opencpn_plugin_121 {
   // fraction of the radius outward, so a shorter-range radar occludes this one
   // within its radius.
   bool DrawRadarOverlay(int index, PlugIn_ViewPort* vp, double inner_frac);
+  // Guard zones of one radar, drawn over the chart.
+  void DrawZonesOverlay(int index, PlugIn_ViewPort* vp);
 
   // Latest own-ship fix, for the overlay/PPI to place the radar.
   double m_ownship_lat = 0.0;

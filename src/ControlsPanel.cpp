@@ -493,6 +493,29 @@ void ControlsPanel::FillViewSection(wxSizer* content) {
           p.menu_autohide = i;
           m_set_prefs(p);
         });
+    // The overlay sits on top of the chart, so how much of the chart it hides
+    // is a judgement only the operator can make.
+    AddChoiceRow(
+        content, _("Overlay opacity"), {"25%", "50%", "75%", "100%"},
+        [this]() {
+          const int a = m_get_prefs().overlay_alpha;
+          return a <= 25 ? 0 : a <= 50 ? 1 : a <= 75 ? 2 : 3;
+        },
+        [this](int i) {
+          PpiPrefs p = m_get_prefs();
+          p.overlay_alpha = 25 * (i + 1);
+          m_set_prefs(p);
+        });
+    auto* oz = new ThemedButton(this, _("Guard zones on chart"), m_theme, true);
+    content->Add(oz, 0, wxEXPAND | wxALL, 4);
+    oz->Bind(wxEVT_TOGGLEBUTTON, [this, oz](wxCommandEvent&) {
+      PpiPrefs p = m_get_prefs();
+      p.overlay_zones = oz->GetValue();
+      m_set_prefs(p);
+    });
+    m_updaters.push_back(
+        [this, oz]() { oz->SetValue(m_get_prefs().overlay_zones); });
+
     auto* rz = new ThemedButton(this, _("Reverse zoom wheel"), m_theme, true);
     content->Add(rz, 0, wxEXPAND | wxALL, 4);
     rz->Bind(wxEVT_TOGGLEBUTTON, [this, rz](wxCommandEvent&) {
