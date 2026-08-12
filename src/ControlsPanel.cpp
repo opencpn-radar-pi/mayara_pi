@@ -258,8 +258,12 @@ void ControlsPanel::ApplyValues() {
 }
 
 void ControlsPanel::Rebuild() {
+  // Destroying a focused text control fires KILL_FOCUS, whose handler would
+  // otherwise run against widgets that are already going away.
+  m_rebuilding = true;
   DestroyChildren();
   m_updaters.clear();
+  m_rebuilding = false;
 
   RadarControls* c = controls();
   if (!c) {
@@ -653,8 +657,15 @@ void ControlsPanel::AddNumber(wxSizer* outer, const ControlDef& def) {
           slider->SetValue(Clampi(
               static_cast<int>((cur - lo) / (hi - lo) * 1000.0 + 0.5), 0,
               1000));
-        if (entry && !*dragging)
-          entry->ChangeValue(wxString::FromUTF8(Num(cur).c_str()));
+        if (entry && !*dragging && !entry->HasFocus()) {
+          // Only when it would actually change: rewriting identical text still
+          // moves the caret, which is enough to make typing impossible.
+          const wxString want = wxString::FromUTF8(Num(cur).c_str());
+          double have = 0;
+          if (entry->GetValue() != want &&
+              !(entry->GetValue().ToDouble(&have) && have == cur))
+            entry->ChangeValue(want);
+        }
         if (valtext) {
           if (adj) {
             const long a = std::lround(cur);
@@ -727,9 +738,14 @@ void ControlsPanel::AddNumber(wxSizer* outer, const ControlDef& def) {
       *dragging = true;
       e.Skip();
     });
-    auto commit = [entry, dragging, send_value]() {
+    auto commit = [this, id, entry, dragging, send_value]() {
+      if (m_rebuilding || !controls()) return;  // widgets are going away
       double d = 0;
-      if (entry->GetValue().ToDouble(&d)) send_value(d);
+      // Only send a value that differs from the model. A focus change alone is
+      // not an edit, and echoing the same number back churns the control for
+      // no reason.
+      if (entry->GetValue().ToDouble(&d) && d != controls()->Value(id).value)
+        send_value(d);
       *dragging = false;
     };
     entry->Bind(wxEVT_TEXT_ENTER,
