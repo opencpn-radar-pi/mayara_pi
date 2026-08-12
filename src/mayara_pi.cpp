@@ -138,24 +138,14 @@ int mayara_pi::Init() {
       _("Mayara Radar"), _("Show or hide the Mayara radar PPI window"),
       nullptr, -1, 0, this);
 
-  // Canvas right-click context menu. The overlay entry carries a submenu of
-  // which radar this canvas shows -- OpenCPN clones submenus and dispatches
-  // their items by their own id, so the ids are allocated here once and only
-  // the labels change as radars come and go.
+  // Canvas right-click context menu. The overlay entry pops a menu of its own
+  // rather than carrying a submenu: OpenCPN only began passing submenu clicks
+  // back to plugins in September 2025, and before that they were silently
+  // dropped -- an entry that does nothing is worse than one more click.
   {
-    auto* sub = new wxMenu();
-    m_mi_ov_none = wxWindow::NewControlId();
-    sub->AppendRadioItem(m_mi_ov_none, _("None"));
-    for (int i = 0; i < kMaxMenuRadars; ++i) {
-      m_mi_ov_radar[i] = wxWindow::NewControlId();
-      sub->AppendRadioItem(m_mi_ov_radar[i], wxString::Format("Radar %d", i + 1));
-    }
-    m_mi_ov_all = wxWindow::NewControlId();
-    sub->AppendRadioItem(m_mi_ov_all, _("All"));
-
     m_mi_overlay_item = new wxMenuItem(nullptr, wxID_ANY,
                                        _("Mayara radar overlay"),
-                                       wxEmptyString, wxITEM_NORMAL, sub);
+                                       wxEmptyString, wxITEM_NORMAL);
     m_mi_overlay = AddCanvasContextMenuItem(m_mi_overlay_item, this);
 
     m_mi_menu_item = new wxMenuItem(nullptr, wxID_ANY, _("Mayara radar menu"),
@@ -166,7 +156,13 @@ int mayara_pi::Init() {
     m_mi_ppi_item = new wxMenuItem(nullptr, wxID_ANY, _("Show Mayara PPI"),
                                    wxEmptyString, wxITEM_NORMAL);
     m_mi_ppi = AddCanvasContextMenuItem(m_mi_ppi_item, this);
+
+    m_mi_ov_none = wxWindow::NewControlId();
+    m_mi_ov_all = wxWindow::NewControlId();
+    for (int k = 0; k < kMaxMenuRadars; ++k)
+      m_mi_ov_radar[k] = wxWindow::NewControlId();
   }
+
 
   // Optional mayara-server of our own: start it before the client so it is
   // already listening on loopback by the time discovery runs.
@@ -1343,31 +1339,15 @@ void mayara_pi::OnToolbarToolCallback(int id) {
 }
 
 void mayara_pi::OnContextMenuItemCallback(int id) {
-  int sel = kOverlayAll;
-  bool is_overlay = false;
-  if (id == m_mi_ov_none) {
-    sel = kOverlayNone;
-    is_overlay = true;
-  } else if (id == m_mi_ov_all) {
-    sel = kOverlayAll;
-    is_overlay = true;
-  } else {
-    for (int i = 0; i < kMaxMenuRadars; ++i)
-      if (id == m_mi_ov_radar[i]) {
-        sel = i;
-        is_overlay = true;
-        break;
-      }
-  }
-  if (is_overlay) {
-    m_overlay_sel[m_menu_canvas] = sel;
-    SaveConfig();
-    SyncAutoRange();
-    GetOCPNCanvasWindow()->Refresh(false);
-    return;
-  }
-  if (id == m_mi_menu) {
-    ShowRadarMenu(m_menu_canvas);
+  // The canvas is whatever the pointer was over when the menu opened; hold it,
+  // because the pointer moves onto the menu itself from here on.
+  const int canvas = m_menu_canvas;
+  if (id == m_mi_overlay) {
+    // Not from inside the host menu's own event handler: let it close first.
+    if (m_parent_window)
+      m_parent_window->CallAfter([this, canvas]() { ShowOverlayMenu(canvas); });
+  } else if (id == m_mi_menu) {
+    ShowRadarMenu(canvas);
   } else if (id == m_mi_ppi) {
     // "Show" also means "bring to the front": a window hidden behind the chart
     // is not showing as far as anyone looking at the screen is concerned.
@@ -1392,40 +1372,73 @@ void mayara_pi::PrepareContextMenu(int canvasIndex) {
 // PrepareContextMenu for that, but only for API versions it knows about, so
 // the heartbeat runs this as well against the canvas under the pointer.
 void mayara_pi::RefreshContextMenu(int canvas) {
-  const std::vector<std::string> names =
-      m_client ? m_client->RadarNames() : std::vector<std::string>();
-  const int sel = OverlaySel(canvas);
   if (m_mi_overlay_item) {
     // Name the canvas only when there is more than one, so the single-canvas
     // case does not carry a number that means nothing.
+    const wxString what = OverlayLabel(canvas);
     m_mi_overlay_item->SetItemLabel(
         GetCanvasCount() > 1
-            ? wxString::Format(_("Mayara radar overlay (chart %d)"), canvas + 1)
-            : wxString(_("Mayara radar overlay")));
-    if (wxMenu* sub = m_mi_overlay_item->GetSubMenu()) {
-      for (int i = 0; i < kMaxMenuRadars; ++i) {
-        wxMenuItem* it = sub->FindItem(m_mi_ov_radar[i]);
-        if (!it) continue;
-        const bool have = i < static_cast<int>(names.size());
-        it->SetItemLabel(have ? wxString::FromUTF8(names[i].c_str())
-                              : wxString::Format(_("Radar %d"), i + 1));
-        it->Enable(have);
-      }
-      // Check only the selected one: they are one radio group, so checking it
-      // clears the others. Checking a radio item false is not portable.
-      const int on = sel == kOverlayNone
-                         ? m_mi_ov_none
-                         : (sel == kOverlayAll ? m_mi_ov_all
-                                               : m_mi_ov_radar[sel < kMaxMenuRadars
-                                                                   ? sel
-                                                                   : 0]);
-      if (wxMenuItem* it = sub->FindItem(on))
-        if (!it->IsChecked()) it->Check(true);
-    }
+            ? wxString::Format(_("Mayara radar overlay (chart %d): %s"),
+                               canvas + 1, what)
+            : wxString::Format(_("Mayara radar overlay: %s"), what));
   }
   if (m_mi_ppi_item)
     m_mi_ppi_item->SetItemLabel(PpiFrontmost() ? _("Hide Mayara PPI")
                                                : _("Show Mayara PPI"));
+}
+
+// What this canvas is currently set to, for the menu entry.
+wxString mayara_pi::OverlayLabel(int canvas) const {
+  const int sel = OverlaySel(canvas);
+  if (sel == kOverlayNone) return _("none");
+  if (sel == kOverlayAll) return _("all radars");
+  const std::vector<std::string> names =
+      m_client ? m_client->RadarNames() : std::vector<std::string>();
+  if (sel >= 0 && sel < static_cast<int>(names.size()))
+    return wxString::FromUTF8(names[sel].c_str());
+  return wxString::Format(_("radar %d"), sel + 1);
+}
+
+// Our own popup, on the canvas that was right-clicked. Ours to build and ours
+// to read, so it works whatever the host does with plugin submenus.
+void mayara_pi::ShowOverlayMenu(int canvas) {
+  if (!m_client) return;
+  const std::vector<std::string> names = m_client->RadarNames();
+  wxWindow* cw = GetCanvasByIndex(canvas);
+  if (!cw) cw = GetOCPNCanvasWindow();
+  if (!cw) return;
+
+  wxMenu menu;
+  menu.AppendRadioItem(m_mi_ov_none, _("None"));
+  const int shown = std::min(static_cast<int>(names.size()), kMaxMenuRadars);
+  for (int i = 0; i < shown; ++i)
+    menu.AppendRadioItem(m_mi_ov_radar[i], wxString::FromUTF8(names[i].c_str()));
+  if (shown > 1) menu.AppendRadioItem(m_mi_ov_all, _("All radars"));
+
+  const int sel = OverlaySel(canvas);
+  int on = m_mi_ov_none;
+  if (sel == kOverlayAll && shown > 1)
+    on = m_mi_ov_all;
+  else if (sel >= 0 && sel < shown)
+    on = m_mi_ov_radar[sel];
+  if (wxMenuItem* it = menu.FindItem(on)) it->Check(true);
+
+  const int got =
+      cw->GetPopupMenuSelectionFromUser(menu, cw->ScreenToClient(wxGetMousePosition()));
+  if (got == wxID_NONE) return;  // dismissed
+
+  int now = kOverlayNone;
+  if (got == m_mi_ov_all) {
+    now = kOverlayAll;
+  } else {
+    for (int i = 0; i < kMaxMenuRadars; ++i)
+      if (got == m_mi_ov_radar[i]) now = i;
+  }
+  m_overlay_sel[canvas] = now;
+  SaveConfig();
+  SyncAutoRange();
+  RefreshContextMenu(canvas);
+  GetOCPNCanvasWindow()->Refresh(false);
 }
 
 // Right-clicking pops the menu where the pointer is, so the canvas under the

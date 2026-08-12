@@ -163,6 +163,8 @@ class mayara_pi : public opencpn_plugin_121 {
   // Push the current radar names and per-canvas selection into the context
   // menu items. OpenCPN copies their labels and checks when it pops the menu.
   void RefreshContextMenu(int canvas);
+  wxString OverlayLabel(int canvas) const;
+  void ShowOverlayMenu(int canvas);  // our own popup, not a host submenu
   bool PpiFrontmost() const;   // shown and in front, not buried under the chart
   void RaisePpiWindows();
   PpiPrefs m_prefs;  // global display prefs, shared by every radar window
