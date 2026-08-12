@@ -432,6 +432,18 @@ void MayaraPpiWindow::WireZoneEditing() {
     });
 }
 
+void MayaraPpiWindow::ShowMenuOnly() {
+  if (!m_controls) return;
+  if (m_grid) m_grid->Show(false);
+  const int ctrl_w = std::max(320, m_controls->GetEffectiveMinSize().x);
+  if (m_frame) m_frame->SetClientSize(ctrl_w, m_frame->GetClientSize().y);
+  m_controls->SetViewMode(false);
+  m_controls->SetSize(0, 0, ctrl_w, GetClientSize().y);
+  m_controls->Show(true);
+  m_controls->Raise();
+  Layout();
+}
+
 void MayaraPpiWindow::ApplyPrefs() {
   if (!m_prefs_get) return;
   const PpiPrefs p = m_prefs_get();

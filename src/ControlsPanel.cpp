@@ -516,6 +516,19 @@ void ControlsPanel::FillViewSection(wxSizer* content) {
     m_updaters.push_back(
         [this, oz]() { oz->SetValue(m_get_prefs().overlay_zones); });
 
+    // Off by default: it writes a range to a radar, and nothing should do that
+    // to your hardware unless you asked for it.
+    auto* ar = new ThemedButton(this, _("Auto-range second radar"), m_theme,
+                                true);
+    content->Add(ar, 0, wxEXPAND | wxALL, 4);
+    ar->Bind(wxEVT_TOGGLEBUTTON, [this, ar](wxCommandEvent&) {
+      PpiPrefs p = m_get_prefs();
+      p.auto_range = ar->GetValue();
+      m_set_prefs(p);
+    });
+    m_updaters.push_back(
+        [this, ar]() { ar->SetValue(m_get_prefs().auto_range); });
+
     auto* rz = new ThemedButton(this, _("Reverse zoom wheel"), m_theme, true);
     content->Add(rz, 0, wxEXPAND | wxALL, 4);
     rz->Bind(wxEVT_TOGGLEBUTTON, [this, rz](wxCommandEvent&) {

@@ -47,9 +47,14 @@ fixed server-side once the two endpoints were compared.
 
 ## Chart overlay
 
-- **Per-canvas overlay** (`CT_OVERLAY_CANVAS`) — done. The canvas context menu
-  switches the overlay for the canvas it was opened from; the View toggle acts
-  on all of them, since a panel button has no canvas of its own.
+- **Per-canvas overlay** (`CT_OVERLAY_CANVAS`) — done, and further than
+  radar_pi takes it: the canvas context menu picks *which* radar that canvas
+  overlays (None / each radar by name / All), so two charts can carry one radar
+  each, the same one, or both nested. The View toggle still acts on every
+  canvas, since a panel button has no canvas of its own.
+- **Auto-range the nested radar** — done, off by default. With a canvas set to
+  "All", the second radar is held at the settable range nearest a quarter of
+  the first's, so the inner picture stays worth looking at.
 - **Overlay opacity** — done, 25/50/75/100% in the View section.
 - **Guard zones on the overlay** — done, in the PPI's colours.
 - **Trails on overlay** — not applicable. mayara-server bakes trails into the

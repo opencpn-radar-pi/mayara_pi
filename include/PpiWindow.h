@@ -90,6 +90,8 @@ class MayaraPpiWindow : public wxPanel {
   // Re-read the prefs and push them to the pictures + auto-hide timer. Public
   // because they are global: a change made in one window applies to them all.
   void ApplyPrefs();
+  // Collapse to just the control panel: the menu without the picture.
+  void ShowMenuOnly();
 
  private:
   void OnSize(wxSizeEvent& event);

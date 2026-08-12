@@ -137,14 +137,33 @@ int mayara_pi::Init() {
       _("Mayara Radar"), _("Show or hide the Mayara radar PPI window"),
       nullptr, -1, 0, this);
 
-  // Canvas right-click context-menu items (checkable), mirroring radar_pi.
+  // Canvas right-click context menu. The overlay entry carries a submenu of
+  // which radar this canvas shows -- OpenCPN clones submenus and dispatches
+  // their items by their own id, so the ids are allocated here once and only
+  // the labels change as radars come and go.
   {
-    m_mi_overlay_item = new wxMenuItem(
-        nullptr, wxID_ANY, _("Mayara radar overlay"), wxEmptyString,
-        wxITEM_CHECK);
+    auto* sub = new wxMenu();
+    m_mi_ov_none = wxWindow::NewControlId();
+    sub->AppendRadioItem(m_mi_ov_none, _("None"));
+    for (int i = 0; i < kMaxMenuRadars; ++i) {
+      m_mi_ov_radar[i] = wxWindow::NewControlId();
+      sub->AppendRadioItem(m_mi_ov_radar[i], wxString::Format("Radar %d", i + 1));
+    }
+    m_mi_ov_all = wxWindow::NewControlId();
+    sub->AppendRadioItem(m_mi_ov_all, _("All"));
+
+    m_mi_overlay_item = new wxMenuItem(nullptr, wxID_ANY,
+                                       _("Mayara radar overlay"),
+                                       wxEmptyString, wxITEM_NORMAL, sub);
     m_mi_overlay = AddCanvasContextMenuItem(m_mi_overlay_item, this);
-    m_mi_ppi_item = new wxMenuItem(nullptr, wxID_ANY, _("Mayara PPI window"),
-                                   wxEmptyString, wxITEM_CHECK);
+
+    m_mi_menu_item = new wxMenuItem(nullptr, wxID_ANY, _("Mayara radar menu"),
+                                    wxEmptyString, wxITEM_NORMAL);
+    m_mi_menu = AddCanvasContextMenuItem(m_mi_menu_item, this);
+
+    // Label says what the click will do, so it is never a guess.
+    m_mi_ppi_item = new wxMenuItem(nullptr, wxID_ANY, _("Show Mayara PPI"),
+                                   wxEmptyString, wxITEM_NORMAL);
     m_mi_ppi = AddCanvasContextMenuItem(m_mi_ppi_item, this);
   }
 
@@ -196,6 +215,7 @@ int mayara_pi::Init() {
     if (AnyWindowShown() && !m_ocpn_fullscreen) CaptureWindowState();
 
     PollGuardAlarms();
+    SyncAutoRange();
 
     // Remember the server that answered (fast reconnect next boot). Not gated
     // on a radar streaming: a server with nothing attached is still the right
@@ -291,18 +311,35 @@ void mayara_pi::LoadConfig() {
   // "OverlayOffCanvases" is a comma list; the old single OverlayEnabled flag is
   // still honoured so an existing config does not silently switch the overlay
   // back on.
-  m_overlay_off.clear();
+  // "OverlaySel" is "canvas:selection;..."; the older OverlayOffCanvases list
+  // and the original single flag are still honoured so an existing config keeps
+  // its meaning.
+  m_overlay_sel.clear();
   bool overlay = true;
   cfg->Read("OverlayEnabled", &overlay, true);
-  wxString off;
-  if (cfg->Read("OverlayOffCanvases", &off) && !off.IsEmpty()) {
-    wxStringTokenizer tok(off, ",");
+  wxString sel;
+  if (cfg->Read("OverlaySel", &sel) && !sel.IsEmpty()) {
+    wxStringTokenizer tok(sel, ";");
     while (tok.HasMoreTokens()) {
-      long c = 0;
-      if (tok.GetNextToken().ToLong(&c)) m_overlay_off.insert(static_cast<int>(c));
+      const wxString pair = tok.GetNextToken();
+      const int colon = pair.Find(':');
+      long c = 0, v = 0;
+      if (colon != wxNOT_FOUND && pair.Left(colon).ToLong(&c) &&
+          pair.Mid(colon + 1).ToLong(&v))
+        m_overlay_sel[static_cast<int>(c)] = static_cast<int>(v);
     }
-  } else if (!overlay) {
-    m_overlay_off.insert(0);
+  } else {
+    wxString off;
+    if (cfg->Read("OverlayOffCanvases", &off) && !off.IsEmpty()) {
+      wxStringTokenizer tok(off, ",");
+      while (tok.HasMoreTokens()) {
+        long c = 0;
+        if (tok.GetNextToken().ToLong(&c))
+          m_overlay_sel[static_cast<int>(c)] = kOverlayNone;
+      }
+    } else if (!overlay) {
+      m_overlay_sel[0] = kOverlayNone;
+    }
   }
   long hz = 5, autohide = 0;
   bool reverse_zoom = false;
@@ -313,6 +350,9 @@ void mayara_pi::LoadConfig() {
   bool ozones = true;
   cfg->Read("OverlayAlpha", &alpha, 100);
   cfg->Read("OverlayZones", &ozones, true);
+  bool arange = false;
+  cfg->Read("AutoRange", &arange, false);
+  m_prefs.auto_range = arange;
   m_prefs.overlay_alpha =
       static_cast<int>(alpha < 25 ? 25 : (alpha > 100 ? 100 : alpha));
   m_prefs.overlay_zones = ozones;
@@ -492,14 +532,16 @@ void mayara_pi::SaveConfig() {
   cfg->SetPath(kConfigGroup);
   cfg->Write("WindowsCount", m_windows_count);
   cfg->Write("OverlayEnabled", OverlayOnAny());
-  wxString off;
-  for (int c : m_overlay_off) off += wxString::Format("%d,", c);
-  cfg->Write("OverlayOffCanvases", off);
+  wxString sel;
+  for (const auto& kv : m_overlay_sel)
+    sel += wxString::Format("%d:%d;", kv.first, kv.second);
+  cfg->Write("OverlaySel", sel);
   cfg->Write("RefreshHz", static_cast<long>(m_prefs.refresh_hz));
   cfg->Write("ReverseZoom", m_prefs.reverse_zoom);
   cfg->Write("MenuAutoHide", static_cast<long>(m_prefs.menu_autohide));
   cfg->Write("OverlayAlpha", static_cast<long>(m_prefs.overlay_alpha));
   cfg->Write("OverlayZones", m_prefs.overlay_zones);
+  cfg->Write("AutoRange", m_prefs.auto_range);
   wxString orient;
   for (const auto& kv : m_orient)
     orient += wxString::Format("%s=%d;", kv.first.c_str(), kv.second);
@@ -659,6 +701,23 @@ void mayara_pi::UpdateAccessDialog() {
 // this, and switching it flips every canvas together -- a panel button has no
 // canvas of its own to act on, and "some are on" is not a state a checkbox can
 // express honestly.
+int mayara_pi::OverlaySel(int canvas) const {
+  auto it = m_overlay_sel.find(canvas);
+  return it == m_overlay_sel.end() ? kOverlayAll : it->second;
+}
+
+// The radars this canvas draws. "All" is every shown radar, which the caller
+// then sorts by range so the shorter one nests inside the longer.
+std::vector<int> mayara_pi::OverlayRadars(int canvas) const {
+  std::vector<int> out;
+  if (!m_client) return out;
+  const int sel = OverlaySel(canvas);
+  if (sel == kOverlayNone) return out;
+  for (int i : m_client->ShownRadars())
+    if (sel == kOverlayAll || sel == i) out.push_back(i);
+  return out;
+}
+
 bool mayara_pi::OverlayOnAny() const {
   const int n = GetCanvasCount();
   for (int c = 0; c < (n > 0 ? n : 1); ++c)
@@ -667,12 +726,94 @@ bool mayara_pi::OverlayOnAny() const {
 }
 
 void mayara_pi::SetOverlayAll(bool on) {
-  m_overlay_off.clear();
-  if (!on) {
-    const int n = GetCanvasCount();
-    for (int c = 0; c < (n > 0 ? n : 1); ++c) m_overlay_off.insert(c);
-  }
+  const int n = GetCanvasCount();
+  m_overlay_sel.clear();
+  if (!on)
+    for (int c = 0; c < (n > 0 ? n : 1); ++c) m_overlay_sel[c] = kOverlayNone;
   SaveConfig();
+}
+
+// With two radars nested on one canvas, the inner picture is only useful if it
+// is meaningfully shorter than the outer. This keeps it at the settable range
+// closest to a quarter of the longer one -- radars accept only the ranges in
+// their own schema, so an exact quarter is usually not one of them.
+void mayara_pi::SyncAutoRange() {
+  if (!m_prefs.auto_range || !m_client) return;
+  // Only when some canvas actually nests them; otherwise the two radars are
+  // independent pictures and their ranges are the operator's business.
+  bool nested = false;
+  const int n = GetCanvasCount();
+  for (int c = 0; c < (n > 0 ? n : 1); ++c)
+    if (OverlaySel(c) == kOverlayAll && OverlayRadars(c).size() > 1)
+      nested = true;
+  if (!nested) return;
+
+  // A steers B, in the order the radars appear in the menu -- not "whichever is
+  // currently longer", which would swap the roles the moment B is ranged out
+  // past A and leave the two chasing each other.
+  std::vector<int> shown = m_client->ShownRadars();
+  if (shown.size() < 2) return;
+  const int outer = shown[0], inner = shown[1];
+
+  RadarControls* oc = m_client->ControlsAt(outer);
+  RadarControls* ic = m_client->ControlsAt(inner);
+  if (!oc || !ic) return;
+  const double outer_m = oc->Value("range").value;
+  if (outer_m <= 0) return;
+  const double want = outer_m / 4.0;
+
+  std::vector<int> vals;
+  for (const auto& d : ic->Schema())
+    if (d.id == "range") {
+      vals = d.validValues;
+      break;
+    }
+  if (vals.empty()) return;
+  int best = vals[0];
+  for (int v : vals)
+    if (std::fabs(v - want) < std::fabs(best - want)) best = v;
+
+  const double cur = ic->Value("range").value;
+  if (std::fabs(cur - best) < 1.0) return;  // already there
+  m_client->SetControlAt(inner, "range",
+                         "{\"value\":" + std::to_string(best) + "}");
+}
+
+// The menu on its own. The window can already collapse to just its controls;
+// this is that state reached deliberately rather than as a side effect of
+// switching the picture off.
+void mayara_pi::ShowRadarMenu() {
+  if (m_windows.empty()) RebuildWindows();
+  m_windows_visible = true;
+  for (MayaraPpiWindow* win : m_windows)
+    if (win) {
+      win->ShowWindow(true);
+      win->ShowMenuOnly();
+    }
+  SetToolbarItemState(m_tool_id, true);
+}
+
+// Shown *and* in front. A window buried behind the chart is not showing as far
+// as anyone looking at the screen is concerned, so the menu offers to show it.
+bool mayara_pi::PpiFrontmost() const {
+  for (MayaraPpiWindow* win : m_windows) {
+    if (!win) continue;
+    if (!const_cast<MayaraPpiWindow*>(win)->IsWindowShown()) continue;
+    wxFrame* f = win->HostFrame();
+    if (!f || f->IsActive()) return true;  // docked panes are always in front
+  }
+  return false;
+}
+
+void mayara_pi::RaisePpiWindows() {
+  if (m_windows.empty()) RebuildWindows();
+  m_windows_visible = true;
+  for (MayaraPpiWindow* win : m_windows)
+    if (win) {
+      win->ShowWindow(true);
+      if (wxFrame* f = win->HostFrame()) f->Raise();
+    }
+  SetToolbarItemState(m_tool_id, true);
 }
 
 void mayara_pi::SyncLocalServerUrl() {
@@ -1091,15 +1232,38 @@ void mayara_pi::OnToolbarToolCallback(int id) {
 }
 
 void mayara_pi::OnContextMenuItemCallback(int id) {
-  if (id == m_mi_overlay) {
-    if (OverlayOn(m_menu_canvas))
-      m_overlay_off.insert(m_menu_canvas);
-    else
-      m_overlay_off.erase(m_menu_canvas);
+  int sel = kOverlayAll;
+  bool is_overlay = false;
+  if (id == m_mi_ov_none) {
+    sel = kOverlayNone;
+    is_overlay = true;
+  } else if (id == m_mi_ov_all) {
+    sel = kOverlayAll;
+    is_overlay = true;
+  } else {
+    for (int i = 0; i < kMaxMenuRadars; ++i)
+      if (id == m_mi_ov_radar[i]) {
+        sel = i;
+        is_overlay = true;
+        break;
+      }
+  }
+  if (is_overlay) {
+    m_overlay_sel[m_menu_canvas] = sel;
     SaveConfig();
+    SyncAutoRange();
     GetOCPNCanvasWindow()->Refresh(false);
+    return;
+  }
+  if (id == m_mi_menu) {
+    ShowRadarMenu();
   } else if (id == m_mi_ppi) {
-    TogglePpiWindow();
+    // "Show" also means "bring to the front": a window hidden behind the chart
+    // is not showing as far as anyone looking at the screen is concerned.
+    if (PpiFrontmost())
+      TogglePpiWindow();
+    else
+      RaisePpiWindows();
   }
 }
 
@@ -1109,13 +1273,39 @@ void mayara_pi::PrepareContextMenu(int canvasIndex) {
   // The menu item acts on the canvas whose menu this is, so remember it: the
   // callback that follows is not told which canvas it came from.
   m_menu_canvas = canvasIndex;
-  if (m_mi_overlay_item) m_mi_overlay_item->Check(OverlayOn(canvasIndex));
-  if (m_mi_overlay_item && GetCanvasCount() > 1)
+  const std::vector<std::string> names =
+      m_client ? m_client->RadarNames() : std::vector<std::string>();
+  const int sel = OverlaySel(canvasIndex);
+  if (m_mi_overlay_item) {
+    // Name the canvas only when there is more than one, so the single-canvas
+    // case does not carry a number that means nothing.
     m_mi_overlay_item->SetItemLabel(
-        wxString::Format(_("Mayara radar overlay on this chart (%d)"),
-                         canvasIndex + 1));
+        GetCanvasCount() > 1
+            ? wxString::Format(_("Mayara radar overlay (chart %d)"),
+                               canvasIndex + 1)
+            : wxString(_("Mayara radar overlay")));
+    if (wxMenu* sub = m_mi_overlay_item->GetSubMenu()) {
+      if (wxMenuItem* it = sub->FindItem(m_mi_ov_none))
+        it->Check(sel == kOverlayNone);
+      for (int i = 0; i < kMaxMenuRadars; ++i) {
+        wxMenuItem* it = sub->FindItem(m_mi_ov_radar[i]);
+        if (!it) continue;
+        const bool have = i < static_cast<int>(names.size());
+        it->SetItemLabel(have ? wxString::FromUTF8(names[i].c_str())
+                              : wxString::Format(_("Radar %d"), i + 1));
+        it->Enable(have);
+        it->Check(sel == i);
+      }
+      // "All" only means something with more than one radar.
+      if (wxMenuItem* it = sub->FindItem(m_mi_ov_all)) {
+        it->Enable(names.size() > 1);
+        it->Check(sel == kOverlayAll);
+      }
+    }
+  }
   if (m_mi_ppi_item)
-    m_mi_ppi_item->Check(AnyWindowShown());
+    m_mi_ppi_item->SetItemLabel(PpiFrontmost() ? _("Hide Mayara PPI")
+                                               : _("Show Mayara PPI"));
 }
 
 // Split the discovered radars into m_windows_count near-even groups. Window w
@@ -1406,7 +1596,7 @@ bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
     uint32_t range;
   };
   std::vector<Item> items;
-  for (int i : m_client->ShownRadars()) {  // at most two displayed radars
+  for (int i : OverlayRadars(canvasIndex)) {
     RadarState* st = m_client->StateAt(i);
     if (st && st->RangeMeters() > 0) items.push_back({i, st->RangeMeters()});
   }

@@ -67,6 +67,12 @@ class mayara_pi : public opencpn_plugin_121 {
   void ShowPreferencesDialog(wxWindow* parent) override;
 
  private:
+  // Overlay selection sentinels, and how many radars the context submenu has
+  // room for. Declared first: members below use them.
+  static const int kOverlayNone = -1;
+  static const int kOverlayAll = -2;
+  static const int kMaxMenuRadars = 4;
+
   void TogglePpiWindow();
   void RebuildWindows();            // (re)create windows from m_windows_count
   void DestroyWindows(bool sync);  // sync=true: delete now (teardown-safe)
@@ -113,6 +119,11 @@ class mayara_pi : public opencpn_plugin_121 {
   int m_tool_id = -1;
   int m_mi_overlay = -1;  // canvas context-menu item ids
   int m_mi_ppi = -1;
+  int m_mi_menu = -1;          // "Radar menu" context item
+  int m_mi_ov_none = -1;       // overlay submenu item ids
+  int m_mi_ov_all = -1;
+  int m_mi_ov_radar[kMaxMenuRadars] = {-1, -1, -1, -1};
+  wxMenuItem* m_mi_menu_item = nullptr;
   wxMenuItem* m_mi_overlay_item = nullptr;  // owned by OpenCPN after adding
   wxMenuItem* m_mi_ppi_item = nullptr;
   std::vector<MayaraPpiWindow*> m_windows;
@@ -124,14 +135,23 @@ class mayara_pi : public opencpn_plugin_121 {
   std::string m_update_declined;  // release tag the user said "later" to
   PI_ColorScheme m_color_scheme = PI_GLOBAL_COLOR_SCHEME_DAY;
   float m_radar_intensity = 1.0f;
-  // Which canvases show the overlay. Empty means all of them, so the default
-  // and the single-canvas case need no special handling; only a canvas the
-  // user has switched off is recorded. Persisted.
-  std::set<int> m_overlay_off;
+  // What each canvas overlays: kOverlayNone, kOverlayAll, or a radar index.
+  // With two radars and two canvases this is what lets A go left and B right.
+  // Absent means kOverlayAll, so the default needs no entry. Persisted.
+  std::map<int, int> m_overlay_sel;
   int m_menu_canvas = 0;  // canvas whose context menu is open
-  bool OverlayOn(int canvas) const { return !m_overlay_off.count(canvas); }
+  int OverlaySel(int canvas) const;
+  bool OverlayOn(int canvas) const { return OverlaySel(canvas) != kOverlayNone; }
   bool OverlayOnAny() const;
   void SetOverlayAll(bool on);
+  // Radars this canvas should draw, honouring its selection.
+  std::vector<int> OverlayRadars(int canvas) const;
+  // Keep the shorter-range radar at a quarter of the longer one's range.
+  void SyncAutoRange();
+  // Open the controls with no picture, for someone who only wants the menu.
+  void ShowRadarMenu();
+  bool PpiFrontmost() const;   // shown and in front, not buried under the chart
+  void RaisePpiWindows();
   PpiPrefs m_prefs;  // global display prefs, shared by every radar window
 
   // Presentation: how many PPI windows to spread the discovered radars across.
