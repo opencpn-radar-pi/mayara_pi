@@ -189,7 +189,12 @@ jobs:
       # against an older SDK links it to a base OpenCPN is not on.
       SDK_VER: '25.08'
       FLATPAK_BRANCH: beta
-      WX_VER: '32'
+      # No WX_VER here on purpose. For flatpak, PluginSetup.cmake appends it to
+      # the ABI string ("flatpak-32-aarch64"), and OpenCPN compares that string
+      # exactly against its own PKG_TARGET, which is "flatpak-aarch64" -- the
+      # form every flatpak plugin in the OpenCPN catalog uses. With the suffix,
+      # importing the tarball fails with "incompatible plugin detected". The
+      # SDK provides exactly one wxWidgets, so there is nothing to disambiguate.
     steps:
       - uses: actions/checkout@v5
         with: { submodules: recursive, fetch-depth: 0 }
