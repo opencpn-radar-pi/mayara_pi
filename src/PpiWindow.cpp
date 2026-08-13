@@ -70,23 +70,21 @@ MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client,
   SetSizer(sizer);
 
   ControlsPanel* controls = m_controls;
-  // Open (or toggle) the controls next to picture `p`, in full or view-only
-  // mode. In a multi-radar window the picture is soloed while its menu is open.
-  auto open = [this, controls](RadarDisplayPanel* p, bool view_only) {
+  // Open (or toggle) the controls next to picture `p`. In a multi-radar window
+  // the picture is soloed while its menu is open.
+  auto open = [this, controls](RadarDisplayPanel* p) {
     if (controls->IsShown() && controls->RadarIndex() == p->RadarIndex() &&
-        controls->IsViewMode() == view_only &&
         controls->SingleControl().empty()) {
       HideControls();
       return;
     }
-    controls->SetViewMode(view_only);
+    controls->SetSingleControl("");
     controls->SetRadarIndex(p->RadarIndex());
     if (m_radars.size() > 1) SoloPicture(p);
     PositionControls(p);
   };
   for (RadarDisplayPanel* p : m_radars) {
-    p->SetMenuCallback([open, p]() { open(p, /*view_only=*/false); });
-    p->SetViewCallback([open, p]() { open(p, /*view_only=*/true); });
+    p->SetMenuCallback([open, p]() { open(p); });
     // A gauge icon opens just that one control as a small top-right popup.
     p->SetControlCallback([this, controls, p](const std::string& id) {
       if (controls->IsShown() && controls->SingleControl() == id &&

@@ -32,10 +32,6 @@ class ControlsPanel : public wxScrolledWindow {
   // one) the set of radars its selector may switch between.
   void SetRadarIndex(int index);
   int RadarIndex() const { return m_index; }
-  // View-only mode shows just the View controls (opened by the View icon);
-  // full mode shows everything else.
-  void SetViewMode(bool view_only);
-  bool IsViewMode() const { return m_view_only; }
   // Single-control mode shows just one control (opened by a gauge icon).
   void SetSingleControl(const std::string& id);
   const std::string& SingleControl() const { return m_single_id; }
@@ -134,7 +130,6 @@ class ControlsPanel : public wxScrolledWindow {
   MayaraClient* m_client;  // not owned
   int m_index = 0;         // which radar these controls drive
   std::vector<int> m_radar_list;  // radars this window hosts (for the selector)
-  bool m_view_only = false;       // show only the View controls
   std::string m_single_id;        // non-empty: show only this control
   wxTimer m_timer;
   uint64_t m_last_gen = ~0ull;

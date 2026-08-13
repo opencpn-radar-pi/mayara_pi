@@ -223,10 +223,9 @@ void RadarDisplayPanel::DrawIconBar(wxDC& dc, const wxSize& sz) {
   RadarControls* controls = m_client ? m_client->ControlsAt(m_index) : nullptr;
   const int cell = 40, bw = 40;
   // Against the right edge of the *visible* picture, not the panel: with the
-  // controls open the full-width position puts the bar underneath them, which
-  // hides the one icon (View) that opens the section they are not showing.
+  // controls open the full-width position puts the bar underneath them.
   const int avail_w = std::max(16, sz.x - m_obscured_right);
-  const int bx = avail_w - bw - 6, by = 6, barH = 7 * cell;
+  const int bx = avail_w - bw - 6, by = 6, barH = 6 * cell;
 
   // Very dark grey rounded background.
   dc.SetBrush(wxBrush(wxColour(22, 22, 24)));
@@ -309,24 +308,11 @@ void RadarDisplayPanel::DrawIconBar(wxDC& dc, const wxSize& sz) {
     m_icon_ebl = cellRect(5);
     caption(5, "EBL/VRM", col);
   }
-  // 6: View (mini hamburger over an eye).
-  {
-    wxPoint c = ctr(6);
-    dc.SetPen(wxPen(ink, 2));
-    for (int k = 0; k < 2; ++k)
-      dc.DrawLine(c.x - 8, c.y - 11 + k * 4, c.x + 8, c.y - 11 + k * 4);
-    dc.SetBrush(*wxTRANSPARENT_BRUSH);
-    dc.DrawEllipse(c.x - 9, c.y - 1, 18, 12);
-    dc.SetBrush(wxBrush(ink));
-    dc.SetPen(*wxTRANSPARENT_PEN);
-    dc.DrawCircle(c.x, c.y + 5, 2);
-    m_icon_view = cellRect(6);
-  }
 }
 
 void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
   m_menu_rect = m_icon_ais = m_icon_gain = m_icon_sea = m_icon_rain =
-      m_icon_ebl = m_icon_view = wxRect();
+      m_icon_ebl = wxRect();
   m_power_rect = wxRect();
   m_range_minus_rect = wxRect();
   m_range_plus_rect = wxRect();
@@ -1272,8 +1258,6 @@ void RadarDisplayPanel::HandleClick(const wxPoint& p) {
     CenterView();
   } else if (m_menu_rect.Contains(p)) {
     if (m_on_menu) m_on_menu();
-  } else if (m_icon_view.Contains(p)) {
-    if (m_on_view) m_on_view();
   } else if (m_icon_ais.Contains(p)) {
     m_layers.ais = !m_layers.ais;
     Refresh(false);
@@ -1336,8 +1320,7 @@ void RadarDisplayPanel::HandleClick(const wxPoint& p) {
 void RadarDisplayPanel::OnLeftDClick(wxMouseEvent& event) {
   const wxPoint p = event.GetPosition();
   // Double-clicking a control/lozenge is not an acquire gesture.
-  if (m_menu_rect.Contains(p) || m_icon_view.Contains(p) ||
-      m_icon_ais.Contains(p) || m_icon_ebl.Contains(p) ||
+  if (m_menu_rect.Contains(p) || m_icon_ais.Contains(p) || m_icon_ebl.Contains(p) ||
       m_icon_gain.Contains(p) || m_icon_sea.Contains(p) ||
       m_icon_rain.Contains(p) || m_power_rect.Contains(p) ||
       m_range_minus_rect.Contains(p) || m_range_plus_rect.Contains(p)) {

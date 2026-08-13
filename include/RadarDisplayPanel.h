@@ -90,7 +90,6 @@ class RadarDisplayPanel : public wxPanel {
   RadarDisplayPanel(wxWindow* parent, MayaraClient* client, int radar_index = 0);
 
   void SetMenuCallback(std::function<void()> cb) { m_on_menu = std::move(cb); }
-  void SetViewCallback(std::function<void()> cb) { m_on_view = std::move(cb); }
   // Open a single control (gauge icons): the callback gets the control id.
   void SetControlCallback(std::function<void(const std::string&)> cb) {
     m_on_control = std::move(cb);
@@ -200,7 +199,6 @@ class RadarDisplayPanel : public wxPanel {
   int m_index = 0;         // which radar this panel shows
   wxTimer m_timer;
   std::function<void()> m_on_menu;
-  std::function<void()> m_on_view;
   std::function<void(const std::string&)> m_on_control;
   std::function<void()> m_on_focus;
   std::function<NavState()> m_nav;  // own-ship nav provider (may be null)
@@ -253,7 +251,6 @@ class RadarDisplayPanel : public wxPanel {
   wxRect m_icon_sea;     // icon-bar: Sea gauge
   wxRect m_icon_rain;    // icon-bar: Rain gauge
   wxRect m_icon_ebl;     // icon-bar: EBL/VRM
-  wxRect m_icon_view;    // icon-bar: View menu
   wxRect m_power_rect;
   wxRect m_range_minus_rect;
   wxRect m_range_plus_rect;

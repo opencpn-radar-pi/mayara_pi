@@ -202,17 +202,9 @@ void ControlsPanel::SetRadarIndex(int index) {
   if (m_built) Rebuild();
 }
 
-void ControlsPanel::SetViewMode(bool view_only) {
-  if (view_only == m_view_only && m_single_id.empty()) return;
-  m_view_only = view_only;
-  m_single_id.clear();
-  if (m_built) Rebuild();
-}
-
 void ControlsPanel::SetSingleControl(const std::string& id) {
-  if (id == m_single_id && !m_view_only) return;
+  if (id == m_single_id) return;
   m_single_id = id;
-  m_view_only = false;
   if (m_built) Rebuild();
 }
 
@@ -296,19 +288,6 @@ void ControlsPanel::Rebuild() {
     return;
   }
 
-  // View-only mode: just the View controls (opened by the View icon).
-  if (m_view_only) {
-    auto* content = new wxBoxSizer(wxVERTICAL);
-    FillViewSection(content);
-    root->Add(content, 0, wxEXPAND | wxLEFT | wxRIGHT, 6);
-    SetSizer(root);
-    FitInside();
-    Layout();
-    ThemeChildren();
-    ApplyValues();
-    return;
-  }
-
   // Radar selector: switches which of this window's radars these controls
   // drive. Shown only when the window hosts more than one radar.
   if (m_radar_list.size() > 1) {
@@ -340,19 +319,21 @@ void ControlsPanel::Rebuild() {
     AddEnum(root, *by_id["rangeUnits"], /*buttons=*/true);
   root->Add(new wxStaticLine(this), 0, wxEXPAND | wxALL, 4);
 
-  // (The View controls live in their own menu now, opened by the View icon.)
   const std::set<std::string> quick = {"power", "range", "rangeUnits"};
   const char* categories[] = {"base",         "targets",      "trails",
                               "advanced",     "installation", "info"};
 
-  bool vrm_done = false;
+  bool local_done = false;
   for (const char* cat : categories) {
-    // Straight after Base, as the operator's own measuring tools rather than
-    // anything the radar reports.
-    if (!vrm_done && std::string(cat) != "base") {
+    // Straight after Base: what the operator sets for themselves, before what
+    // the radar reports about itself. View first -- it is the one people go
+    // looking for.
+    if (!local_done && std::string(cat) != "base") {
+      AddCollapsibleSection(root, _("View"), "view",
+                            [this](wxSizer* c) { FillViewSection(c); });
       AddCollapsibleSection(root, _("EBL/VRM"), "eblvrm",
                             [this](wxSizer* c) { FillVrmEblSection(c); });
-      vrm_done = true;
+      local_done = true;
     }
     std::vector<const ControlDef*> group;
     for (const auto& d : defs)
