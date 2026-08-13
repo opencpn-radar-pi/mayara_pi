@@ -108,8 +108,11 @@ Four profiles ship, in Settings → Colours:
 3. **Garmin**
 4. **Furuno**
 
-The three named after makers are in the spirit of their displays, not measured
-from them. None of the four can be edited in place: changing a colour copies the
+The three named after makers are drawn from an impression of how those
+displays look — not sampled from screenshots and not from published values. If
+anyone has real references, they are four lines each in `BuiltinPalettes()`.
+"Standard Mayara" is mayara-server's own computed blue-green-red ramp
+(`default_legend()`), not a maker's palette either. None of the four can be edited in place: changing a colour copies the
 profile to one of your own first, so "Navico yellow" means the same thing on
 every boat. Profiles of your own can be renamed and deleted. They are stored in
 the OpenCPN config; the built-ins are rebuilt from code each start, so improving

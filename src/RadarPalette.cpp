@@ -34,17 +34,21 @@ RadarPalette::RadarPalette() {
 std::vector<RadarPalette> BuiltinPalettes() {
   std::vector<RadarPalette> out;
 
-  // What the radar itself says its colours are. Every server legend already
-  // carries one, and for Navico it is the maker's own -- so this is not a
-  // "plugin look", it is no opinion at all.
+  // The legend exactly as mayara-server computes it -- a blue-green-red ramp
+  // it builds itself in default_legend(), not the maker's palette. It is the
+  // reference the other profiles depart from.
   RadarPalette mayara;
   mayara.name = "Standard Mayara";
   mayara.builtin = true;
   mayara.from_server = true;
   out.push_back(mayara);
 
-  // Dark red through orange to a hot yellow-white: the look of a Navico set
-  // with its yellow palette selected.
+  // The three below are drawn from an impression of how each maker's display
+  // looks, not from sampled screenshots or published values. They are a
+  // familiar place to start, and every one of them can be copied and edited.
+  //
+  // Dark red through orange to a hot yellow-white: a Navico set with its
+  // yellow palette selected.
   RadarPalette navico;
   navico.name = "Navico yellow";
   navico.builtin = true;
