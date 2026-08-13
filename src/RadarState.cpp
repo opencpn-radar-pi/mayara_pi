@@ -17,7 +17,9 @@ void RadarState::Configure(int spokes_per_rev, int max_spoke_len,
   std::lock_guard<std::mutex> lock(m_);
   spokes_ = spokes_per_rev;
   maxlen_ = max_spoke_len;
-  legend_ = std::move(legend);
+  legend_src_ = std::move(legend);
+  legend_ = legend_src_;
+  RebuildLegend();
   raster_.assign(static_cast<size_t>(spokes_) * maxlen_, 0);
   spoke_len_.assign(spokes_, 0);
   range_ = 0;
@@ -182,6 +184,70 @@ bool RadarState::RenderPPI(uint8_t* rgb, int w, int h, double zoom,
 void RadarState::SetIntensity(float f) {
   std::lock_guard<std::mutex> lock(m_);
   intensity_ = f;
+}
+
+void RadarState::SetLegendLayout(const LegendLayout& layout) {
+  std::lock_guard<std::mutex> lock(m_);
+  layout_ = layout;
+  RebuildLegend();
+  ++generation_;
+}
+
+void RadarState::SetPalette(const RadarPalette& palette) {
+  std::lock_guard<std::mutex> lock(m_);
+  palette_ = palette;
+  has_palette_ = true;
+  RebuildLegend();
+  ++generation_;
+}
+
+namespace {
+
+Rgba Mix(const Rgba& a, const Rgba& b, double t) {
+  if (t < 0) t = 0;
+  if (t > 1) t = 1;
+  Rgba c;
+  c.r = static_cast<uint8_t>(a.r + (b.r - a.r) * t + 0.5);
+  c.g = static_cast<uint8_t>(a.g + (b.g - a.g) * t + 0.5);
+  c.b = static_cast<uint8_t>(a.b + (b.b - a.b) * t + 0.5);
+  c.a = static_cast<uint8_t>(a.a + (b.a - a.a) * t + 0.5);
+  return c;
+}
+
+}  // namespace
+
+// Re-colour the server's legend in place, entry by entry, keeping its length
+// and its meaning. Anything the layout does not account for is left as the
+// server sent it: a legend that grows a new kind of entry then shows through
+// unaltered rather than coming out wrong.
+void RadarState::RebuildLegend() {
+  legend_ = legend_src_;
+  if (!has_palette_ || palette_.from_server || legend_src_.empty()) return;
+
+  const int n = static_cast<int>(legend_src_.size());
+  const int ramp_end = layout_.pixel_colors > 1 ? layout_.pixel_colors : 0;
+  for (int i = 1; i < ramp_end && i < n; ++i) {
+    // Index 0 is "no echo" and stays transparent whatever the palette says.
+    const double t = ramp_end > 2 ? static_cast<double>(i - 1) / (ramp_end - 2)
+                                  : 1.0;
+    legend_[i] = t < 0.5 ? Mix(palette_.weak, palette_.medium, t * 2.0)
+                         : Mix(palette_.medium, palette_.strong, t * 2.0 - 1.0);
+  }
+  auto at = [&](int idx, const Rgba& c) {
+    if (idx >= 0 && idx < n) legend_[idx] = c;
+  };
+  at(layout_.static_background, palette_.background);
+  at(layout_.doppler_approaching, palette_.doppler_approaching);
+  at(layout_.doppler_receding, palette_.doppler_receding);
+
+  if (layout_.history_start > 0 && layout_.history_start < n) {
+    const int last = n - 1;
+    const int span = last - layout_.history_start;
+    for (int i = layout_.history_start; i <= last; ++i)
+      legend_[i] = Mix(palette_.trail_start, palette_.trail_end,
+                       span > 0 ? static_cast<double>(i - layout_.history_start) / span
+                                : 0.0);
+  }
 }
 
 void RadarState::SetLegendBands(int low, int medium, int strong) {

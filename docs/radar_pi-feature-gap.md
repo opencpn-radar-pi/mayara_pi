@@ -74,17 +74,60 @@ fixed server-side once the two endpoints were compared.
 
 ## Feeding OpenCPN
 
-- **Radar heading → NMEA HDM/HDT** (`pass_heading_to_opencpn`), for boats where
-  the radar is the best heading source.
-- **ARPA targets → TTM / AIVDM** (`TTMtoO`, `AIVDMtoO`), so targets land in
-  OpenCPN's own target list instead of only being drawn by us.
-- **Target-mixer address** — forward targets to another host.
+- **Radar heading → NMEA HDT** — done. Settings → Display → Feed OpenCPN. The
+  radar's own heading, not OpenCPN's fix fed back to it, at 1 Hz. Off by
+  default: on most boats another source already provides heading, and two
+  disagreeing sources is worse than one.
+- **ARPA targets → TTM** — done, same place. TTM's target number is two digits
+  and target ids are not, so numbers are handed out and held for the life of a
+  target; a target that goes lost is reported once as `L` and gives its number
+  back.
+- **ARPA targets → AIVDM** — not done. TTM is what OpenCPN's own target list
+  wants; AIVDM would mean minting AIS identities for radar contacts, which
+  makes them indistinguishable from real AIS traffic downstream.
+- **Target-mixer address** — not done. Forwarding to another host is
+  mayara-server's business: it already serves every client on the network,
+  which is the same job done once instead of per plugin.
 
 ## Colours
 
-radar_pi lets the user set trail start/end, Doppler approaching/receding,
-strong/intermediate/weak, ARPA edge, AIS text and PPI background. mayara_pi
-takes the legend wholesale from the server with no user override.
+Done, and answering radar_pi issue
+[#294](https://github.com/opencpn-radar-pi/radar_pi/issues/294) ("Color palette
+templates") rather than radar_pi's own eleven separate colour settings.
+
+A palette re-colours the server's legend **by role** instead of replacing it:
+the legend says which indices are the echo-strength ramp, which is the static
+background, which two are Doppler and where the trail history starts, so eight
+colours cover any radar whatever legend length it reports. Anything the layout
+does not account for is left exactly as the server sent it.
+
+Five profiles ship, in Settings → Colours:
+
+1. **Standard Mayara** — the ramp mayara-server computes in `default_legend()`
+   (blue at a third, green at two thirds, red at the top), untouched.
+2. **Red**, 3. **Yellow**, 4. **Green**, 5. **Blue** — single-hue ramps, dark at
+   the weakest return through full colour to a pale tint of the same hue at the
+   strongest, so echo strength reads as brightness alone.
+
+Emulating maker palettes was tried and dropped. Their manuals document what
+their colours *mean* (Furuno: "red, yellow or green, corresponding to strong,
+medium and weak echoes"; Navico: diverging blue on every image palette; Garmin:
+green away, red toward) but none publish RGB values, so a profile called
+"Furuno" could only ever be an impression wearing a maker's name. A hue is
+honest about what it is.
+
+Doppler is mayara's own magenta/green on every profile, because a Doppler mark
+has to be the one thing that cannot be mistaken for an echo. The green ramp is
+the exception, where green would be exactly that; there receding is cyan.
+Trails stay neutral white-to-grey, which contrasts with every hue.
+
+None of the built-ins can be edited in place: changing a colour copies the
+profile to one of your own first. Profiles of your own can be renamed and
+deleted. They are stored in the OpenCPN config; the built-ins are rebuilt from
+code each start, so improving one reaches everybody.
+
+Not covered: ARPA edge and AIS text (drawn from the UI theme, not the legend)
+and the PPI background (black, and the picture is designed against it).
 
 ## Diagnostics and testing
 
