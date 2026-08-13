@@ -7,6 +7,7 @@
 #ifndef MAYARA_RADAR_DISPLAY_PANEL_H_
 #define MAYARA_RADAR_DISPLAY_PANEL_H_
 
+#include <cstdint>
 #include <functional>
 #include <string>
 

@@ -9,6 +9,7 @@
 #define MAYARA_CLIENT_H_
 
 #include <atomic>
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <mutex>
