@@ -1502,10 +1502,11 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
 
   auto* chint = new wxStaticText(
       cpage, wxID_ANY,
-      _("\"Standard Mayara\" is the radar's own legend, untouched. The three "
-        "named after makers are in the spirit of their displays, not measured "
-        "from them. Changing a colour on any of the four copies it to a "
-        "profile of your own first."));
+      _("\"Standard Mayara\" is the legend mayara-server computes. The three "
+        "named after makers follow what each maker's manual says its colours "
+        "mean; the exact shades are ours, since none of them publish values. "
+        "Changing a colour on any of the four copies it to a profile of your "
+        "own first."));
   chint->Wrap(330);
   cbox->Add(chint, 0, wxALL, 8);
   cpage->SetSizer(cbox);

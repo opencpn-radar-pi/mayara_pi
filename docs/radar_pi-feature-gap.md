@@ -108,11 +108,32 @@ Four profiles ship, in Settings → Colours:
 3. **Garmin**
 4. **Furuno**
 
-The three named after makers are drawn from an impression of how those
-displays look — not sampled from screenshots and not from published values. If
-anyone has real references, they are four lines each in `BuiltinPalettes()`.
-"Standard Mayara" is mayara-server's own computed blue-green-red ramp
-(`default_legend()`), not a maker's palette either. None of the four can be edited in place: changing a colour copies the
+"Standard Mayara" is the ramp mayara-server computes in `default_legend()` —
+blue at a third, green at two thirds, red at the top — not a maker's palette.
+
+The three named after makers follow what each maker's own documentation says
+its colours *mean*. No maker publishes RGB values, so the exact shades are
+ours; the mapping is not.
+
+- **Furuno** — [DRS4W operator's manual](https://www.furuno.it/docs/OPERATOR_MANUAL/DRS4W_OME-C8.pdf),
+  §1.15 Echo Color: "Multicolor paints each radar echo in a color according to
+  its strength, in red, yellow or green, corresponding to strong, medium and
+  weak echoes." Doppler follows Target Analyzer on the
+  [DRS-NXT series](https://www.furuno.com/special/en/radar/drs4d-nxt/): "red
+  echoes are hazardous targets that are moving towards your vessel", "green
+  echoes are targets that stay stationary, or are moving away from you".
+- **Navico** — the Black/Yellow radar image palette.
+  [Lowrance HDS Live operator manual](https://reviewmarine.com/wp-content/uploads/2019/11/Lowrance-HDS-Live-Operators-Manual.pdf),
+  "Radar view options": "Diverging targets are blue colored on all radar image
+  palettes", and approaching targets are red on the Black/Green and
+  Black/Yellow palettes (yellow on Black/Red and White/Red).
+- **Garmin** — [GPSMAP owner's manual, MotionScope](https://www8.garmin.com/manuals/webhelp/gpsmap1002-1202/EN-US/GUID-745F4B45-874C-474D-84B6-EFFB987F3093.html):
+  "On most color schemes, green indicates the target is moving away from you
+  and red indicates the target is moving toward you." The strength ramp is
+  **not** documented — Garmin's
+  [radar appearance settings](https://www8.garmin.com/manuals/webhelp/gpsmap8400-8600/EN-US/GUID-E9EF00DE-8456-439A-BB46-AD72A410E62C.html)
+  only say "Frgd. Color - Sets the color scheme for the radar returns" without
+  naming the schemes — so the greens there remain our reading. None of the four can be edited in place: changing a colour copies the
 profile to one of your own first, so "Navico yellow" means the same thing on
 every boat. Profiles of your own can be renamed and deleted. They are stored in
 the OpenCPN config; the built-ins are rebuilt from code each start, so improving

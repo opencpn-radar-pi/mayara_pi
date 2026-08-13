@@ -43,50 +43,60 @@ std::vector<RadarPalette> BuiltinPalettes() {
   mayara.from_server = true;
   out.push_back(mayara);
 
-  // The three below are drawn from an impression of how each maker's display
-  // looks, not from sampled screenshots or published values. They are a
-  // familiar place to start, and every one of them can be copied and edited.
-  //
-  // Dark red through orange to a hot yellow-white: a Navico set with its
-  // yellow palette selected.
+  // The three below follow what each maker's own documentation says, with the
+  // sources named. Where a manual gives a colour by name ("red", "yellow") the
+  // exact shade is still ours: no maker publishes RGB values.
+
+  // Navico's "Black/Yellow" radar image palette. VelocityTrack colours are
+  // documented per palette -- Lowrance HDS Live operator manual, "Radar view
+  // options": "Diverging targets are blue colored on all radar image
+  // palettes", and for the Black/Yellow palette approaching targets are red.
   RadarPalette navico;
   navico.name = "Navico yellow";
   navico.builtin = true;
-  navico.weak = C(80, 0, 0);
-  navico.medium = C(220, 60, 0);
-  navico.strong = C(255, 240, 140);
-  navico.doppler_approaching = C(255, 90, 90);
-  navico.doppler_receding = C(90, 170, 255);
+  navico.weak = C(90, 70, 0);
+  navico.medium = C(210, 170, 0);
+  navico.strong = C(255, 245, 140);
+  navico.doppler_approaching = C(255, 40, 40);
+  navico.doppler_receding = C(60, 130, 255);
   navico.trail_start = C(255, 255, 255);
-  navico.trail_end = C(70, 60, 60);
-  navico.background = C(70, 60, 60);
+  navico.trail_end = C(70, 65, 45);
+  navico.background = C(70, 65, 45);
   out.push_back(navico);
 
-  // Garmin's radar sits in the greens, brightening to yellow for the hardest
-  // returns.
+  // Garmin MotionScope, from the GPSMAP owner's manual: "On most color
+  // schemes, green indicates the target is moving away from you and red
+  // indicates the target is moving toward you." The strength ramp is not
+  // documented -- Garmin's manuals only say "Frgd. Color - Sets the color
+  // scheme for the radar returns" without naming the schemes -- so the greens
+  // below remain our reading of how those displays look.
   RadarPalette garmin;
   garmin.name = "Garmin";
   garmin.builtin = true;
   garmin.weak = C(0, 70, 40);
   garmin.medium = C(0, 200, 90);
   garmin.strong = C(255, 255, 170);
-  garmin.doppler_approaching = C(255, 120, 0);
-  garmin.doppler_receding = C(0, 190, 255);
+  garmin.doppler_approaching = C(255, 40, 40);
+  garmin.doppler_receding = C(0, 220, 80);
   garmin.trail_start = C(230, 255, 230);
   garmin.trail_end = C(50, 70, 55);
   garmin.background = C(50, 70, 55);
   out.push_back(garmin);
 
-  // Furuno's multicolour: blue for the faintest returns, green in the middle,
-  // red at the top.
+  // Furuno's multicolour, from the DRS4W operator's manual (OME-C8, "Echo
+  // Color"): "Multicolor paints each radar echo in a color according to its
+  // strength, in red, yellow or green, corresponding to strong, medium and
+  // weak echoes." Doppler follows Target Analyzer on the DRS-NXT series:
+  // "red echoes are hazardous targets that are moving towards your vessel",
+  // "green echoes are targets that stay stationary, or are moving away".
   RadarPalette furuno;
   furuno.name = "Furuno";
   furuno.builtin = true;
-  furuno.weak = C(0, 40, 170);
-  furuno.medium = C(0, 200, 60);
-  furuno.strong = C(255, 60, 40);
-  furuno.doppler_approaching = C(255, 0, 255);
-  furuno.doppler_receding = C(0, 255, 255);
+  furuno.weak = C(0, 200, 0);
+  furuno.medium = C(255, 235, 0);
+  furuno.strong = C(255, 30, 30);
+  furuno.doppler_approaching = C(255, 30, 30);
+  furuno.doppler_receding = C(0, 200, 0);
   furuno.trail_start = C(255, 255, 255);
   furuno.trail_end = C(60, 60, 70);
   furuno.background = C(60, 60, 70);
