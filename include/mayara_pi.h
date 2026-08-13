@@ -181,6 +181,9 @@ class mayara_pi : public opencpn_plugin_121 {
   bool ResolvePosition(int radar, double* lat, double* lon,
                        wxString* source) const;
   void Log(int level, const wxString& msg) const;
+  void LogSettings() const;  // the whole configuration, in one line
+  wxString m_last_heading_source;
+  int m_fix_flags = -1;  // position/COG/heading validity, to log transitions
   // Echo colour profiles: the four built-ins plus whatever the user has made
   // from them. The active one is applied to every radar.
   std::vector<RadarPalette> m_palettes;

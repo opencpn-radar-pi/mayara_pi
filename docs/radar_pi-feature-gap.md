@@ -147,7 +147,21 @@ one of those two, and until now nothing said which.
   and a stale heading points the picture the wrong way with no sign that
   anything is wrong.
 - **Fixed position** — run on a bench with no GPS.
-- **Log level** — Off / Problems / Verbose, into OpenCPN's own log.
+- **Log level** — Off / Problems / Verbose, into OpenCPN's own log. Worker
+  threads never call `wxLog` (its deferred cross-thread flush can dereference
+  an unloaded plugin dylib), so the client queues its lines and the UI thread
+  drains them each heartbeat. Turning logging up writes the whole configuration
+  in one line, so a log sent by a user explains itself.
+
+Turning it on immediately earned its keep: it showed OpenCPN was handing the
+plugin no position fix at all. `SendPositionFixToAllPlugIns()` gates both
+`SetPositionFix` and `SetPositionFixEx` on `WANTS_NMEA_EVENTS`, which this
+plugin never declared — so COG, SOG, heading and position from OpenCPN had
+never arrived, and everything had been running on what the radar stamps into
+its own spokes. `INSTALLS_CONTEXTMENU_ITEMS` was missing too, which is what
+`PrepareAllPluginContextMenus()` checks before calling `PrepareContextMenu`;
+the menu items appear without it, so the only symptom was labels that never
+updated.
 
 Two behaviour fixes came out of it. Heading was previously taken as "0 means
 missing", which is a lie on a boat heading due north; and a missing heading now

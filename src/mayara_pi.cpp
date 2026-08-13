@@ -188,6 +188,7 @@ int mayara_pi::Init() {
   if (!m_sk_token.empty())
     m_client->SetAuthToken(m_sk_token_server, m_sk_token);
   m_client->SetPalette(ActivePalette());  // before the first radar arrives
+  LogSettings();
   m_client->Start();
   // An access request posted in an earlier session may still be waiting for
   // someone to approve it; pick it up where we left off.
@@ -216,6 +217,30 @@ int mayara_pi::Init() {
     // Snapshot geometry for persistence, but not while full-screen (that would
     // save the full-screen rects).
     if (AnyWindowShown() && !m_ocpn_fullscreen) CaptureWindowState();
+
+    if (m_client && m_diag.log_level > 0)
+      for (const auto& line : m_client->TakeLog())
+        Log(line.first, wxString::FromUTF8(line.second.c_str()));
+    else if (m_client)
+      m_client->TakeLog();  // keep the queue from filling while logging is off
+
+    // Say when the answer to "where is the picture" changes, which is the
+    // transition worth having in a log rather than the steady state.
+    {
+      double h = 0.0;
+      wxString src;
+      const bool have = ResolveHeading(-1, &h, &src);
+      const wxString now = have ? src : wxString("none");
+      if (now != m_last_heading_source) {
+        Log(have ? 2 : 1,
+            wxString::Format("heading source: %s -> %s",
+                             m_last_heading_source.IsEmpty()
+                                 ? wxString("(start)")
+                                 : m_last_heading_source,
+                             now));
+        m_last_heading_source = now;
+      }
+    }
 
     PollGuardAlarms();
     FeedHeading();
@@ -261,11 +286,22 @@ int mayara_pi::Init() {
   });
   m_heartbeat->Start(1000);
 
-  // Capabilities. The overlay callback is declared now but returns false until
-  // Phase 1 wires up the spoke renderer.
+  // Capabilities.
+  //
+  // WANTS_NMEA_EVENTS is what gets us SetPositionFixEx at all:
+  // SendPositionFixToAllPlugIns() gates *both* the basic and the extended fix
+  // on that flag, so without it OpenCPN never hands over position, COG, SOG or
+  // heading -- the plugin was running entirely on what the radar stamps into
+  // its own spokes.
+  //
+  // INSTALLS_CONTEXTMENU_ITEMS is what gets PrepareContextMenu called:
+  // PrepareAllPluginContextMenus() skips any plugin without it. The menu items
+  // themselves appear regardless, which is why this was invisible -- the menu
+  // was there, it just never got the chance to update its labels.
   return WANTS_OPENGL_OVERLAY_CALLBACK | WANTS_OVERLAY_CALLBACK |
          WANTS_TOOLBAR_CALLBACK | INSTALLS_TOOLBAR_TOOL | WANTS_CURSOR_LATLON |
-         WANTS_PREFERENCES | USES_AUI_MANAGER;
+         WANTS_NMEA_EVENTS | INSTALLS_CONTEXTMENU_ITEMS | WANTS_PREFERENCES |
+         USES_AUI_MANAGER;
 }
 
 bool mayara_pi::DeInit() {
@@ -1090,6 +1126,25 @@ bool mayara_pi::ResolvePosition(int radar, double* lat, double* lon,
 void mayara_pi::Log(int level, const wxString& msg) const {
   if (level > m_diag.log_level) return;
   wxLogMessage("mayara_pi: %s", msg);
+}
+
+// What the plugin is set to do, written once when logging is turned on so a
+// log sent by a user explains itself without a second round trip.
+void mayara_pi::LogSettings() const {
+  static const char* kSources[] = {"auto", "OpenCPN only", "radar only",
+                                   "fixed"};
+  Log(2, wxString::Format(
+             "settings: heading source %s (fixed %.1f, timeout %ds, COG "
+             "fallback %s), fixed position %s, palette \"%s\", overlay "
+             "alpha %d%%, chart-scale range %s, nest second radar %s, feed "
+             "HDT %s, feed TTM %s",
+             kSources[m_diag.heading_source & 3], m_diag.fixed_heading,
+             m_diag.heading_timeout_s, m_diag.cog_as_heading ? "on" : "off",
+             m_diag.fixed_position ? "on" : "off",
+             wxString::FromUTF8(m_palette_active.c_str()),
+             m_prefs.overlay_alpha, m_prefs.chart_range ? "on" : "off",
+             m_prefs.nest_range ? "on" : "off", m_feed_heading ? "on" : "off",
+             m_feed_targets ? "on" : "off"));
 }
 
 
@@ -1930,8 +1985,10 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
     d.heading_timeout_s = tspin->GetValue();
     d.fixed_position = cb_fpos->GetValue();
     d.log_level = lchoice->GetSelection();
+    const bool louder = d.log_level > m_diag.log_level;
     m_diag = d;
     SaveConfig();
+    if (louder) LogSettings();
     if (wxWindow* c = GetOCPNCanvasWindow()) c->Refresh(false);
   }
 
@@ -2654,6 +2711,20 @@ void mayara_pi::SetPositionFixEx(PlugIn_Position_Fix_Ex& pfix) {
   m_nav.has_hdt = !std::isnan(pfix.Hdt) && pfix.Hdt >= 0.0 && pfix.Hdt < 360.0;
   m_nav.hdt = m_nav.has_hdt ? pfix.Hdt : 0.0;
   if (m_nav.has_hdt) m_hdt_ms = DiagNowMs();
+
+  // Which of these OpenCPN actually supplies is the first question when the
+  // picture is in the wrong place, so log the transitions.
+  const int now_flags = (m_nav.valid ? 1 : 0) | (m_nav.has_cog ? 2 : 0) |
+                        (m_nav.has_hdt ? 4 : 0);
+  if (now_flags != m_fix_flags) {
+    m_fix_flags = now_flags;
+    Log(2, wxString::Format(
+               "OpenCPN fix: position %s, COG %s, heading %s (lat %.5f lon "
+               "%.5f cog %.1f sog %.1f hdt %.1f)",
+               m_nav.valid ? "yes" : "no", m_nav.has_cog ? "yes" : "no",
+               m_nav.has_hdt ? "yes" : "no", m_nav.lat, m_nav.lon, m_nav.cog,
+               m_nav.sog, m_nav.hdt));
+  }
 }
 
 void mayara_pi::SetColorScheme(PI_ColorScheme cs) {

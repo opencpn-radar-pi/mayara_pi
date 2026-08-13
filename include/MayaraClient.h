@@ -138,7 +138,13 @@ class MayaraClient {
   void SetActive(int index);
   void SetAllIntensity(float f);
   // Echo colours, applied to every radar now and to any that appear later.
-  void SetPalette(const RadarPalette& p);  // apply echo dimming to every radar
+  void SetPalette(const RadarPalette& p);
+
+  // Diagnostic lines, drained by the UI thread. Not written straight to wxLog:
+  // wxLog defers a worker thread's messages to the main thread's next flush,
+  // which can land after this dylib has been unloaded. Level 1 is a problem,
+  // 2 is chatter.
+  std::vector<std::pair<int, std::string>> TakeLog();  // apply echo dimming to every radar
 
   // Per-radar access (for the composite overlay and multi-PPI windows).
   RadarState* StateAt(int index);
@@ -217,6 +223,9 @@ class MayaraClient {
   std::atomic<AuthState> m_auth{AuthState::kUnknown};
   std::atomic<bool> m_auth_busy{false};
   std::thread m_auth_thread;
+  void LogLine(int level, const std::string& msg);
+  std::mutex m_log_mutex;
+  std::vector<std::pair<int, std::string>> m_log;
   std::mutex m_palette_mutex;
   RadarPalette m_palette;
   // Targets over REST, for servers whose delta stream does not carry them.
