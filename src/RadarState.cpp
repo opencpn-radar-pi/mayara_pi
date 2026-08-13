@@ -282,8 +282,9 @@ void RadarState::Clear() {
 }
 
 bool RadarState::RenderOverlayRGBA(uint8_t* rgba, int size, double rot_deg,
-                                   double inner_frac) {
+                                   double inner_frac, uint64_t* generation) {
   std::lock_guard<std::mutex> lock(m_);
+  if (generation) *generation = generation_;
   // Guard first: a negative size wraps the length and the memset would run off
   // into whatever follows.
   if (size <= 0) return false;

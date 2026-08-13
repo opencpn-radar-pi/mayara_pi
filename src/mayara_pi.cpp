@@ -2563,11 +2563,10 @@ bool mayara_pi::RenderOverlayMultiCanvas(wxDC& dc, PlugIn_ViewPort* vp,
   // Once per canvas geometry, not once per frame: this says how the plugin is
   // mapping to the screen, and that only changes when the window does.
   if (m_diag.log_level >= 2) {
-    const wxString shape = wxString::Format("%d:%dx%d@%.3f", canvasIndex,
-                                            vp->pix_width, vp->pix_height,
-                                            scale);
-    if (m_last_dc_shape != shape) {
-      m_last_dc_shape = shape;
+    const wxString shape = wxString::Format("%dx%d@%.3f", vp->pix_width,
+                                            vp->pix_height, scale);
+    if (m_last_dc_shape[canvasIndex] != shape) {
+      m_last_dc_shape[canvasIndex] = shape;
       Log(2, wxString::Format("DC overlay: canvas %d, vp %dx%d, coordinate "
                               "scale %.3f",
                               canvasIndex, vp->pix_width, vp->pix_height,
@@ -2618,7 +2617,9 @@ bool mayara_pi::DrawRadarOverlayDC(wxGraphicsContext* gc, int index,
       cache.size != size || cache.rot10 != rot10 ||
       std::fabs(cache.inner - inner_frac) > 0.001) {
     std::vector<uint8_t> rgba(static_cast<size_t>(size) * size * 4);
-    if (!state->RenderOverlayRGBA(rgba.data(), size, rot_deg, inner_frac))
+    uint64_t drawn_gen = 0;
+    if (!state->RenderOverlayRGBA(rgba.data(), size, rot_deg, inner_frac,
+                                  &drawn_gen))
       return false;
     // wxImage wants the colour and the alpha in separate buffers, and takes
     // ownership of both.
@@ -2636,7 +2637,7 @@ bool mayara_pi::DrawRadarOverlayDC(wxGraphicsContext* gc, int index,
       alpha[i] = rgba[i * 4 + 3];
     }
     cache.bmp = wxBitmap(wxImage(size, size, rgb, alpha));
-    cache.gen = state->Generation();
+    cache.gen = drawn_gen;  // what was drawn, not what has arrived since
     cache.size = size;
     cache.rot10 = rot10;
     cache.inner = inner_frac;

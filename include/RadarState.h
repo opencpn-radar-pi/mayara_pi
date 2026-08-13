@@ -81,8 +81,11 @@ class RadarState {
   // chart: no black background to blend against, and an optional transparent
   // hole in the middle so a shorter-range radar occludes this one there.
   // `size` is the diameter in pixels; the radar's range fills size/2.
+  // `generation` (optional) returns the generation these pixels were rendered
+  // from, read under the same lock: a caller that asks afterwards can be handed
+  // a newer one than it drew, and would then cache a stale image against it.
   bool RenderOverlayRGBA(uint8_t* rgba, int size, double rot_deg,
-                         double inner_frac);
+                         double inner_frac, uint64_t* generation = nullptr);
 
   // Radar position stamped into the spoke data (best-effort). Used to place the
   // chart overlay when OpenCPN has no own-ship fix of its own.

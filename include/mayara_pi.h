@@ -224,7 +224,9 @@ class mayara_pi : public opencpn_plugin_121 {
     double inner = -1.0;
   };
   std::vector<OverlayBmp> m_overlay_bmp;
-  wxString m_last_dc_shape;   // logged when the DC mapping changes, not per frame
+  // Per canvas: with two of them, a single value alternates and logs on every
+  // repaint, which is the opposite of what the throttle is for.
+  std::map<int, wxString> m_last_dc_shape;
   uint64_t m_dc_frames = 0;
   // Open the controls with no picture, for someone who only wants the menu.
   // The controls drawn over the chart canvas, without a picture.

@@ -69,7 +69,11 @@ class MayaraPpiWindow : public wxPanel {
   // only while verbose logging is on.
   void SetPerfLog(std::function<void(const wxString&)> cb);
 
-  // The plugin's heading resolver, for every picture in this window.
+  // The plugin's heading resolver, injected rather than reimplemented here, so
+  // the Diagnostics settings -- heading source, fixed heading, staleness
+  // timeout -- govern the picture exactly as they govern the chart overlay.
+  // Without it each picture kept its own OpenCPN-then-radar order and quietly
+  // ignored all three.
   void SetHeadingProvider(std::function<bool(int, double&)> cb);
 
   // Provide own-ship nav state to the radar pictures (COG/heading/AIS layers).
