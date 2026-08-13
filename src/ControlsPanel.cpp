@@ -361,6 +361,25 @@ void ControlsPanel::Rebuild() {
   ApplyValues();
 }
 
+// Opening a section whose contents fall below the bottom of the panel shows a
+// header and nothing else, which reads as an empty section. Bring as much of it
+// up as fits, without ever pushing its own header out of sight.
+void ControlsPanel::ScrollSectionIntoView(wxWindow* header, wxSizer* content) {
+  int xu = 0, yu = 0;
+  GetScrollPixelsPerUnit(&xu, &yu);
+  if (yu <= 0) return;
+  const int view_h = GetClientSize().y;
+  const int start = GetViewStart().y * yu;
+  const int top = CalcUnscrolledPosition(header->GetPosition()).y;
+  const int bottom = top + header->GetSize().y + content->GetSize().y;
+
+  int want = start;
+  if (bottom > start + view_h) want = bottom - view_h;
+  if (want > top) want = top;  // the header stays visible whatever else does
+  if (want < 0) want = 0;
+  if (want != start) Scroll(-1, want / yu);
+}
+
 void ControlsPanel::AddCollapsibleSection(wxSizer* root, const wxString& title,
                                           const std::string& key,
                                           std::function<void(wxSizer*)> fill) {
@@ -388,6 +407,7 @@ void ControlsPanel::AddCollapsibleSection(wxSizer* root, const wxString& title,
     ApplyValues();
     Layout();
     FitInside();
+    if (!c) ScrollSectionIntoView(header, content);
   });
   root->Show(content, !collapsed, true);
 }
@@ -497,18 +517,29 @@ void ControlsPanel::FillViewSection(wxSizer* content) {
     m_updaters.push_back(
         [this, oz]() { oz->SetValue(m_get_prefs().overlay_zones); });
 
-    // Off by default: it writes a range to a radar, and nothing should do that
-    // to your hardware unless you asked for it.
-    auto* ar = new ThemedButton(this, _("Auto-range second radar"), m_theme,
+    // Both off by default: they write a range to a radar, and nothing should do
+    // that to your hardware unless you asked for it.
+    auto* cr = new ThemedButton(this, _("Chart scale sets range"), m_theme,
+                                true);
+    content->Add(cr, 0, wxEXPAND | wxALL, 4);
+    cr->Bind(wxEVT_TOGGLEBUTTON, [this, cr](wxCommandEvent&) {
+      PpiPrefs p = m_get_prefs();
+      p.chart_range = cr->GetValue();
+      m_set_prefs(p);
+    });
+    m_updaters.push_back(
+        [this, cr]() { cr->SetValue(m_get_prefs().chart_range); });
+
+    auto* ar = new ThemedButton(this, _("Nest second radar at 1/4"), m_theme,
                                 true);
     content->Add(ar, 0, wxEXPAND | wxALL, 4);
     ar->Bind(wxEVT_TOGGLEBUTTON, [this, ar](wxCommandEvent&) {
       PpiPrefs p = m_get_prefs();
-      p.auto_range = ar->GetValue();
+      p.nest_range = ar->GetValue();
       m_set_prefs(p);
     });
     m_updaters.push_back(
-        [this, ar]() { ar->SetValue(m_get_prefs().auto_range); });
+        [this, ar]() { ar->SetValue(m_get_prefs().nest_range); });
 
     auto* rz = new ThemedButton(this, _("Reverse zoom wheel"), m_theme, true);
     content->Add(rz, 0, wxEXPAND | wxALL, 4);

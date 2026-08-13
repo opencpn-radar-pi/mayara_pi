@@ -97,6 +97,7 @@ class ControlsPanel : public wxScrolledWindow {
  private:
   wxSizer* MakeCloseRow();  // a "Controls  ×" header row
   void ThemeChildren();
+  void ScrollSectionIntoView(wxWindow* header, wxSizer* content);
   void AddCollapsibleSection(wxSizer* root, const wxString& title,
                              const std::string& key,
                              std::function<void(wxSizer*)> fill);

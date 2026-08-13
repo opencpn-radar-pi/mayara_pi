@@ -213,7 +213,9 @@ int mayara_pi::Init() {
     if (AnyWindowShown() && !m_ocpn_fullscreen) CaptureWindowState();
 
     PollGuardAlarms();
-    SyncAutoRange();
+    SyncChartRange();
+    SyncAutoRange();  // after it: the nested radar follows the outer one
+    FitChartMenu();
     const int under = CanvasUnderMouse();
     if (under >= 0) m_menu_canvas = under;
     RefreshContextMenu(m_menu_canvas);
@@ -352,9 +354,11 @@ void mayara_pi::LoadConfig() {
   bool ozones = true;
   cfg->Read("OverlayAlpha", &alpha, 100);
   cfg->Read("OverlayZones", &ozones, true);
-  bool arange = false;
+  bool arange = false, crange = false;
   cfg->Read("AutoRange", &arange, false);
-  m_prefs.auto_range = arange;
+  cfg->Read("ChartRange", &crange, false);
+  m_prefs.nest_range = arange;
+  m_prefs.chart_range = crange;
   m_prefs.overlay_alpha =
       static_cast<int>(alpha < 25 ? 25 : (alpha > 100 ? 100 : alpha));
   m_prefs.overlay_zones = ozones;
@@ -543,7 +547,8 @@ void mayara_pi::SaveConfig() {
   cfg->Write("MenuAutoHide", static_cast<long>(m_prefs.menu_autohide));
   cfg->Write("OverlayAlpha", static_cast<long>(m_prefs.overlay_alpha));
   cfg->Write("OverlayZones", m_prefs.overlay_zones);
-  cfg->Write("AutoRange", m_prefs.auto_range);
+  cfg->Write("AutoRange", m_prefs.nest_range);
+  cfg->Write("ChartRange", m_prefs.chart_range);
   wxString orient;
   for (const auto& kv : m_orient)
     orient += wxString::Format("%s=%d;", kv.first.c_str(), kv.second);
@@ -740,7 +745,7 @@ void mayara_pi::SetOverlayAll(bool on) {
 // closest to a quarter of the longer one -- radars accept only the ranges in
 // their own schema, so an exact quarter is usually not one of them.
 void mayara_pi::SyncAutoRange() {
-  if (!m_prefs.auto_range || !m_client) return;
+  if (!m_prefs.nest_range || !m_client) return;
   // Only when some canvas actually nests them; otherwise the two radars are
   // independent pictures and their ranges are the operator's business.
   bool nested = false;
@@ -785,6 +790,37 @@ void mayara_pi::SyncAutoRange() {
 // of the canvas, so it floats above the chart without being a window of its
 // own to manage, and it goes away with one click. Clicking the menu entry for
 // the canvas it is already on closes it again.
+// Let the chart's own zoom drive the radar: the operator zooms once and the
+// picture follows. The target is the shortest range the radar offers that
+// still covers the chart, so zooming in steps the radar down with it.
+void mayara_pi::SyncChartRange() {
+  if (!m_prefs.chart_range || !m_client) return;
+  for (const auto& kv : m_canvas_radius_m) {
+    const std::vector<int> radars = OverlayRadars(kv.first);
+    if (radars.empty() || kv.second <= 0) continue;
+    // Only the outer radar: a nested second one is steered by that one.
+    const int idx = radars.front();
+    RadarControls* c = m_client->ControlsAt(idx);
+    if (!c) continue;
+    std::vector<int> vals;
+    for (const auto& d : c->Schema())
+      if (d.id == "range") {
+        vals = d.validValues;
+        break;
+      }
+    if (vals.empty()) continue;
+    int want = 0;
+    for (int v : vals)
+      if (v >= kv.second && (want == 0 || v < want)) want = v;
+    if (want == 0)  // chart wider than the radar reaches: use its longest
+      for (int v : vals) want = std::max(want, v);
+    const ControlValue cur = c->Value("range");
+    if (cur.has_value && std::fabs(cur.value - want) < 1.0) continue;
+    m_client->SetControlAt(idx, "range",
+                           "{\"value\":" + std::to_string(want) + "}");
+  }
+}
+
 void mayara_pi::ShowRadarMenu(int canvas) {
   const int was = m_chart_menu ? m_chart_menu_canvas : -1;
   DestroyChartMenu();
@@ -878,12 +914,6 @@ void mayara_pi::ShowRadarMenu(int canvas) {
   // scrolled should say so, and because a bar that comes and goes reflows the
   // controls under the pointer.
   p->ShowScrollbars(wxSHOW_SB_NEVER, wxSHOW_SB_ALWAYS);
-  const wxSize cs = cw->GetClientSize();
-  const wxSize best = p->GetEffectiveMinSize();
-  const int sbw = std::max(15, wxSystemSettings::GetMetric(wxSYS_VSCROLL_X, p));
-  const int w = std::max(320, best.x) + sbw;  // room for the bar, not over the controls
-  const int h = std::min(cs.y - 2 * kChartMenuMargin,
-                         std::max(320, best.y));
   // The canvas owns its children, so a canvas that goes away (a layout change,
   // shutdown) takes the panel with it. Notice, rather than keep a dead pointer.
   p->Bind(wxEVT_DESTROY, [this](wxWindowDestroyEvent& e) {
@@ -893,11 +923,32 @@ void mayara_pi::ShowRadarMenu(int canvas) {
     }
     e.Skip();
   });
-  p->SetSize(kChartMenuMargin, kChartMenuMargin, w, h);
-  p->Layout();
-  p->FitInside();  // virtual size from the content, so the bar knows its range
+  FitChartMenu();
   p->Show();
   p->Raise();
+}
+
+// The panel builds itself from the schema on its own timer, so at this point
+// it holds a "waiting for radar" placeholder and knows nothing about how wide
+// it wants to be. Size it to the canvas now and keep following it: full height,
+// because a control list is always longer than the room for it, and the wider
+// of its own idea and a readable minimum.
+void mayara_pi::FitChartMenu() {
+  if (!m_chart_menu) return;
+  wxWindow* cw = m_chart_menu->GetParent();
+  if (!cw) return;
+  const wxSize cs = cw->GetClientSize();
+  const int sbw =
+      std::max(15, wxSystemSettings::GetMetric(wxSYS_VSCROLL_X, m_chart_menu));
+  // The bar's width is added to the panel, not taken out of it, so it sits
+  // beside the controls rather than over them.
+  const int w = std::min(cs.x - 2 * kChartMenuMargin,
+                         std::max(320, m_chart_menu->GetEffectiveMinSize().x) + sbw);
+  const int h = std::max(240, cs.y - 2 * kChartMenuMargin);
+  if (m_chart_menu->GetSize() == wxSize(w, h)) return;
+  m_chart_menu->SetSize(kChartMenuMargin, kChartMenuMargin, w, h);
+  m_chart_menu->Layout();
+  m_chart_menu->FitInside();  // virtual size from the content: the bar's range
 }
 
 void mayara_pi::DestroyChartMenu() {
@@ -1747,6 +1798,18 @@ bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
   // legacy chart-overlay layer; the higher passes (OVER_EMBOSS/OVER_UI) render
   // on top of the toolbar and chart bar, so drawing there paints over them.
   if (priority != OVERLAY_LEGACY) return false;
+  // What this chart is showing, in real metres, for "chart scale sets range".
+  // Same Mercator correction as the overlay itself: view_scale_ppm is pixels
+  // per Mercator metre. The radius is half the shorter side, i.e. the largest
+  // circle the canvas holds -- a radar covering that covers the chart.
+  {
+    const double coslat =
+        std::max(0.02, std::cos(vp->clat * M_PI / 180.0));
+    const double ppm = vp->view_scale_ppm / coslat;
+    if (ppm > 0)
+      m_canvas_radius_m[canvasIndex] =
+          0.5 * std::min(vp->pix_width, vp->pix_height) / ppm;
+  }
   const int n = m_client->RadarCount();
   if (n == 0) return false;
   if (static_cast<int>(m_overlay_tex.size()) != n)
