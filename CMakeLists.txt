@@ -129,6 +129,7 @@ set(SRCS
     src/mayara_pi.cpp
     src/PpiWindow.cpp
     src/MayaraClient.cpp
+    src/RadarPalette.cpp
     src/RadarState.cpp
     src/RadarMessage.cpp
     src/MayaraDiscovery.cpp

@@ -228,6 +228,17 @@ void MayaraClient::SetActive(int index) {
   if (index >= 0 && index < static_cast<int>(m_radars.size())) m_active = index;
 }
 
+// One palette for every radar: it is a display preference, not a property of
+// a particular set.
+void MayaraClient::SetPalette(const RadarPalette& p) {
+  {
+    std::lock_guard<std::mutex> lock(m_palette_mutex);
+    m_palette = p;
+  }
+  std::lock_guard<std::mutex> lock(m_radars_mutex);
+  for (auto& r : m_radars) r->state.SetPalette(p);
+}
+
 void MayaraClient::SetAllIntensity(float f) {
   m_intensity = f;
   std::lock_guard<std::mutex> lock(m_radars_mutex);
@@ -750,6 +761,24 @@ bool MayaraClient::FetchCapabilities(Radar* radar) {
       radar->state.SetLegendBands(lg.value("lowReturn", 0),
                                   lg.value("mediumReturn", 0),
                                   lg.value("strongReturn", 0));
+      // What each legend index means, so a palette can re-colour by role
+      // rather than by position. The Doppler entries come as [start, count].
+      LegendLayout layout;
+      layout.pixel_colors = lg.value("pixelColors", 0);
+      layout.static_background = lg.value("staticBackground", -1);
+      layout.history_start = lg.value("historyStart", -1);
+      auto first = [&](const char* key) -> int {
+        auto it = lg.find(key);
+        if (it == lg.end() || !it->is_array() || it->empty()) return -1;
+        return (*it)[0].get<int>();
+      };
+      layout.doppler_approaching = first("dopplerApproaching");
+      layout.doppler_receding = first("dopplerReceding");
+      radar->state.SetLegendLayout(layout);
+    }
+    {
+      std::lock_guard<std::mutex> lock(m_palette_mutex);
+      radar->state.SetPalette(m_palette);
     }
     radar->state.SetIntensity(m_intensity);
 

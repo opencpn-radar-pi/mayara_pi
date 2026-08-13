@@ -136,7 +136,9 @@ class MayaraClient {
   std::vector<std::string> RadarNames();
   int ActiveIndex();
   void SetActive(int index);
-  void SetAllIntensity(float f);  // apply echo dimming to every radar
+  void SetAllIntensity(float f);
+  // Echo colours, applied to every radar now and to any that appear later.
+  void SetPalette(const RadarPalette& p);  // apply echo dimming to every radar
 
   // Per-radar access (for the composite overlay and multi-PPI windows).
   RadarState* StateAt(int index);
@@ -215,6 +217,8 @@ class MayaraClient {
   std::atomic<AuthState> m_auth{AuthState::kUnknown};
   std::atomic<bool> m_auth_busy{false};
   std::thread m_auth_thread;
+  std::mutex m_palette_mutex;
+  RadarPalette m_palette;
   // Targets over REST, for servers whose delta stream does not carry them.
   void PollTargets();
   std::thread m_targets_thread;

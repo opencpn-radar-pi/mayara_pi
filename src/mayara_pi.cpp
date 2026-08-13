@@ -10,6 +10,7 @@
 
 #include <wx/aui/framemanager.h>
 #include <wx/bmpbndl.h>
+#include <wx/clrpicker.h>
 #include <wx/dcmemory.h>
 #include <wx/display.h>
 #include <wx/fileconf.h>
@@ -18,6 +19,7 @@
 #include <wx/settings.h>
 #include <wx/spinctrl.h>
 #include <wx/statline.h>
+#include <wx/textdlg.h>
 #include <wx/tokenzr.h>
 #include <wx/toplevel.h>
 
@@ -33,6 +35,7 @@
 #endif
 
 #include "MayaraClient.h"
+#include "RadarPalette.h"
 #include "MayaraServer.h"
 #include "MayaraTheme.h"
 #include "ControlsPanel.h"
@@ -183,6 +186,7 @@ int mayara_pi::Init() {
   m_client->SetClientId(m_client_id);
   if (!m_sk_token.empty())
     m_client->SetAuthToken(m_sk_token_server, m_sk_token);
+  m_client->SetPalette(ActivePalette());  // before the first radar arrives
   m_client->Start();
   // An access request posted in an earlier session may still be waiting for
   // someone to approve it; pick it up where we left off.
@@ -314,6 +318,7 @@ void mayara_pi::LoadConfig() {
   int windows = 1;
   cfg->Read("WindowsCount", &windows, 1);
   m_windows_count = windows < 1 ? 1 : windows;
+  LoadPalettes(cfg);
   // "OverlayOffCanvases" is a comma list; the old single OverlayEnabled flag is
   // still honoured so an existing config does not silently switch the overlay
   // back on.
@@ -547,6 +552,7 @@ void mayara_pi::SaveConfig() {
   if (!cfg) return;
   cfg->SetPath(kConfigGroup);
   cfg->Write("WindowsCount", m_windows_count);
+  SavePalettes(cfg);
   cfg->Write("OverlayEnabled", OverlayOnAny());
   wxString sel;
   for (const auto& kv : m_overlay_sel)
@@ -897,6 +903,68 @@ void mayara_pi::FeedTargets() {
       PushNMEABuffer(NmeaSentence(body));
     }
   }
+}
+
+// --- Echo colour profiles --------------------------------------------------
+// The four built-ins are rebuilt from code every time, so a later release can
+// improve one and every user gets it; only the profiles a user made are stored.
+void mayara_pi::LoadPalettes(wxFileConfig* cfg) {
+  m_palettes = BuiltinPalettes();
+  long count = 0;
+  cfg->Read("PaletteCount", &count, 0);
+  for (long i = 0; i < count; ++i) {
+    wxString line;
+    if (!cfg->Read(wxString::Format("Palette%ld", i), &line) || line.IsEmpty())
+      continue;
+    RadarPalette p;
+    if (!PaletteFromString(std::string(line.utf8_str()), &p)) continue;
+    // A user profile never shadows a built-in name: the built-in would become
+    // unreachable and the list would show the same name twice.
+    bool clash = false;
+    for (const RadarPalette& b : m_palettes)
+      if (b.name == p.name) clash = true;
+    if (clash) p.name += " (copy)";
+    m_palettes.push_back(p);
+  }
+  wxString active;
+  cfg->Read("PaletteActive", &active, "Standard Mayara");
+  m_palette_active = std::string(active.utf8_str());
+  // The maker-named profiles were replaced by plain hues; keep a config that
+  // selected one pointing at the nearest thing rather than silently resetting.
+  if (m_palette_active == "Navico red" || m_palette_active == "Navico yellow")
+    m_palette_active = "Yellow";
+  else if (m_palette_active == "Garmin")
+    m_palette_active = "Green";
+  else if (m_palette_active == "Furuno")
+    m_palette_active = "Standard Mayara";
+}
+
+void mayara_pi::SavePalettes(wxFileConfig* cfg) {
+  long n = 0;
+  for (const RadarPalette& p : m_palettes) {
+    if (p.builtin) continue;
+    cfg->Write(wxString::Format("Palette%ld", n),
+               wxString::FromUTF8(PaletteToString(p).c_str()));
+    ++n;
+  }
+  cfg->Write("PaletteCount", n);
+  cfg->Write("PaletteActive", wxString::FromUTF8(m_palette_active.c_str()));
+}
+
+const RadarPalette& mayara_pi::ActivePalette() const {
+  for (const RadarPalette& p : m_palettes)
+    if (p.name == m_palette_active) return p;
+  return m_palettes.front();  // the built-ins are always there
+}
+
+void mayara_pi::ApplyPalette() {
+  if (!m_client) return;
+  m_client->SetPalette(ActivePalette());
+  // The pictures redraw on their own timer; the chart overlay only when the
+  // chart does, and a colour change is not something it would notice.
+  for (MayaraPpiWindow* win : m_windows)
+    if (win) win->Refresh(false);
+  if (wxWindow* c = GetOCPNCanvasWindow()) c->Refresh(false);
 }
 
 void mayara_pi::SyncChartRange() {
@@ -1383,6 +1451,181 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   dpage->SetSizer(dbox);
   book->AddPage(dpage, _("Display"));
 
+  // --- Colours page --------------------------------------------------------
+  // A palette is eight colours over the server's legend, so the page is a
+  // picker per role plus a strip showing what the echo ramp and the trails
+  // will actually look like. Built-ins cannot be edited in place: touching a
+  // colour copies the profile first, which is the only way to keep "Navico
+  // red" meaning the same thing on every boat.
+  auto* cpage = new wxPanel(book);
+  auto* cbox = new wxBoxSizer(wxVERTICAL);
+
+  auto* prow = new wxBoxSizer(wxHORIZONTAL);
+  prow->Add(new wxStaticText(cpage, wxID_ANY, _("Profile:")), 0,
+            wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+  auto* pchoice = new wxChoice(cpage, wxID_ANY);
+  prow->Add(pchoice, 1, wxALIGN_CENTER_VERTICAL);
+  auto* pren = new wxButton(cpage, wxID_ANY, _("Rename"));
+  prow->Add(pren, 0, wxLEFT, 8);
+  auto* pdel = new wxButton(cpage, wxID_ANY, _("Delete"));
+  prow->Add(pdel, 0, wxLEFT, 8);
+  cbox->Add(prow, 0, wxEXPAND | wxALL, 8);
+
+  // Working copy: edits land here and are written back on OK.
+  auto palettes = std::make_shared<std::vector<RadarPalette>>(m_palettes);
+  auto active = std::make_shared<int>(0);
+  for (size_t i = 0; i < palettes->size(); ++i)
+    if ((*palettes)[i].name == m_palette_active) *active = static_cast<int>(i);
+
+  auto* preview = new wxPanel(cpage, wxID_ANY, wxDefaultPosition, wxSize(-1, 46));
+  cbox->Add(preview, 0, wxEXPAND | wxLEFT | wxRIGHT, 8);
+
+  struct Field {
+    const char* label;
+    Rgba RadarPalette::*member;
+  };
+  static const Field kFields[] = {
+      {"Weak echo", &RadarPalette::weak},
+      {"Medium echo", &RadarPalette::medium},
+      {"Strong echo", &RadarPalette::strong},
+      {"Doppler approaching", &RadarPalette::doppler_approaching},
+      {"Doppler receding", &RadarPalette::doppler_receding},
+      {"Newest trail", &RadarPalette::trail_start},
+      {"Oldest trail", &RadarPalette::trail_end},
+      {"Static background", &RadarPalette::background},
+  };
+  auto* grid = new wxFlexGridSizer(2, 4, 4);
+  grid->AddGrowableCol(1);
+  std::vector<wxColourPickerCtrl*> pickers;
+  for (const Field& f : kFields) {
+    grid->Add(new wxStaticText(cpage, wxID_ANY, wxGetTranslation(f.label)), 0,
+              wxALIGN_CENTER_VERTICAL);
+    auto* pick = new wxColourPickerCtrl(cpage, wxID_ANY);
+    grid->Add(pick, 0, wxEXPAND);
+    pickers.push_back(pick);
+  }
+  cbox->Add(grid, 0, wxEXPAND | wxALL, 8);
+
+  auto* chint = new wxStaticText(
+      cpage, wxID_ANY,
+      _("\"Standard Mayara\" is the legend the server computes; the four hues "
+        "show echo strength as brightness of one colour. Doppler stays "
+        "magenta and green throughout, so a moving target can never be read "
+        "as an echo. Changing a colour on a built-in copies it to a profile "
+        "of your own first."));
+  chint->Wrap(330);
+  cbox->Add(chint, 0, wxALL, 8);
+  cpage->SetSizer(cbox);
+  book->AddPage(cpage, _("Colours"));
+
+  // Paint the strip: the echo ramp on top, the trail ramp below it, exactly as
+  // RadarState will build them.
+  preview->Bind(wxEVT_PAINT, [preview, palettes, active](wxPaintEvent&) {
+    wxPaintDC dc(preview);
+    const wxSize sz = preview->GetClientSize();
+    const RadarPalette& p = (*palettes)[*active];
+    auto mix = [](const Rgba& a, const Rgba& b, double t) {
+      return wxColour(static_cast<uint8_t>(a.r + (b.r - a.r) * t),
+                      static_cast<uint8_t>(a.g + (b.g - a.g) * t),
+                      static_cast<uint8_t>(a.b + (b.b - a.b) * t));
+    };
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    for (int x = 0; x < sz.x; ++x) {
+      const double t = sz.x > 1 ? static_cast<double>(x) / (sz.x - 1) : 0.0;
+      dc.SetBrush(wxBrush(t < 0.5 ? mix(p.weak, p.medium, t * 2)
+                                  : mix(p.medium, p.strong, t * 2 - 1)));
+      dc.DrawRectangle(x, 0, 1, sz.y / 2);
+      dc.SetBrush(wxBrush(mix(p.trail_start, p.trail_end, t)));
+      dc.DrawRectangle(x, sz.y / 2, 1, sz.y - sz.y / 2);
+    }
+  });
+
+  // Fill the list and the pickers from the working copy.
+  auto refresh_palette_ui = [pchoice, pren, pdel, preview, pickers, palettes,
+                             active]() {
+    pchoice->Clear();
+    for (const RadarPalette& p : *palettes)
+      pchoice->Append(wxString::FromUTF8(p.name.c_str()));
+    pchoice->SetSelection(*active);
+    const RadarPalette& p = (*palettes)[*active];
+    for (size_t i = 0; i < pickers.size(); ++i)
+      pickers[i]->SetColour(
+          wxColour((p.*kFields[i].member).r, (p.*kFields[i].member).g,
+                   (p.*kFields[i].member).b));
+    // The server's own legend has no colours of ours to show, so the pickers
+    // stand for what a copy would start from rather than what is on screen.
+    pdel->Enable(!p.builtin);
+    pren->Enable(!p.builtin);
+    preview->Refresh(false);
+  };
+  refresh_palette_ui();
+
+  pchoice->Bind(wxEVT_CHOICE, [pchoice, active, refresh_palette_ui](wxCommandEvent&) {
+    *active = pchoice->GetSelection();
+    refresh_palette_ui();
+  });
+  pren->Bind(wxEVT_BUTTON, [palettes, active, refresh_palette_ui,
+                            &dlg](wxCommandEvent&) {
+    RadarPalette& p = (*palettes)[*active];
+    if (p.builtin) return;
+    const wxString name = wxGetTextFromUser(
+        _("Name for this colour profile:"), _("Rename profile"),
+        wxString::FromUTF8(p.name.c_str()), &dlg);
+    std::string want(name.utf8_str());
+    // '|' separates the fields this is stored in, and an empty name would
+    // leave a blank row in the list.
+    want.erase(std::remove(want.begin(), want.end(), '|'), want.end());
+    while (!want.empty() && want.front() == ' ') want.erase(want.begin());
+    while (!want.empty() && want.back() == ' ') want.pop_back();
+    if (want.empty() || want == p.name) return;
+    for (const RadarPalette& q : *palettes)
+      if (q.name == want) {
+        wxMessageBox(_("There is already a profile with that name."),
+                     _("Mayara"), wxOK | wxICON_INFORMATION, &dlg);
+        return;
+      }
+    p.name = want;
+    refresh_palette_ui();
+  });
+  pdel->Bind(wxEVT_BUTTON, [palettes, active, refresh_palette_ui](wxCommandEvent&) {
+    if ((*palettes)[*active].builtin) return;
+    palettes->erase(palettes->begin() + *active);
+    *active = 0;
+    refresh_palette_ui();
+  });
+  for (size_t i = 0; i < pickers.size(); ++i) {
+    wxColourPickerCtrl* pick = pickers[i];
+    pickers[i]->Bind(wxEVT_COLOURPICKER_CHANGED,
+                     [i, pick, palettes, active, refresh_palette_ui](
+                         wxColourPickerEvent&) {
+      if ((*palettes)[*active].builtin) {
+        // Copy first, then edit the copy: a built-in must mean the same thing
+        // on every boat, and an edit that silently redefined it would not.
+        RadarPalette copy = (*palettes)[*active];
+        copy.builtin = false;
+        copy.from_server = false;
+        const std::string base = copy.name + " (custom)";
+        copy.name = base;
+        for (int n = 2; ; ++n) {
+          bool taken = false;
+          for (const RadarPalette& q : *palettes)
+            if (q.name == copy.name) taken = true;
+          if (!taken) break;
+          copy.name = base + " " + std::to_string(n);
+        }
+        palettes->push_back(copy);
+        *active = static_cast<int>(palettes->size()) - 1;
+      }
+      const wxColour c = pick->GetColour();
+      Rgba& target = (*palettes)[*active].*kFields[i].member;
+      target.r = c.Red();
+      target.g = c.Green();
+      target.b = c.Blue();
+      target.a = 255;
+      refresh_palette_ui();
+    });
+  }
+
   top->Add(book, 1, wxEXPAND | wxALL, 8);
   top->Add(dlg.CreateButtonSizer(wxOK | wxCANCEL), 0, wxALIGN_RIGHT | wxALL, 8);
 
@@ -1440,6 +1683,11 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
 
   dlg.SetSizerAndFit(top);
   if (dlg.ShowModal() != wxID_OK) return;
+
+  m_palettes = *palettes;
+  m_palette_active = (*palettes)[*active].name;
+  SaveConfig();
+  ApplyPalette();
 
   if (cb_head->GetValue() != m_feed_heading ||
       cb_targ->GetValue() != m_feed_targets) {
