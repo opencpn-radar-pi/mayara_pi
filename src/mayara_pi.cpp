@@ -19,6 +19,7 @@
 #include <wx/settings.h>
 #include <wx/spinctrl.h>
 #include <wx/statline.h>
+#include <wx/textdlg.h>
 #include <wx/tokenzr.h>
 #include <wx/toplevel.h>
 
@@ -928,6 +929,8 @@ void mayara_pi::LoadPalettes(wxFileConfig* cfg) {
   wxString active;
   cfg->Read("PaletteActive", &active, "Standard Mayara");
   m_palette_active = std::string(active.utf8_str());
+  // It shipped as "Navico red" for one branch; the palette is the same one.
+  if (m_palette_active == "Navico red") m_palette_active = "Navico yellow";
 }
 
 void mayara_pi::SavePalettes(wxFileConfig* cfg) {
@@ -1456,6 +1459,8 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
             wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
   auto* pchoice = new wxChoice(cpage, wxID_ANY);
   prow->Add(pchoice, 1, wxALIGN_CENTER_VERTICAL);
+  auto* pren = new wxButton(cpage, wxID_ANY, _("Rename"));
+  prow->Add(pren, 0, wxLEFT, 8);
   auto* pdel = new wxButton(cpage, wxID_ANY, _("Delete"));
   prow->Add(pdel, 0, wxLEFT, 8);
   cbox->Add(prow, 0, wxEXPAND | wxALL, 8);
@@ -1529,7 +1534,7 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   });
 
   // Fill the list and the pickers from the working copy.
-  auto refresh_palette_ui = [pchoice, pdel, preview, pickers, palettes,
+  auto refresh_palette_ui = [pchoice, pren, pdel, preview, pickers, palettes,
                              active]() {
     pchoice->Clear();
     for (const RadarPalette& p : *palettes)
@@ -1543,12 +1548,36 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
     // The server's own legend has no colours of ours to show, so the pickers
     // stand for what a copy would start from rather than what is on screen.
     pdel->Enable(!p.builtin);
+    pren->Enable(!p.builtin);
     preview->Refresh(false);
   };
   refresh_palette_ui();
 
   pchoice->Bind(wxEVT_CHOICE, [pchoice, active, refresh_palette_ui](wxCommandEvent&) {
     *active = pchoice->GetSelection();
+    refresh_palette_ui();
+  });
+  pren->Bind(wxEVT_BUTTON, [palettes, active, refresh_palette_ui,
+                            &dlg](wxCommandEvent&) {
+    RadarPalette& p = (*palettes)[*active];
+    if (p.builtin) return;
+    const wxString name = wxGetTextFromUser(
+        _("Name for this colour profile:"), _("Rename profile"),
+        wxString::FromUTF8(p.name.c_str()), &dlg);
+    std::string want(name.utf8_str());
+    // '|' separates the fields this is stored in, and an empty name would
+    // leave a blank row in the list.
+    want.erase(std::remove(want.begin(), want.end(), '|'), want.end());
+    while (!want.empty() && want.front() == ' ') want.erase(want.begin());
+    while (!want.empty() && want.back() == ' ') want.pop_back();
+    if (want.empty() || want == p.name) return;
+    for (const RadarPalette& q : *palettes)
+      if (q.name == want) {
+        wxMessageBox(_("There is already a profile with that name."),
+                     _("Mayara"), wxOK | wxICON_INFORMATION, &dlg);
+        return;
+      }
+    p.name = want;
     refresh_palette_ui();
   });
   pdel->Bind(wxEVT_BUTTON, [palettes, active, refresh_palette_ui](wxCommandEvent&) {

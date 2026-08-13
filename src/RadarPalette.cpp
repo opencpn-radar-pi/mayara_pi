@@ -44,9 +44,9 @@ std::vector<RadarPalette> BuiltinPalettes() {
   out.push_back(mayara);
 
   // Dark red through orange to a hot yellow-white: the look of a Navico set
-  // with its red palette selected.
+  // with its yellow palette selected.
   RadarPalette navico;
-  navico.name = "Navico red";
+  navico.name = "Navico yellow";
   navico.builtin = true;
   navico.weak = C(80, 0, 0);
   navico.medium = C(220, 60, 0);

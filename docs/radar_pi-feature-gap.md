@@ -104,15 +104,16 @@ does not account for is left exactly as the server sent it.
 Four profiles ship, in Settings → Colours:
 
 1. **Standard Mayara** — the radar's own legend, untouched.
-2. **Navico red**
+2. **Navico yellow**
 3. **Garmin**
 4. **Furuno**
 
 The three named after makers are in the spirit of their displays, not measured
 from them. None of the four can be edited in place: changing a colour copies the
-profile to one of your own first, so "Navico red" means the same thing on every
-boat. User profiles are stored in the OpenCPN config; the built-ins are rebuilt
-from code each start, so improving one reaches everybody.
+profile to one of your own first, so "Navico yellow" means the same thing on
+every boat. Profiles of your own can be renamed and deleted. They are stored in
+the OpenCPN config; the built-ins are rebuilt from code each start, so improving
+one reaches everybody.
 
 Not covered: ARPA edge and AIS text (drawn from the UI theme, not the legend)
 and the PPI background (black, and the picture is designed against it).
