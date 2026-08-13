@@ -87,6 +87,7 @@ class RadarState {
   // true heading of its own.
   void SetHeadingFromBearing(uint32_t angle, uint32_t bearing);
   bool Heading(double& degrees) const;
+  int64_t HeadingAgeMs() const;  // -1 when there has never been one
 
   // Drop all echoes (e.g. when the radar goes to Standby) so the picture is
   // erased until the next sweep repopulates it.
@@ -136,6 +137,7 @@ class RadarState {
   bool has_pos_ = false;
   double heading_deg_ = 0.0;
   bool has_heading_ = false;
+  int64_t heading_ms_ = 0;
   float intensity_ = 1.0f;
   int band_medium_ = 0;     // legend index where the medium return starts
   int band_strong_ = 0;     // legend index where the strong return starts

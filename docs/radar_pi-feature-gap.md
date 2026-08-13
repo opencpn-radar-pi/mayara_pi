@@ -131,8 +131,46 @@ and the PPI background (black, and the picture is designed against it).
 
 ## Diagnostics and testing
 
-Fixed heading, fixed position, ignore-radar-heading, COG-as-heading, heading
-timeout, skew-factor correction, verbose log level, radar description text.
+Done, as a Diagnostics page in Settings. It opens with a live readout of the
+heading and position the drawing code would use *this instant*, and where each
+came from — because "why is the picture in the wrong place" is nearly always
+one of those two, and until now nothing said which.
+
+- **Heading source** — Automatic (OpenCPN, else the radar) / OpenCPN only /
+  Radar only / Fixed. Covers radar_pi's *ignore-radar-heading* and
+  *fixed heading* in one control.
+- **COG as heading** — off by default. COG is not heading; it differs by leeway
+  and set, so it is a last resort and the readout says when it is being used.
+- **Heading timeout** — a heading older than this is not used (0 = never
+  expires). Radar headings are now timestamped for this. It matters more than
+  it looks: a radar that stops transmitting keeps its last heading for ever,
+  and a stale heading points the picture the wrong way with no sign that
+  anything is wrong.
+- **Fixed position** — run on a bench with no GPS.
+- **Log level** — Off / Problems / Verbose, into OpenCPN's own log.
+
+Two behaviour fixes came out of it. Heading was previously taken as "0 means
+missing", which is a lie on a boat heading due north; and a missing heading now
+means the overlay is not drawn at all rather than drawn at north. Both go
+through one resolver used by every drawing path.
+
+**Skew-factor correction** is not a gap: it corrects a brand's wire protocol,
+which is mayara-server's side of the line. **Radar description text** is already
+there — name, model, firmware and serial are in the Info section, with the
+server URL.
+
+## PPI orientation
+
+Already per radar before this work (`m_orient`, keyed by radar id): Head up,
+North up, Course up, in the View section. What was missing is that the picture
+never said which one it was in, and in a two-radar window the controls follow
+whichever picture has focus, so the setting looked global.
+
+Each picture now carries an orientation lozenge under the power one, clicking it
+cycles that radar's own orientation, and the View rows name the radar they act
+on ("Orientation (Halo A)"). The lozenge dims and says "no heading" when the
+picture is head-up because nothing reports a heading — course-up also needs a
+course, and claiming "CU" without one would be a lie.
 
 ## Not gaps, despite appearances
 

@@ -312,7 +312,7 @@ void RadarDisplayPanel::DrawIconBar(wxDC& dc, const wxSize& sz) {
 
 void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
   m_menu_rect = m_icon_ais = m_icon_gain = m_icon_sea = m_icon_rain =
-      m_icon_ebl = wxRect();
+      m_icon_ebl = m_orient_rect = wxRect();
   m_power_rect = wxRect();
   m_range_minus_rect = wxRect();
   m_range_plus_rect = wxRect();
@@ -386,6 +386,47 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
     }
     dc.SetFont(base);
     m_power_rect = wxRect(x, y, w, h);
+  }
+
+  // --- Orientation lozenge, under the power one ---
+  // Which way is up is a per-radar decision, and on a two-radar window the
+  // controls drive whichever picture has focus -- so the picture itself has to
+  // say what it is doing. Click to cycle.
+  {
+    double up = 0.0, rot = 0.0, hdg = 0.0;
+    bool has_heading = false;
+    ResolveOrientation(up, rot, hdg, has_heading);
+    // Course-up needs a course as well as a heading; without one it falls back
+    // to head-up, and saying "CU" then would be a lie.
+    NavState nav;
+    if (m_nav) nav = m_nav();
+    const bool honoured =
+        has_heading && (m_orientation != kCourseUp || nav.has_cog);
+    const wxString label = m_orientation == kNorthUp   ? _("North up")
+                           : m_orientation == kCourseUp ? _("Course up")
+                                                        : _("Head up");
+    const wxColour fg = honoured ? m_theme.text : m_theme.accent_dim;
+
+    wxFont f = GetFont();
+    dc.SetFont(f);
+    wxCoord tw, th;
+    dc.GetTextExtent(label, &tw, &th);
+    const int w = tw + 22, h = th + 12;
+    const int x = 10, y = m_power_rect.IsEmpty() ? 10
+                                                 : m_power_rect.GetBottom() + 8;
+    LozengeBg(dc, wxRect(x, y, w, h), std::min(h / 2, 12), m_theme);
+
+    // A small arrow for what is at the top of the picture: north gets a
+    // needle, course and heading get a bow.
+    dc.SetTextForeground(fg);
+    dc.DrawText(label, x + 11, y + 6);
+    m_orient_rect = wxRect(x, y, w, h);
+    if (!honoured) {
+      // No heading: the picture is head-up whatever the setting says.
+      dc.SetFont(f);
+      dc.SetTextForeground(m_theme.accent_dim);
+      dc.DrawText(_("no heading"), x, y + h + 2);
+    }
   }
 
   // --- Range lozenge (left edge, vertically centred) with - / + ---
@@ -1258,6 +1299,9 @@ void RadarDisplayPanel::HandleClick(const wxPoint& p) {
     CenterView();
   } else if (m_menu_rect.Contains(p)) {
     if (m_on_menu) m_on_menu();
+  } else if (m_orient_rect.Contains(p)) {
+    SetOrientation((m_orientation + 1) % 3);
+    if (m_on_orientation) m_on_orientation(m_orientation);
   } else if (m_icon_ais.Contains(p)) {
     m_layers.ais = !m_layers.ais;
     Refresh(false);
@@ -1320,7 +1364,8 @@ void RadarDisplayPanel::HandleClick(const wxPoint& p) {
 void RadarDisplayPanel::OnLeftDClick(wxMouseEvent& event) {
   const wxPoint p = event.GetPosition();
   // Double-clicking a control/lozenge is not an acquire gesture.
-  if (m_menu_rect.Contains(p) || m_icon_ais.Contains(p) || m_icon_ebl.Contains(p) ||
+  if (m_menu_rect.Contains(p) || m_orient_rect.Contains(p) ||
+      m_icon_ais.Contains(p) || m_icon_ebl.Contains(p) ||
       m_icon_gain.Contains(p) || m_icon_sea.Contains(p) ||
       m_icon_rain.Contains(p) || m_power_rect.Contains(p) ||
       m_range_minus_rect.Contains(p) || m_range_plus_rect.Contains(p)) {

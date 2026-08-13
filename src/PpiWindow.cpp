@@ -331,6 +331,18 @@ void MayaraPpiWindow::SetOrientationHandlers(
     const std::string id = m_client ? m_client->RadarId(p->RadarIndex()) : "";
     p->SetOrientation(m_orient_get ? m_orient_get(id) : 0);
   }
+  // The lozenge on each picture cycles that picture's own orientation, so the
+  // setting is stored against its radar rather than the focused one.
+  for (RadarDisplayPanel* p : m_radars) {
+    RadarDisplayPanel* panel = p;
+    panel->SetOrientationChangedCallback([this, panel](int mode) {
+      const std::string id =
+          m_client ? m_client->RadarId(panel->RadarIndex()) : "";
+      if (m_orient_set) m_orient_set(id, mode);
+      if (m_controls) m_controls->SyncNow();
+      panel->Refresh(false);
+    });
+  }
   // Drive the View toggle from/into the focused radar's picture.
   if (m_controls)
     m_controls->SetOrientationControl(
@@ -357,6 +369,18 @@ void MayaraPpiWindow::SetThresholdHandlers(
   for (RadarDisplayPanel* p : m_radars) {
     const std::string id = m_client ? m_client->RadarId(p->RadarIndex()) : "";
     p->SetThreshold(m_thresh_get ? m_thresh_get(id) : 0);
+  }
+  // The lozenge on each picture cycles that picture's own orientation, so the
+  // setting is stored against its radar rather than the focused one.
+  for (RadarDisplayPanel* p : m_radars) {
+    RadarDisplayPanel* panel = p;
+    panel->SetOrientationChangedCallback([this, panel](int mode) {
+      const std::string id =
+          m_client ? m_client->RadarId(panel->RadarIndex()) : "";
+      if (m_orient_set) m_orient_set(id, mode);
+      if (m_controls) m_controls->SyncNow();
+      panel->Refresh(false);
+    });
   }
   // Drive the View toggle from/into the focused radar's picture.
   if (m_controls)

@@ -155,6 +155,32 @@ class mayara_pi : public opencpn_plugin_121 {
   // Keep the shorter-range radar at a quarter of the longer one's range.
   void SyncAutoRange();
   void SyncChartRange();
+
+  // --- Diagnostics ---------------------------------------------------------
+  // Everything here exists to answer "why is the picture in the wrong place",
+  // which is nearly always heading or position, and to let a bench setup run
+  // without a compass or a GPS.
+  struct Diagnostics {
+    enum HeadingSource { kAuto = 0, kOpenCpnOnly, kRadarOnly, kFixedHeading };
+    int heading_source = kAuto;
+    double fixed_heading = 0.0;
+    bool cog_as_heading = false;  // last resort when nothing reports heading
+    int heading_timeout_s = 5;    // 0 = a heading never goes stale
+    bool fixed_position = false;
+    double fixed_lat = 0.0, fixed_lon = 0.0;
+    int log_level = 0;  // 0 off, 1 problems, 2 verbose
+  };
+  Diagnostics m_diag;
+  int64_t m_hdt_ms = 0;  // when OpenCPN last gave us a usable heading
+
+  // The heading to draw with, and where it came from. `radar` may be -1 for
+  // "any radar". Returns false when nothing usable is available -- which is
+  // not the same as 0 degrees, and the difference shows on the chart.
+  bool ResolveHeading(int radar, double* deg, wxString* source) const;
+  // Own-ship position to draw from, honouring a fixed position.
+  bool ResolvePosition(int radar, double* lat, double* lon,
+                       wxString* source) const;
+  void Log(int level, const wxString& msg) const;
   // Echo colour profiles: the four built-ins plus whatever the user has made
   // from them. The active one is applied to every radar.
   std::vector<RadarPalette> m_palettes;

@@ -3,6 +3,8 @@
  *****************************************************************************/
 #include "RadarState.h"
 
+#include <chrono>
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -302,6 +304,21 @@ void RadarState::SetHeadingFromBearing(uint32_t angle, uint32_t bearing) {
   if (diff < 0) diff += spokes_;
   heading_deg_ = diff * 360.0 / spokes_;
   has_heading_ = true;
+  heading_ms_ = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now().time_since_epoch())
+                    .count();
+}
+
+// How long ago that heading arrived. A radar that has stopped transmitting
+// keeps its last heading for ever otherwise, and a stale heading pointing the
+// picture the wrong way is worse than no heading at all.
+int64_t RadarState::HeadingAgeMs() const {
+  std::lock_guard<std::mutex> lock(m_);
+  if (!has_heading_) return -1;
+  const int64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                          std::chrono::steady_clock::now().time_since_epoch())
+                          .count();
+  return now - heading_ms_;
 }
 
 bool RadarState::Heading(double& degrees) const {
