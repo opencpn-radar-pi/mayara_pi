@@ -157,12 +157,105 @@ ControlsPanel::ControlsPanel(wxWindow* parent, MayaraClient* client,
       m_timer(this, kControlsTimerId) {
   SetMinSize(wxSize(300, -1));
   SetScrollRate(0, 12);
+  SetBackgroundStyle(wxBG_STYLE_PAINT);
   auto* sizer = new wxBoxSizer(wxVERTICAL);
   sizer->Add(MakeCloseRow(), 0, wxEXPAND);
   sizer->Add(new wxStaticText(this, wxID_ANY, _("Waiting for radar…")), 0,
              wxALL, 8);
-  SetSizer(sizer);
+  SetSizer(WithScrollGutter(sizer));
+
+  // The scrollbar is drawn, not native: macOS hides the real one until it is
+  // being used (and inside a plugin's own child window it never appeared at
+  // all), which leaves a panel that scrolls with no sign that it does.
+  Bind(wxEVT_PAINT, &ControlsPanel::OnPaint, this);
+  auto redraw = [this](wxScrollWinEvent& e) {
+    Refresh(false);
+    e.Skip();
+  };
+  Bind(wxEVT_SCROLLWIN_TOP, redraw);
+  Bind(wxEVT_SCROLLWIN_BOTTOM, redraw);
+  Bind(wxEVT_SCROLLWIN_LINEUP, redraw);
+  Bind(wxEVT_SCROLLWIN_LINEDOWN, redraw);
+  Bind(wxEVT_SCROLLWIN_PAGEUP, redraw);
+  Bind(wxEVT_SCROLLWIN_PAGEDOWN, redraw);
+  Bind(wxEVT_SCROLLWIN_THUMBTRACK, redraw);
+  Bind(wxEVT_SCROLLWIN_THUMBRELEASE, redraw);
+  Bind(wxEVT_LEFT_DOWN, &ControlsPanel::OnBarMouse, this);
+  Bind(wxEVT_LEFT_UP, &ControlsPanel::OnBarMouse, this);
+  Bind(wxEVT_MOTION, &ControlsPanel::OnBarMouse, this);
   m_timer.Start(400);
+}
+
+wxSizer* ControlsPanel::WithScrollGutter(wxSizer* content) {
+  auto* outer = new wxBoxSizer(wxHORIZONTAL);
+  outer->Add(content, 1, wxEXPAND);
+  outer->AddSpacer(kScrollBarW);  // kept clear of children, so the bar shows
+  return outer;
+}
+
+// Where the thumb sits, in client coordinates. Empty when everything fits.
+wxRect ControlsPanel::ThumbRect() const {
+  const wxSize cs = GetClientSize();
+  const int vh = GetVirtualSize().y;
+  if (vh <= cs.y || cs.y <= 0) return wxRect();
+  int xu = 0, yu = 0;
+  GetScrollPixelsPerUnit(&xu, &yu);
+  const int start = GetViewStart().y * (yu > 0 ? yu : 1);
+  const int th = std::max(28, cs.y * cs.y / vh);
+  const int ty = (cs.y - th) * std::min(start, vh - cs.y) / (vh - cs.y);
+  return wxRect(cs.x - kScrollBarW + 1, ty, kScrollBarW - 2, th);
+}
+
+void ControlsPanel::OnPaint(wxPaintEvent&) {
+  wxPaintDC dc(this);
+  const wxSize cs = GetClientSize();
+  dc.SetPen(*wxTRANSPARENT_PEN);
+  dc.SetBrush(wxBrush(m_theme.panel_bg));
+  dc.DrawRectangle(0, 0, cs.x, cs.y);
+
+  const wxRect thumb = ThumbRect();
+  if (thumb.IsEmpty()) return;
+  dc.SetBrush(wxBrush(m_theme.lozenge_bg));
+  dc.DrawRoundedRectangle(cs.x - kScrollBarW + 1, 0, kScrollBarW - 2, cs.y,
+                          (kScrollBarW - 2) / 2.0);
+  dc.SetBrush(wxBrush(m_dragging_bar ? m_theme.text : m_theme.lozenge_border));
+  dc.DrawRoundedRectangle(thumb, (kScrollBarW - 2) / 2.0);
+}
+
+// Click or drag anywhere down the gutter. Nothing else lives there, so the
+// panel itself sees these events.
+void ControlsPanel::OnBarMouse(wxMouseEvent& event) {
+  const wxSize cs = GetClientSize();
+  const int vh = GetVirtualSize().y;
+  const bool in_bar = event.GetX() >= cs.x - kScrollBarW;
+  int xu = 0, yu = 0;
+  GetScrollPixelsPerUnit(&xu, &yu);
+  if (yu <= 0) yu = 1;
+
+  if (event.LeftDown() && in_bar && vh > cs.y) {
+    m_dragging_bar = true;
+    CaptureMouse();
+  } else if (event.LeftUp()) {
+    if (!m_dragging_bar) {
+      event.Skip();
+      return;
+    }
+    m_dragging_bar = false;
+    if (HasCapture()) ReleaseMouse();
+    Refresh(false);
+    return;
+  } else if (!m_dragging_bar || !event.Dragging()) {
+    event.Skip();
+    return;
+  }
+  if (!m_dragging_bar || vh <= cs.y) return;
+
+  // Put the middle of the thumb where the pointer is.
+  const int th = std::max(28, cs.y * cs.y / vh);
+  const int span = std::max(1, cs.y - th);
+  const int want = (event.GetY() - th / 2) * (vh - cs.y) / span;
+  Scroll(-1, std::max(0, want) / yu);
+  Refresh(false);
 }
 
 wxSizer* ControlsPanel::MakeCloseRow() {
@@ -261,7 +354,7 @@ void ControlsPanel::Rebuild() {
   if (!c) {
     auto* sizer = new wxBoxSizer(wxVERTICAL);
     sizer->Add(MakeCloseRow(), 0, wxEXPAND);
-    SetSizer(sizer);
+    SetSizer(WithScrollGutter(sizer));
     return;
   }
   std::vector<ControlDef> defs = c->Schema();
@@ -280,7 +373,7 @@ void ControlsPanel::Rebuild() {
         AddControl(root, d);
         break;
       }
-    SetSizer(root);
+    SetSizer(WithScrollGutter(root));
     FitInside();
     Layout();
     ThemeChildren();
@@ -354,7 +447,7 @@ void ControlsPanel::Rebuild() {
                           });
   }
 
-  SetSizer(root);  // deletes the previous sizer
+  SetSizer(WithScrollGutter(root));  // deletes the previous sizer
   FitInside();
   Layout();
   ThemeChildren();  // theme the freshly created widgets

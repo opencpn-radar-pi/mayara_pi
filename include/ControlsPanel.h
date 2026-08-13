@@ -95,6 +95,11 @@ class ControlsPanel : public wxScrolledWindow {
                        std::function<void(const PpiPrefs&)> set);
 
  private:
+  static const int kScrollBarW = 10;  // gutter for the scrollbar we draw
+  wxSizer* WithScrollGutter(wxSizer* content);
+  wxRect ThumbRect() const;
+  void OnPaint(wxPaintEvent& event);
+  void OnBarMouse(wxMouseEvent& event);
   wxSizer* MakeCloseRow();  // a "Controls  ×" header row
   void ThemeChildren();
   void ScrollSectionIntoView(wxWindow* header, wxSizer* content);
@@ -156,7 +161,8 @@ class ControlsPanel : public wxScrolledWindow {
   std::function<void(int)> m_set_threshold;
   std::function<bool()> m_get_dock;
   std::function<void(bool)> m_set_dock;
-  bool m_rebuilding = false;  // true while widgets are being destroyed
+  bool m_rebuilding = false;
+  bool m_dragging_bar = false;  // the drawn scrollbar's thumb  // true while widgets are being destroyed
   std::function<VrmEbl(int)> m_vrm_get;
   std::function<void(int, const VrmEbl&)> m_vrm_set;
   std::function<ZoneEdit()> m_zone_get;

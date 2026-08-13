@@ -354,10 +354,13 @@ void mayara_pi::LoadConfig() {
   bool ozones = true;
   cfg->Read("OverlayAlpha", &alpha, 100);
   cfg->Read("OverlayZones", &ozones, true);
-  bool arange = false, crange = false;
-  cfg->Read("AutoRange", &arange, false);
-  cfg->Read("ChartRange", &crange, false);
-  m_prefs.nest_range = arange;
+  // "AutoRange" was this setting's name when it was the only one; read it once
+  // so an existing config keeps its meaning, but write the honest name.
+  bool nrange = false, crange = false;
+  cfg->Read("AutoRange", &nrange, false);
+  cfg->Read("NestSecondRadar", &nrange, nrange);
+  cfg->Read("ChartScaleSetsRange", &crange, false);
+  m_prefs.nest_range = nrange;
   m_prefs.chart_range = crange;
   m_prefs.overlay_alpha =
       static_cast<int>(alpha < 25 ? 25 : (alpha > 100 ? 100 : alpha));
@@ -547,8 +550,8 @@ void mayara_pi::SaveConfig() {
   cfg->Write("MenuAutoHide", static_cast<long>(m_prefs.menu_autohide));
   cfg->Write("OverlayAlpha", static_cast<long>(m_prefs.overlay_alpha));
   cfg->Write("OverlayZones", m_prefs.overlay_zones);
-  cfg->Write("AutoRange", m_prefs.nest_range);
-  cfg->Write("ChartRange", m_prefs.chart_range);
+  cfg->Write("NestSecondRadar", m_prefs.nest_range);
+  cfg->Write("ChartScaleSetsRange", m_prefs.chart_range);
   wxString orient;
   for (const auto& kv : m_orient)
     orient += wxString::Format("%s=%d;", kv.first.c_str(), kv.second);
@@ -913,7 +916,6 @@ void mayara_pi::ShowRadarMenu(int canvas) {
   // and the scrollbar is kept permanently, both because a panel that can be
   // scrolled should say so, and because a bar that comes and goes reflows the
   // controls under the pointer.
-  p->ShowScrollbars(wxSHOW_SB_NEVER, wxSHOW_SB_ALWAYS);
   // The canvas owns its children, so a canvas that goes away (a layout change,
   // shutdown) takes the panel with it. Notice, rather than keep a dead pointer.
   p->Bind(wxEVT_DESTROY, [this](wxWindowDestroyEvent& e) {
@@ -938,13 +940,12 @@ void mayara_pi::FitChartMenu() {
   wxWindow* cw = m_chart_menu->GetParent();
   if (!cw) return;
   const wxSize cs = cw->GetClientSize();
-  const int sbw =
-      std::max(15, wxSystemSettings::GetMetric(wxSYS_VSCROLL_X, m_chart_menu));
-  // The bar's width is added to the panel, not taken out of it, so it sits
-  // beside the controls rather than over them.
-  const int w = std::min(cs.x - 2 * kChartMenuMargin,
-                         std::max(320, m_chart_menu->GetEffectiveMinSize().x) + sbw);
-  const int h = std::max(240, cs.y - 2 * kChartMenuMargin);
+  const wxSize best = m_chart_menu->GetEffectiveMinSize();  // gutter included
+  const int w = std::min(cs.x - 2 * kChartMenuMargin, std::max(320, best.x));
+  // As tall as it needs, never taller than the chart: a panel sized to the
+  // canvas is mostly empty, and one sized to a placeholder scrolls everything
+  // real off the bottom.
+  const int h = std::min(cs.y - 2 * kChartMenuMargin, std::max(240, best.y));
   if (m_chart_menu->GetSize() == wxSize(w, h)) return;
   m_chart_menu->SetSize(kChartMenuMargin, kChartMenuMargin, w, h);
   m_chart_menu->Layout();
