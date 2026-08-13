@@ -18,6 +18,24 @@ This has two advantages:
 
 If you do not have a Signal K installation, the plugin will download mayara for you, but then advantage 2 disappears.
 
+## What it does
+
+Radar as a chart overlay and in PPI windows: several radars, several windows,
+per-canvas overlay assignment, guard zones with alarms, ARPA targets, VRM/EBL,
+colour profiles, and every control the radar exposes. See
+**[FEATURES.md](FEATURES.md)** for the full list, and
+**[CHANGELOG.md](CHANGELOG.md)** for what has landed so far.
+
+[docs/radar_pi-feature-gap.md](docs/radar_pi-feature-gap.md) tracks this against
+radar_pi, including the things deliberately not built here and why.
+
+## Installing
+
+Packages for every platform are published to Cloudsmith and reach the OpenCPN
+plugin catalog from there. To install one by hand — a CI build, say — use
+**Options → Plugins → Import plugin…** and give it the `.tar.gz`. On flatpak the
+file must live under your home directory, since the sandbox cannot see `/tmp`.
+
 ## Building
 
 The build uses the OpenCPN **Frontend2 (FE2)** template. Everything under
@@ -31,9 +49,14 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
 
-Requirements: CMake ≥ 3.15, a C++17 compiler, wxWidgets (3.2 for distributable
+Requirements: CMake ≥ 3.15, a C++ compiler, wxWidgets (3.2 for distributable
 builds; 3.3 works for local development), and gettext. macOS deployment target
 matching OpenCPN.
+
+Note that the effective language standard is **C++11**, not the C++17 that
+`CMAKE_CXX_STANDARD` asks for: the FE2 template's `cmake/PluginSetup.cmake`
+appends `-std=c++11` to `CMAKE_CXX_FLAGS` afterwards, and the flag wins. Code
+that compiles locally with a newer standard will fail in CI.
 
 ## CI / distribution
 

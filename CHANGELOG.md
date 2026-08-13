@@ -1,0 +1,72 @@
+# Changelog
+
+Notable changes per release. Written by hand, newest first.
+
+The plugin has not had a tagged release yet: everything below is on the way to
+0.1.0. Entries are grouped by the pull request that landed them, because a
+squash merge makes the PR the unit of change here.
+
+## Unreleased (0.1.0)
+
+### Added
+
+- **Diagnostics page** (#21) — live readout of the heading and position being
+  used and where each came from; heading source (automatic / OpenCPN only /
+  radar only / fixed), COG-as-heading, staleness timeout, fixed position, and
+  logging into OpenCPN's own log.
+- **Chart overlay without OpenGL** (#21) — `RenderOverlayMultiCanvas(wxDC&, …)`
+  over the same cached picture, so the overlay survives OpenCPN's hardware
+  acceleration being switched off.
+- **Orientation lozenge** on each picture (#21), per radar, click to cycle,
+  naming the missing input when north-up or course-up cannot be honoured.
+- **Echo colour profiles** (#18) — the server's own legend plus Red, Yellow,
+  Green and Blue single-hue ramps, all copyable, renameable and editable. A
+  palette re-colours the legend by role, so it fits any radar.
+- **NMEA out to OpenCPN** (#18) — radar heading as HDT and radar targets as TTM,
+  both off by default.
+- **Per-canvas overlay assignment** (#17) — each chart canvas draws None, a
+  named radar, or all of them; two radars on one canvas nest as annuli. Overlay
+  opacity, guard zones on the chart, chart-scale-driven ranging and
+  nest-at-quarter, the last two off by default.
+- **The control panel over the chart** (#17), without a PPI window.
+- **VRM/EBL markers** and the **guard-zone alarm** as OpenCPN notifications
+  (#14).
+- **Guard zones** drawn as the mayara GUI draws them, editable by dragging
+  handles or typing numbers (#12, #15).
+- **PPI improvements** (#9) — EBL/VRM, off-centre view, cursor readout, extreme
+  range ring, refresh rate, reverse zoom, menu auto-hide.
+- **Local mayara-server** (#7, #10) — download, run and stop one when there is
+  no server on the network, tied to OpenCPN's lifetime; server settings page and
+  mDNS discovery that works on macOS.
+- **ARPA targets** rendered from the server, with click to acquire and cancel
+  (#1, #2).
+- **Display echo threshold** (#4) and **free display zoom** (#3).
+- **arm64 flatpak packages** (#22) alongside x86_64.
+- **CodeRabbit review configuration** (#20).
+
+### Fixed
+
+- **The flatpak package would not install** (#23). `WX_VER` put `-32` in the
+  ABI string, so the metadata said `flatpak-32-aarch64` where OpenCPN expects
+  `flatpak-aarch64`, and importing failed with "incompatible plugin detected".
+- **Two capability flags were never declared** (#21). Without
+  `WANTS_NMEA_EVENTS`, OpenCPN never sent the plugin a position fix at all — no
+  position, COG, SOG or heading. Without `INSTALLS_CONTEXTMENU_ITEMS`,
+  `PrepareContextMenu` was never called, so canvas menu labels never refreshed.
+- **The non-GL overlay landed in the corner on HiDPI screens** (#21). The
+  viewport is in physical pixels and a `wxDC` draws in logical points.
+- **A heading of exactly 0° counted as "no heading"** (#21), and a missing
+  heading drew the overlay at north instead of not at all.
+- **Linux and flatpak builds broke** on `uint64_t` without `<cstdint>` (#21) —
+  it arrived transitively on macOS and not on libstdc++.
+- **Cancelling the settings dialog could crash OpenCPN** (#21): a heap timer
+  owned by a stack dialog kept ticking into a destroyed handler.
+- **Targets never appeared when connected through a Signal K server** (#18).
+  The bridge republishes controls but not targets; the client now falls back to
+  the REST target list when no delta arrives.
+- **Guard zones saved as zeroes** (#15). `%g` follows `LC_NUMERIC`, which writes
+  a decimal comma in half of Europe and produced invalid JSON.
+- **The chart overlay was drawn `cos(lat)` too small** (#8) — 40% short at 53°N.
+  `view_scale_ppm` is pixels per *Mercator* metre, not per ground metre.
+- **mDNS discovery found nothing on macOS** (#10), where mDNSResponder owns port
+  5353 and a plugin's own socket never sees the answers.
