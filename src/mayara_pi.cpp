@@ -912,14 +912,31 @@ void mayara_pi::FeedHeading() {
     RadarState* st = m_client->StateAt(i);
     if (st && st->Heading(hdt)) have = true;
   }
-  if (!have) return;
+  // Nothing to say is worth saying once: a radar that reports no heading of
+  // its own is the usual reason this feed appears to do nothing.
+  if (!have) {
+    if (!m_feed_hdt_silent) {
+      m_feed_hdt_silent = true;
+      Log(1, "HDT feed is on, but no radar reports a heading; nothing sent");
+    }
+    return;
+  }
+  m_feed_hdt_silent = false;
   while (hdt < 0) hdt += 360.0;
   while (hdt >= 360.0) hdt -= 360.0;
-  PushNMEABuffer(NmeaSentence("RAHDT," + NmeaNum(hdt, 1) + ",T"));
+  const wxString sentence = NmeaSentence("RAHDT," + NmeaNum(hdt, 1) + ",T");
+  PushNMEABuffer(sentence);
+  // Once a minute: enough to prove it is being sent and what it says, without
+  // a line a second. Whether OpenCPN then *uses* it is a question for its
+  // source priorities, not for us -- another source may outrank ours.
+  if (++m_feed_hdt_count % 60 == 1)
+    Log(2, wxString::Format("sent %s (%llu so far)", sentence.Strip(wxString::both),
+                            static_cast<unsigned long long>(m_feed_hdt_count)));
 }
 
 void mayara_pi::FeedTargets() {
   if (!m_feed_targets || !m_client) return;
+  int sent = 0;
   const wxDateTime now = wxDateTime::UNow().ToUTC();
   const std::string stamp = NmeaNum(now.GetHour() * 10000 + now.GetMinute() * 100 +
                                         now.GetSecond() +
@@ -969,8 +986,11 @@ void mayara_pi::FeedTargets() {
       body += ",";
       body += t.manual ? 'M' : 'A';
       PushNMEABuffer(NmeaSentence(body));
+      ++sent;
     }
   }
+  if (sent && ++m_feed_ttm_ticks % 60 == 1)
+    Log(2, wxString::Format("sent %d TTM sentence(s) this tick", sent));
 }
 
 // --- Echo colour profiles --------------------------------------------------

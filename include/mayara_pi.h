@@ -200,6 +200,9 @@ class mayara_pi : public opencpn_plugin_121 {
   void FeedHeading();
   void FeedTargets();
   bool m_feed_heading = false;
+  uint64_t m_feed_hdt_count = 0;
+  uint64_t m_feed_ttm_ticks = 0;
+  bool m_feed_hdt_silent = false;  // warned once that there is nothing to send
   bool m_feed_targets = false;
   std::map<std::string, int> m_ttm_number;  // target key -> TTM target number  // the chart's zoom drives the overlaid radar
   std::map<int, double> m_canvas_radius_m;  // per canvas, what the chart shows
