@@ -24,6 +24,7 @@
 #include "RadarDisplayPanel.h"  // PpiPrefs, ZoneEdit
 
 // Forward declarations keep implementation types out of this header.
+class wxGraphicsContext;
 class ControlsPanel;
 class MayaraPpiWindow;
 class MayaraClient;
@@ -60,6 +61,9 @@ class mayara_pi : public opencpn_plugin_121 {
   // --- Chart overlay (filled in Phase 1) -----------------------------------
   bool RenderGLOverlayMultiCanvas(wxGLContext* pcontext, PlugIn_ViewPort* vp,
                                   int canvasIndex, int priority) override;
+  // The same overlay without OpenGL, for when hardware acceleration is off.
+  bool RenderOverlayMultiCanvas(wxDC& dc, PlugIn_ViewPort* vp, int canvasIndex,
+                                int priority) override;
 
   // --- Own-ship state ------------------------------------------------------
   void SetPositionFixEx(PlugIn_Position_Fix_Ex& pfix) override;
@@ -199,6 +203,27 @@ class mayara_pi : public opencpn_plugin_121 {
   bool m_feed_targets = false;
   std::map<std::string, int> m_ttm_number;  // target key -> TTM target number  // the chart's zoom drives the overlaid radar
   std::map<int, double> m_canvas_radius_m;  // per canvas, what the chart shows
+  struct OverlayItem {
+    int idx;
+    uint32_t range;
+  };
+  std::vector<OverlayItem> OverlayItems(int canvasIndex);
+  void RecordCanvasRadius(PlugIn_ViewPort* vp, int canvasIndex);
+  bool DrawRadarOverlayDC(wxGraphicsContext* gc, int index, PlugIn_ViewPort* vp,
+                          double inner_frac);
+  void DrawZonesOverlayDC(wxGraphicsContext* gc, int index,
+                          PlugIn_ViewPort* vp);
+  // The rotated, scaled disc as a bitmap. Rebuilt only when the picture, the
+  // size, the rotation or the occluded middle changes: this is the path with
+  // no GPU to lean on.
+  struct OverlayBmp {
+    wxBitmap bmp;
+    uint64_t gen = ~0ull;
+    int size = 0;
+    int rot10 = -1;
+    double inner = -1.0;
+  };
+  std::vector<OverlayBmp> m_overlay_bmp;
   // Open the controls with no picture, for someone who only wants the menu.
   // The controls drawn over the chart canvas, without a picture.
   void ShowRadarMenu(int canvas);

@@ -77,6 +77,13 @@ class RadarState {
   bool RenderPPI(uint8_t* rgb, int w, int h, double zoom = 1.0,
                  double rot_deg = 0.0, double off_x = 0.0, double off_y = 0.0);
 
+  // The same walk as RenderPPI, but straight RGBA for compositing over a
+  // chart: no black background to blend against, and an optional transparent
+  // hole in the middle so a shorter-range radar occludes this one there.
+  // `size` is the diameter in pixels; the radar's range fills size/2.
+  bool RenderOverlayRGBA(uint8_t* rgba, int size, double rot_deg,
+                         double inner_frac);
+
   // Radar position stamped into the spoke data (best-effort). Used to place the
   // chart overlay when OpenCPN has no own-ship fix of its own.
   void SetPosition(double lat, double lon);

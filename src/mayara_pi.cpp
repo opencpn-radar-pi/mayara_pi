@@ -16,6 +16,7 @@
 #include <wx/display.h>
 #include <wx/fileconf.h>
 #include <wx/frame.h>
+#include <wx/graphics.h>
 #include <wx/radiobox.h>
 #include <wx/settings.h>
 #include <wx/spinctrl.h>
@@ -2477,6 +2478,181 @@ void mayara_pi::TogglePpiWindow() {
   if (m_windows_visible) CaptureWindowState();
 }
 
+// What this chart is showing, in real metres, for "chart scale sets range".
+// Same Mercator correction as the overlay itself: view_scale_ppm is pixels per
+// Mercator metre. The radius is half the shorter side, i.e. the largest circle
+// the canvas holds -- a radar covering that covers the chart.
+void mayara_pi::RecordCanvasRadius(PlugIn_ViewPort* vp, int canvasIndex) {
+  const double coslat = std::max(0.02, std::cos(vp->clat * M_PI / 180.0));
+  const double ppm = vp->view_scale_ppm / coslat;
+  if (ppm > 0)
+    m_canvas_radius_m[canvasIndex] =
+        0.5 * std::min(vp->pix_width, vp->pix_height) / ppm;
+}
+
+// The radars this canvas draws, longest range first, so each is drawn as an
+// annulus out to its own range and the shortest owns the middle.
+std::vector<mayara_pi::OverlayItem> mayara_pi::OverlayItems(int canvasIndex) {
+  std::vector<OverlayItem> items;
+  for (int i : OverlayRadars(canvasIndex)) {
+    RadarState* st = m_client->StateAt(i);
+    if (st && st->RangeMeters() > 0) items.push_back({i, st->RangeMeters()});
+  }
+  std::sort(items.begin(), items.end(),
+            [](const OverlayItem& a, const OverlayItem& b) {
+              return a.range > b.range;
+            });
+  return items;
+}
+
+// The chart without OpenGL. OpenCPN calls this instead of the GL callback when
+// hardware acceleration is off, and until now the plugin inherited the base
+// class no-op -- so the overlay simply vanished, while the PPI (which never
+// used GL: it is a wxPanel blitting a CPU-rendered bitmap) carried on. Same
+// geometry as the GL path, same cached disc, drawn through wxGraphicsContext
+// because a plain wxDC has no alpha.
+bool mayara_pi::RenderOverlayMultiCanvas(wxDC& dc, PlugIn_ViewPort* vp,
+                                         int canvasIndex, int priority) {
+  if (!OverlayOn(canvasIndex) || !m_client || !vp || !vp->bValid) return false;
+  if (priority != OVERLAY_LEGACY) return false;
+  RecordCanvasRadius(vp, canvasIndex);
+  const int n = m_client->RadarCount();
+  if (n == 0) return false;
+  if (static_cast<int>(m_overlay_bmp.size()) != n) m_overlay_bmp.assign(n, OverlayBmp{});
+
+  std::vector<OverlayItem> items = OverlayItems(canvasIndex);
+  if (items.empty()) return false;
+
+  std::unique_ptr<wxGraphicsContext> gc(
+      wxGraphicsContext::CreateFromUnknownDC(dc));
+  if (!gc) return false;
+  gc->BeginLayer(m_prefs.overlay_alpha / 100.0);
+  bool drew = false;
+  for (size_t k = 0; k < items.size(); ++k) {
+    const double inner =
+        (k + 1 < items.size())
+            ? static_cast<double>(items[k + 1].range) / items[k].range
+            : 0.0;
+    if (DrawRadarOverlayDC(gc.get(), items[k].idx, vp, inner)) drew = true;
+  }
+  if (m_prefs.overlay_zones)
+    for (const OverlayItem& it : items) DrawZonesOverlayDC(gc.get(), it.idx, vp);
+  gc->EndLayer();
+  return drew;
+}
+
+bool mayara_pi::DrawRadarOverlayDC(wxGraphicsContext* gc, int index,
+                                   PlugIn_ViewPort* vp, double inner_frac) {
+  RadarState* state = m_client->StateAt(index);
+  if (!state) return false;
+  const uint32_t range_m = state->RangeMeters();
+  if (range_m == 0) return false;
+
+  double lat = 0.0, lon = 0.0, heading = 0.0;
+  if (!ResolvePosition(index, &lat, &lon, nullptr)) return false;
+  if (!ResolveHeading(index, &heading, nullptr)) return false;
+
+  wxPoint centre;
+  GetCanvasPixLL(vp, &centre, lat, lon);
+  if (std::abs(centre.x) > 1000000 || std::abs(centre.y) > 1000000) return false;
+  const double coslat = std::max(0.02, std::cos(lat * M_PI / 180.0));
+  const double radius_px = range_m * vp->view_scale_ppm / coslat;
+  if (radius_px < 1.0) return false;
+  const double rot_deg = heading + vp->rotation * 180.0 / M_PI;
+
+  // Rasterising is per pixel on the CPU here, so the disc is capped and scaled
+  // up by the blit when the chart is zoomed in past it. GL had no such worry.
+  const int size = std::max(4, std::min(1536, static_cast<int>(radius_px * 2)));
+  const int rot10 = static_cast<int>(rot_deg * 10) % 3600;
+
+  OverlayBmp& cache = m_overlay_bmp[index];
+  if (!cache.bmp.IsOk() || cache.gen != state->Generation() ||
+      cache.size != size || cache.rot10 != rot10 ||
+      std::fabs(cache.inner - inner_frac) > 0.001) {
+    std::vector<uint8_t> rgba(static_cast<size_t>(size) * size * 4);
+    if (!state->RenderOverlayRGBA(rgba.data(), size, rot_deg, inner_frac))
+      return false;
+    // wxImage wants the colour and the alpha in separate buffers, and takes
+    // ownership of both.
+    unsigned char* rgb = static_cast<unsigned char*>(malloc(static_cast<size_t>(size) * size * 3));
+    unsigned char* alpha = static_cast<unsigned char*>(malloc(static_cast<size_t>(size) * size));
+    if (!rgb || !alpha) {
+      free(rgb);
+      free(alpha);
+      return false;
+    }
+    for (size_t i = 0; i < static_cast<size_t>(size) * size; ++i) {
+      rgb[i * 3 + 0] = rgba[i * 4 + 0];
+      rgb[i * 3 + 1] = rgba[i * 4 + 1];
+      rgb[i * 3 + 2] = rgba[i * 4 + 2];
+      alpha[i] = rgba[i * 4 + 3];
+    }
+    cache.bmp = wxBitmap(wxImage(size, size, rgb, alpha));
+    cache.gen = state->Generation();
+    cache.size = size;
+    cache.rot10 = rot10;
+    cache.inner = inner_frac;
+  }
+  if (!cache.bmp.IsOk()) return false;
+  gc->DrawBitmap(cache.bmp, centre.x - radius_px, centre.y - radius_px,
+                 radius_px * 2, radius_px * 2);
+  return true;
+}
+
+void mayara_pi::DrawZonesOverlayDC(wxGraphicsContext* gc, int index,
+                                   PlugIn_ViewPort* vp) {
+  RadarControls* ctrl = m_client ? m_client->ControlsAt(index) : nullptr;
+  if (!ctrl) return;
+  double lat = 0.0, lon = 0.0, heading = 0.0;
+  if (!ResolvePosition(index, &lat, &lon, nullptr)) return;
+  if (!ResolveHeading(index, &heading, nullptr)) return;
+
+  wxPoint centre;
+  GetCanvasPixLL(vp, &centre, lat, lon);
+  const double coslat = std::max(0.02, std::cos(lat * M_PI / 180.0));
+  const double ppm = vp->view_scale_ppm / coslat;
+  const double base = (heading + vp->rotation * 180.0 / M_PI) * M_PI / 180.0 -
+                      M_PI / 2.0;
+
+  const wxColour fill[2] = {wxColour(144, 238, 144, 64),
+                            wxColour(173, 216, 230, 64)};
+  const wxColour line[2] = {wxColour(0, 128, 0, 153), wxColour(0, 0, 255, 153)};
+  const char* ids[2] = {"guardZone1", "guardZone2"};
+
+  for (int z = 0; z < 2; ++z) {
+    const ControlValue v = ctrl->Value(ids[z]);
+    if (!v.has_enabled || !v.enabled) continue;
+    if (v.endDistance <= v.startDistance) continue;
+    const double r_in = v.startDistance * ppm, r_out = v.endDistance * ppm;
+    if (r_out < 2) continue;
+    double a0 = base + v.value, a1 = base + v.endValue;
+    const bool whole = std::fabs(v.endValue - v.value) < 0.001;
+    if (whole) a1 = a0 + 2.0 * M_PI;
+    if (a1 < a0) a1 += 2.0 * M_PI;
+
+    wxGraphicsPath path = gc->CreatePath();
+    if (whole) {
+      // Two full circles in one path: the odd-even rule leaves the hole.
+      path.AddCircle(centre.x, centre.y, r_out);
+      path.AddCircle(centre.x, centre.y, r_in);
+    } else {
+      path.MoveToPoint(centre.x + r_in * std::cos(a0),
+                       centre.y + r_in * std::sin(a0));
+      path.AddLineToPoint(centre.x + r_out * std::cos(a0),
+                          centre.y + r_out * std::sin(a0));
+      path.AddArc(centre.x, centre.y, r_out, a0, a1, true);
+      path.AddLineToPoint(centre.x + r_in * std::cos(a1),
+                          centre.y + r_in * std::sin(a1));
+      path.AddArc(centre.x, centre.y, r_in, a1, a0, false);
+      path.CloseSubpath();
+    }
+    gc->SetBrush(wxBrush(fill[z]));
+    gc->SetPen(wxPen(line[z], 1));
+    gc->FillPath(path, wxODDEVEN_RULE);
+    gc->StrokePath(path);
+  }
+}
+
 bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
                                            PlugIn_ViewPort* vp, int canvasIndex,
                                            int priority) {
@@ -2486,18 +2662,7 @@ bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
   // legacy chart-overlay layer; the higher passes (OVER_EMBOSS/OVER_UI) render
   // on top of the toolbar and chart bar, so drawing there paints over them.
   if (priority != OVERLAY_LEGACY) return false;
-  // What this chart is showing, in real metres, for "chart scale sets range".
-  // Same Mercator correction as the overlay itself: view_scale_ppm is pixels
-  // per Mercator metre. The radius is half the shorter side, i.e. the largest
-  // circle the canvas holds -- a radar covering that covers the chart.
-  {
-    const double coslat =
-        std::max(0.02, std::cos(vp->clat * M_PI / 180.0));
-    const double ppm = vp->view_scale_ppm / coslat;
-    if (ppm > 0)
-      m_canvas_radius_m[canvasIndex] =
-          0.5 * std::min(vp->pix_width, vp->pix_height) / ppm;
-  }
+  RecordCanvasRadius(vp, canvasIndex);
   const int n = m_client->RadarCount();
   if (n == 0) return false;
   if (static_cast<int>(m_overlay_tex.size()) != n)
@@ -2506,18 +2671,8 @@ bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
   // Collect radars that have data, sorted by range descending so the longest
   // range is drawn first and the shortest composites on top (short-range inner
   // disc, longer-range annulus beyond it).
-  struct Item {
-    int idx;
-    uint32_t range;
-  };
-  std::vector<Item> items;
-  for (int i : OverlayRadars(canvasIndex)) {
-    RadarState* st = m_client->StateAt(i);
-    if (st && st->RangeMeters() > 0) items.push_back({i, st->RangeMeters()});
-  }
+  std::vector<OverlayItem> items = OverlayItems(canvasIndex);
   if (items.empty()) return false;
-  std::sort(items.begin(), items.end(),
-            [](const Item& a, const Item& b) { return a.range > b.range; });
 
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -2542,7 +2697,7 @@ bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
   // Guard zones over the chart, in the same colours as the PPI so a zone reads
   // as the same thing in both places.
   if (m_prefs.overlay_zones)
-    for (const Item& it : items) DrawZonesOverlay(it.idx, vp);
+    for (const OverlayItem& it : items) DrawZonesOverlay(it.idx, vp);
   glDisable(GL_BLEND);
   return drew;
 }

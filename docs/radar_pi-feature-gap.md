@@ -196,6 +196,13 @@ course, and claiming "CU" without one would be a lie.
   render.
 - **Timed idle/run, antenna offsets, no-transmit zones** — present as server
   controls (`TimedIdle`, `AntennaForward`, …), surfaced automatically.
-- **wxDC (non-GL) overlay** — radar_pi declares `WANTS_OVERLAY_CALLBACK`, but
-  its `RenderOverlay` is a no-op that only flips GL off. Both plugins are
-  GL-only.
+- **wxDC (non-GL) overlay** — was listed here as "not a gap" because radar_pi's
+  own `RenderOverlay` is a no-op that only flips a GL flag. That was wrong for
+  us: with OpenCPN's hardware acceleration off, our overlay simply vanished
+  while the PPI carried on (it never used GL — it is a `wxPanel` blitting a
+  CPU-rendered bitmap). `RenderOverlayMultiCanvas(wxDC&, …)` is now
+  implemented: same geometry, same cached disc, drawn through
+  `wxGraphicsContext` because a plain `wxDC` has no alpha. The disc is
+  rasterised at up to 1536 px and scaled up by the blit beyond that, and cached
+  against picture generation, size, rotation and the occluded middle — there is
+  no GPU on this path to waste work on.
