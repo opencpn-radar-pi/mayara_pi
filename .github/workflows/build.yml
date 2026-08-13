@@ -169,10 +169,20 @@ jobs:
   # the build step so the script skips its own apt block -- that block also uses
   # apt-key, which modern Ubuntu no longer ships.
   flatpak:
-    runs-on: ubuntu-latest
+    # Both arches OpenCPN itself is published for on Flathub. An x86_64-only
+    # extension is no use on a Pi or an Apple-silicon VM, which is most of the
+    # Linux this plugin actually runs on.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: flatpak-x86_64, runs-on: ubuntu-latest,     arch: x86_64 }
+          - { name: flatpak-arm64,  runs-on: ubuntu-24.04-arm,  arch: aarch64 }
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runs-on }}
     env:
       OCPN_TARGET: flatpak
-      BUILD_ARCH: x86_64
+      BUILD_ARCH: ${{ matrix.arch }}
       # Must match the runtime the OpenCPN flatpak is built on:
       # flathub org.opencpn.OpenCPN (master and beta) is on
       # org.freedesktop.Platform 25.08. Building the extension
@@ -208,7 +218,7 @@ jobs:
           bash ci/cloudsmith-upload.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: mayara_pi-flatpak
+          name: mayara_pi-${{ matrix.name }}
           path: build/*.tar.gz
           if-no-files-found: warn
 
