@@ -929,8 +929,14 @@ void mayara_pi::LoadPalettes(wxFileConfig* cfg) {
   wxString active;
   cfg->Read("PaletteActive", &active, "Standard Mayara");
   m_palette_active = std::string(active.utf8_str());
-  // It shipped as "Navico red" for one branch; the palette is the same one.
-  if (m_palette_active == "Navico red") m_palette_active = "Navico yellow";
+  // The maker-named profiles were replaced by plain hues; keep a config that
+  // selected one pointing at the nearest thing rather than silently resetting.
+  if (m_palette_active == "Navico red" || m_palette_active == "Navico yellow")
+    m_palette_active = "Yellow";
+  else if (m_palette_active == "Garmin")
+    m_palette_active = "Green";
+  else if (m_palette_active == "Furuno")
+    m_palette_active = "Standard Mayara";
 }
 
 void mayara_pi::SavePalettes(wxFileConfig* cfg) {
@@ -1502,11 +1508,11 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
 
   auto* chint = new wxStaticText(
       cpage, wxID_ANY,
-      _("\"Standard Mayara\" is the legend mayara-server computes. The three "
-        "named after makers follow what each maker's manual says its colours "
-        "mean; the exact shades are ours, since none of them publish values. "
-        "Changing a colour on any of the four copies it to a profile of your "
-        "own first."));
+      _("\"Standard Mayara\" is the legend the server computes; the four hues "
+        "show echo strength as brightness of one colour. Doppler stays "
+        "magenta and green throughout, so a moving target can never be read "
+        "as an echo. Changing a colour on a built-in copies it to a profile "
+        "of your own first."));
   chint->Wrap(330);
   cbox->Add(chint, 0, wxALL, 8);
   cpage->SetSizer(cbox);

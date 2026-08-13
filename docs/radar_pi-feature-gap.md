@@ -101,43 +101,30 @@ background, which two are Doppler and where the trail history starts, so eight
 colours cover any radar whatever legend length it reports. Anything the layout
 does not account for is left exactly as the server sent it.
 
-Four profiles ship, in Settings → Colours:
+Five profiles ship, in Settings → Colours:
 
-1. **Standard Mayara** — the radar's own legend, untouched.
-2. **Navico yellow**
-3. **Garmin**
-4. **Furuno**
+1. **Standard Mayara** — the ramp mayara-server computes in `default_legend()`
+   (blue at a third, green at two thirds, red at the top), untouched.
+2. **Red**, 3. **Yellow**, 4. **Green**, 5. **Blue** — single-hue ramps, dark at
+   the weakest return through full colour to a pale tint of the same hue at the
+   strongest, so echo strength reads as brightness alone.
 
-"Standard Mayara" is the ramp mayara-server computes in `default_legend()` —
-blue at a third, green at two thirds, red at the top — not a maker's palette.
+Emulating maker palettes was tried and dropped. Their manuals document what
+their colours *mean* (Furuno: "red, yellow or green, corresponding to strong,
+medium and weak echoes"; Navico: diverging blue on every image palette; Garmin:
+green away, red toward) but none publish RGB values, so a profile called
+"Furuno" could only ever be an impression wearing a maker's name. A hue is
+honest about what it is.
 
-The three named after makers follow what each maker's own documentation says
-its colours *mean*. No maker publishes RGB values, so the exact shades are
-ours; the mapping is not.
+Doppler is mayara's own magenta/green on every profile, because a Doppler mark
+has to be the one thing that cannot be mistaken for an echo. The green ramp is
+the exception, where green would be exactly that; there receding is cyan.
+Trails stay neutral white-to-grey, which contrasts with every hue.
 
-- **Furuno** — [DRS4W operator's manual](https://www.furuno.it/docs/OPERATOR_MANUAL/DRS4W_OME-C8.pdf),
-  §1.15 Echo Color: "Multicolor paints each radar echo in a color according to
-  its strength, in red, yellow or green, corresponding to strong, medium and
-  weak echoes." Doppler follows Target Analyzer on the
-  [DRS-NXT series](https://www.furuno.com/special/en/radar/drs4d-nxt/): "red
-  echoes are hazardous targets that are moving towards your vessel", "green
-  echoes are targets that stay stationary, or are moving away from you".
-- **Navico** — the Black/Yellow radar image palette.
-  [Lowrance HDS Live operator manual](https://reviewmarine.com/wp-content/uploads/2019/11/Lowrance-HDS-Live-Operators-Manual.pdf),
-  "Radar view options": "Diverging targets are blue colored on all radar image
-  palettes", and approaching targets are red on the Black/Green and
-  Black/Yellow palettes (yellow on Black/Red and White/Red).
-- **Garmin** — [GPSMAP owner's manual, MotionScope](https://www8.garmin.com/manuals/webhelp/gpsmap1002-1202/EN-US/GUID-745F4B45-874C-474D-84B6-EFFB987F3093.html):
-  "On most color schemes, green indicates the target is moving away from you
-  and red indicates the target is moving toward you." The strength ramp is
-  **not** documented — Garmin's
-  [radar appearance settings](https://www8.garmin.com/manuals/webhelp/gpsmap8400-8600/EN-US/GUID-E9EF00DE-8456-439A-BB46-AD72A410E62C.html)
-  only say "Frgd. Color - Sets the color scheme for the radar returns" without
-  naming the schemes — so the greens there remain our reading. None of the four can be edited in place: changing a colour copies the
-profile to one of your own first, so "Navico yellow" means the same thing on
-every boat. Profiles of your own can be renamed and deleted. They are stored in
-the OpenCPN config; the built-ins are rebuilt from code each start, so improving
-one reaches everybody.
+None of the built-ins can be edited in place: changing a colour copies the
+profile to one of your own first. Profiles of your own can be renamed and
+deleted. They are stored in the OpenCPN config; the built-ins are rebuilt from
+code each start, so improving one reaches everybody.
 
 Not covered: ARPA edge and AIS text (drawn from the UI theme, not the legend)
 and the PPI background (black, and the picture is designed against it).

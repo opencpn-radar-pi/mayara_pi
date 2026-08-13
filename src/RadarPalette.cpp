@@ -34,73 +34,48 @@ RadarPalette::RadarPalette() {
 std::vector<RadarPalette> BuiltinPalettes() {
   std::vector<RadarPalette> out;
 
-  // The legend exactly as mayara-server computes it -- a blue-green-red ramp
-  // it builds itself in default_legend(), not the maker's palette. It is the
-  // reference the other profiles depart from.
+  // The legend exactly as mayara-server computes it: a blue-green-red ramp it
+  // builds itself in default_legend(). The reference the others depart from.
   RadarPalette mayara;
   mayara.name = "Standard Mayara";
   mayara.builtin = true;
   mayara.from_server = true;
   out.push_back(mayara);
 
-  // The three below follow what each maker's own documentation says, with the
-  // sources named. Where a manual gives a colour by name ("red", "yellow") the
-  // exact shade is still ours: no maker publishes RGB values.
-
-  // Navico's "Black/Yellow" radar image palette. VelocityTrack colours are
-  // documented per palette -- Lowrance HDS Live operator manual, "Radar view
-  // options": "Diverging targets are blue colored on all radar image
-  // palettes", and for the Black/Yellow palette approaching targets are red.
-  RadarPalette navico;
-  navico.name = "Navico yellow";
-  navico.builtin = true;
-  navico.weak = C(90, 70, 0);
-  navico.medium = C(210, 170, 0);
-  navico.strong = C(255, 245, 140);
-  navico.doppler_approaching = C(255, 40, 40);
-  navico.doppler_receding = C(60, 130, 255);
-  navico.trail_start = C(255, 255, 255);
-  navico.trail_end = C(70, 65, 45);
-  navico.background = C(70, 65, 45);
-  out.push_back(navico);
-
-  // Garmin MotionScope, from the GPSMAP owner's manual: "On most color
-  // schemes, green indicates the target is moving away from you and red
-  // indicates the target is moving toward you." The strength ramp is not
-  // documented -- Garmin's manuals only say "Frgd. Color - Sets the color
-  // scheme for the radar returns" without naming the schemes -- so the greens
-  // below remain our reading of how those displays look.
-  RadarPalette garmin;
-  garmin.name = "Garmin";
-  garmin.builtin = true;
-  garmin.weak = C(0, 70, 40);
-  garmin.medium = C(0, 200, 90);
-  garmin.strong = C(255, 255, 170);
-  garmin.doppler_approaching = C(255, 40, 40);
-  garmin.doppler_receding = C(0, 220, 80);
-  garmin.trail_start = C(230, 255, 230);
-  garmin.trail_end = C(50, 70, 55);
-  garmin.background = C(50, 70, 55);
-  out.push_back(garmin);
-
-  // Furuno's multicolour, from the DRS4W operator's manual (OME-C8, "Echo
-  // Color"): "Multicolor paints each radar echo in a color according to its
-  // strength, in red, yellow or green, corresponding to strong, medium and
-  // weak echoes." Doppler follows Target Analyzer on the DRS-NXT series:
-  // "red echoes are hazardous targets that are moving towards your vessel",
-  // "green echoes are targets that stay stationary, or are moving away".
-  RadarPalette furuno;
-  furuno.name = "Furuno";
-  furuno.builtin = true;
-  furuno.weak = C(0, 200, 0);
-  furuno.medium = C(255, 235, 0);
-  furuno.strong = C(255, 30, 30);
-  furuno.doppler_approaching = C(255, 30, 30);
-  furuno.doppler_receding = C(0, 200, 0);
-  furuno.trail_start = C(255, 255, 255);
-  furuno.trail_end = C(60, 60, 70);
-  furuno.background = C(60, 60, 70);
-  out.push_back(furuno);
+  // Four single-hue ramps: dark at the weakest return, full colour in the
+  // middle, a pale tint of the same hue at the strongest. One hue means the
+  // strength of an echo reads as brightness alone, which is what a monochrome
+  // radar display has always done.
+  //
+  // Doppler stays on mayara's own two colours across all of them -- magenta
+  // approaching, green receding -- because a Doppler mark has to be the one
+  // thing on the screen that cannot be mistaken for an echo. The green ramp is
+  // the exception, where green would be exactly that; there receding is cyan.
+  // Trails stay neutral white-to-grey, which contrasts with every hue.
+  struct Hue {
+    const char* name;
+    Rgba weak, medium, strong, receding;
+  };
+  const Hue hues[] = {
+      {"Red", C(64, 0, 0), C(220, 0, 0), C(255, 170, 150), C(0, 255, 0)},
+      {"Yellow", C(64, 56, 0), C(220, 200, 0), C(255, 250, 180), C(0, 255, 0)},
+      {"Green", C(0, 64, 0), C(0, 210, 0), C(180, 255, 180), C(0, 255, 255)},
+      {"Blue", C(0, 0, 80), C(40, 90, 255), C(180, 215, 255), C(0, 255, 0)},
+  };
+  for (const Hue& h : hues) {
+    RadarPalette p;
+    p.name = h.name;
+    p.builtin = true;
+    p.weak = h.weak;
+    p.medium = h.medium;
+    p.strong = h.strong;
+    p.doppler_approaching = C(255, 0, 255);
+    p.doppler_receding = h.receding;
+    p.trail_start = C(255, 255, 255);
+    p.trail_end = C(69, 69, 69);
+    p.background = C(80, 80, 80);
+    out.push_back(p);
+  }
 
   return out;
 }
