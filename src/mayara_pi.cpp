@@ -15,6 +15,7 @@
 #include <wx/fileconf.h>
 #include <wx/frame.h>
 #include <wx/radiobox.h>
+#include <wx/settings.h>
 #include <wx/spinctrl.h>
 #include <wx/statline.h>
 #include <wx/tokenzr.h>
@@ -872,10 +873,15 @@ void mayara_pi::ShowRadarMenu(int canvas) {
       });
 
   // Top-left, clear of the chart bar along the bottom. Height is capped to the
-  // canvas so a long control list scrolls rather than running off the chart.
+  // canvas so a long control list scrolls rather than running off the chart --
+  // and the scrollbar is kept permanently, both because a panel that can be
+  // scrolled should say so, and because a bar that comes and goes reflows the
+  // controls under the pointer.
+  p->ShowScrollbars(wxSHOW_SB_NEVER, wxSHOW_SB_ALWAYS);
   const wxSize cs = cw->GetClientSize();
   const wxSize best = p->GetEffectiveMinSize();
-  const int w = std::max(320, best.x);
+  const int sbw = std::max(15, wxSystemSettings::GetMetric(wxSYS_VSCROLL_X, p));
+  const int w = std::max(320, best.x) + sbw;  // room for the bar, not over the controls
   const int h = std::min(cs.y - 2 * kChartMenuMargin,
                          std::max(320, best.y));
   // The canvas owns its children, so a canvas that goes away (a layout change,
@@ -888,6 +894,8 @@ void mayara_pi::ShowRadarMenu(int canvas) {
     e.Skip();
   });
   p->SetSize(kChartMenuMargin, kChartMenuMargin, w, h);
+  p->Layout();
+  p->FitInside();  // virtual size from the content, so the bar knows its range
   p->Show();
   p->Raise();
 }
@@ -1436,6 +1444,16 @@ void mayara_pi::ShowOverlayMenu(int canvas) {
   }
   m_overlay_sel[canvas] = now;
   SaveConfig();
+  // Asking to see a radar on the chart means asking it to run: a radar in
+  // standby would draw nothing. One-shot, on the selection itself -- putting
+  // it back in standby afterwards is the operator's call and is left alone.
+  for (int i : OverlayRadars(canvas)) {
+    RadarControls* c = m_client->ControlsAt(i);
+    if (!c) continue;
+    const ControlValue pw = c->Value("power");
+    if (pw.has_value && pw.value < 2.0)
+      m_client->SetControlAt(i, "power", "{\"value\":2}");
+  }
   SyncAutoRange();
   RefreshContextMenu(canvas);
   GetOCPNCanvasWindow()->Refresh(false);
