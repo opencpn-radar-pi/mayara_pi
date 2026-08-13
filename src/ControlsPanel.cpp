@@ -157,12 +157,105 @@ ControlsPanel::ControlsPanel(wxWindow* parent, MayaraClient* client,
       m_timer(this, kControlsTimerId) {
   SetMinSize(wxSize(300, -1));
   SetScrollRate(0, 12);
+  SetBackgroundStyle(wxBG_STYLE_PAINT);
   auto* sizer = new wxBoxSizer(wxVERTICAL);
   sizer->Add(MakeCloseRow(), 0, wxEXPAND);
   sizer->Add(new wxStaticText(this, wxID_ANY, _("Waiting for radar…")), 0,
              wxALL, 8);
-  SetSizer(sizer);
+  SetSizer(WithScrollGutter(sizer));
+
+  // The scrollbar is drawn, not native: macOS hides the real one until it is
+  // being used (and inside a plugin's own child window it never appeared at
+  // all), which leaves a panel that scrolls with no sign that it does.
+  Bind(wxEVT_PAINT, &ControlsPanel::OnPaint, this);
+  auto redraw = [this](wxScrollWinEvent& e) {
+    Refresh(false);
+    e.Skip();
+  };
+  Bind(wxEVT_SCROLLWIN_TOP, redraw);
+  Bind(wxEVT_SCROLLWIN_BOTTOM, redraw);
+  Bind(wxEVT_SCROLLWIN_LINEUP, redraw);
+  Bind(wxEVT_SCROLLWIN_LINEDOWN, redraw);
+  Bind(wxEVT_SCROLLWIN_PAGEUP, redraw);
+  Bind(wxEVT_SCROLLWIN_PAGEDOWN, redraw);
+  Bind(wxEVT_SCROLLWIN_THUMBTRACK, redraw);
+  Bind(wxEVT_SCROLLWIN_THUMBRELEASE, redraw);
+  Bind(wxEVT_LEFT_DOWN, &ControlsPanel::OnBarMouse, this);
+  Bind(wxEVT_LEFT_UP, &ControlsPanel::OnBarMouse, this);
+  Bind(wxEVT_MOTION, &ControlsPanel::OnBarMouse, this);
   m_timer.Start(400);
+}
+
+wxSizer* ControlsPanel::WithScrollGutter(wxSizer* content) {
+  auto* outer = new wxBoxSizer(wxHORIZONTAL);
+  outer->Add(content, 1, wxEXPAND);
+  outer->AddSpacer(kScrollBarW);  // kept clear of children, so the bar shows
+  return outer;
+}
+
+// Where the thumb sits, in client coordinates. Empty when everything fits.
+wxRect ControlsPanel::ThumbRect() const {
+  const wxSize cs = GetClientSize();
+  const int vh = GetVirtualSize().y;
+  if (vh <= cs.y || cs.y <= 0) return wxRect();
+  int xu = 0, yu = 0;
+  GetScrollPixelsPerUnit(&xu, &yu);
+  const int start = GetViewStart().y * (yu > 0 ? yu : 1);
+  const int th = std::max(28, cs.y * cs.y / vh);
+  const int ty = (cs.y - th) * std::min(start, vh - cs.y) / (vh - cs.y);
+  return wxRect(cs.x - kScrollBarW + 1, ty, kScrollBarW - 2, th);
+}
+
+void ControlsPanel::OnPaint(wxPaintEvent&) {
+  wxPaintDC dc(this);
+  const wxSize cs = GetClientSize();
+  dc.SetPen(*wxTRANSPARENT_PEN);
+  dc.SetBrush(wxBrush(m_theme.panel_bg));
+  dc.DrawRectangle(0, 0, cs.x, cs.y);
+
+  const wxRect thumb = ThumbRect();
+  if (thumb.IsEmpty()) return;
+  dc.SetBrush(wxBrush(m_theme.lozenge_bg));
+  dc.DrawRoundedRectangle(cs.x - kScrollBarW + 1, 0, kScrollBarW - 2, cs.y,
+                          (kScrollBarW - 2) / 2.0);
+  dc.SetBrush(wxBrush(m_dragging_bar ? m_theme.text : m_theme.lozenge_border));
+  dc.DrawRoundedRectangle(thumb, (kScrollBarW - 2) / 2.0);
+}
+
+// Click or drag anywhere down the gutter. Nothing else lives there, so the
+// panel itself sees these events.
+void ControlsPanel::OnBarMouse(wxMouseEvent& event) {
+  const wxSize cs = GetClientSize();
+  const int vh = GetVirtualSize().y;
+  const bool in_bar = event.GetX() >= cs.x - kScrollBarW;
+  int xu = 0, yu = 0;
+  GetScrollPixelsPerUnit(&xu, &yu);
+  if (yu <= 0) yu = 1;
+
+  if (event.LeftDown() && in_bar && vh > cs.y) {
+    m_dragging_bar = true;
+    CaptureMouse();
+  } else if (event.LeftUp()) {
+    if (!m_dragging_bar) {
+      event.Skip();
+      return;
+    }
+    m_dragging_bar = false;
+    if (HasCapture()) ReleaseMouse();
+    Refresh(false);
+    return;
+  } else if (!m_dragging_bar || !event.Dragging()) {
+    event.Skip();
+    return;
+  }
+  if (!m_dragging_bar || vh <= cs.y) return;
+
+  // Put the middle of the thumb where the pointer is.
+  const int th = std::max(28, cs.y * cs.y / vh);
+  const int span = std::max(1, cs.y - th);
+  const int want = (event.GetY() - th / 2) * (vh - cs.y) / span;
+  Scroll(-1, std::max(0, want) / yu);
+  Refresh(false);
 }
 
 wxSizer* ControlsPanel::MakeCloseRow() {
@@ -202,17 +295,9 @@ void ControlsPanel::SetRadarIndex(int index) {
   if (m_built) Rebuild();
 }
 
-void ControlsPanel::SetViewMode(bool view_only) {
-  if (view_only == m_view_only && m_single_id.empty()) return;
-  m_view_only = view_only;
-  m_single_id.clear();
-  if (m_built) Rebuild();
-}
-
 void ControlsPanel::SetSingleControl(const std::string& id) {
-  if (id == m_single_id && !m_view_only) return;
+  if (id == m_single_id) return;
   m_single_id = id;
-  m_view_only = false;
   if (m_built) Rebuild();
 }
 
@@ -269,7 +354,7 @@ void ControlsPanel::Rebuild() {
   if (!c) {
     auto* sizer = new wxBoxSizer(wxVERTICAL);
     sizer->Add(MakeCloseRow(), 0, wxEXPAND);
-    SetSizer(sizer);
+    SetSizer(WithScrollGutter(sizer));
     return;
   }
   std::vector<ControlDef> defs = c->Schema();
@@ -288,20 +373,7 @@ void ControlsPanel::Rebuild() {
         AddControl(root, d);
         break;
       }
-    SetSizer(root);
-    FitInside();
-    Layout();
-    ThemeChildren();
-    ApplyValues();
-    return;
-  }
-
-  // View-only mode: just the View controls (opened by the View icon).
-  if (m_view_only) {
-    auto* content = new wxBoxSizer(wxVERTICAL);
-    FillViewSection(content);
-    root->Add(content, 0, wxEXPAND | wxLEFT | wxRIGHT, 6);
-    SetSizer(root);
+    SetSizer(WithScrollGutter(root));
     FitInside();
     Layout();
     ThemeChildren();
@@ -340,19 +412,21 @@ void ControlsPanel::Rebuild() {
     AddEnum(root, *by_id["rangeUnits"], /*buttons=*/true);
   root->Add(new wxStaticLine(this), 0, wxEXPAND | wxALL, 4);
 
-  // (The View controls live in their own menu now, opened by the View icon.)
   const std::set<std::string> quick = {"power", "range", "rangeUnits"};
   const char* categories[] = {"base",         "targets",      "trails",
                               "advanced",     "installation", "info"};
 
-  bool vrm_done = false;
+  bool local_done = false;
   for (const char* cat : categories) {
-    // Straight after Base, as the operator's own measuring tools rather than
-    // anything the radar reports.
-    if (!vrm_done && std::string(cat) != "base") {
+    // Straight after Base: what the operator sets for themselves, before what
+    // the radar reports about itself. View first -- it is the one people go
+    // looking for.
+    if (!local_done && std::string(cat) != "base") {
+      AddCollapsibleSection(root, _("View"), "view",
+                            [this](wxSizer* c) { FillViewSection(c); });
       AddCollapsibleSection(root, _("EBL/VRM"), "eblvrm",
                             [this](wxSizer* c) { FillVrmEblSection(c); });
-      vrm_done = true;
+      local_done = true;
     }
     std::vector<const ControlDef*> group;
     for (const auto& d : defs)
@@ -373,11 +447,30 @@ void ControlsPanel::Rebuild() {
                           });
   }
 
-  SetSizer(root);  // deletes the previous sizer
+  SetSizer(WithScrollGutter(root));  // deletes the previous sizer
   FitInside();
   Layout();
   ThemeChildren();  // theme the freshly created widgets
   ApplyValues();
+}
+
+// Opening a section whose contents fall below the bottom of the panel shows a
+// header and nothing else, which reads as an empty section. Bring as much of it
+// up as fits, without ever pushing its own header out of sight.
+void ControlsPanel::ScrollSectionIntoView(wxWindow* header, wxSizer* content) {
+  int xu = 0, yu = 0;
+  GetScrollPixelsPerUnit(&xu, &yu);
+  if (yu <= 0) return;
+  const int view_h = GetClientSize().y;
+  const int start = GetViewStart().y * yu;
+  const int top = CalcUnscrolledPosition(header->GetPosition()).y;
+  const int bottom = top + header->GetSize().y + content->GetSize().y;
+
+  int want = start;
+  if (bottom > start + view_h) want = bottom - view_h;
+  if (want > top) want = top;  // the header stays visible whatever else does
+  if (want < 0) want = 0;
+  if (want != start) Scroll(-1, want / yu);
 }
 
 void ControlsPanel::AddCollapsibleSection(wxSizer* root, const wxString& title,
@@ -407,6 +500,7 @@ void ControlsPanel::AddCollapsibleSection(wxSizer* root, const wxString& title,
     ApplyValues();
     Layout();
     FitInside();
+    if (!c) ScrollSectionIntoView(header, content);
   });
   root->Show(content, !collapsed, true);
 }
@@ -493,6 +587,53 @@ void ControlsPanel::FillViewSection(wxSizer* content) {
           p.menu_autohide = i;
           m_set_prefs(p);
         });
+    // The overlay sits on top of the chart, so how much of the chart it hides
+    // is a judgement only the operator can make.
+    AddChoiceRow(
+        content, _("Overlay opacity"), {"25%", "50%", "75%", "100%"},
+        [this]() {
+          const int a = m_get_prefs().overlay_alpha;
+          return a <= 25 ? 0 : a <= 50 ? 1 : a <= 75 ? 2 : 3;
+        },
+        [this](int i) {
+          PpiPrefs p = m_get_prefs();
+          p.overlay_alpha = 25 * (i + 1);
+          m_set_prefs(p);
+        });
+    auto* oz = new ThemedButton(this, _("Guard zones on chart"), m_theme, true);
+    content->Add(oz, 0, wxEXPAND | wxALL, 4);
+    oz->Bind(wxEVT_TOGGLEBUTTON, [this, oz](wxCommandEvent&) {
+      PpiPrefs p = m_get_prefs();
+      p.overlay_zones = oz->GetValue();
+      m_set_prefs(p);
+    });
+    m_updaters.push_back(
+        [this, oz]() { oz->SetValue(m_get_prefs().overlay_zones); });
+
+    // Both off by default: they write a range to a radar, and nothing should do
+    // that to your hardware unless you asked for it.
+    auto* cr = new ThemedButton(this, _("Chart scale sets range"), m_theme,
+                                true);
+    content->Add(cr, 0, wxEXPAND | wxALL, 4);
+    cr->Bind(wxEVT_TOGGLEBUTTON, [this, cr](wxCommandEvent&) {
+      PpiPrefs p = m_get_prefs();
+      p.chart_range = cr->GetValue();
+      m_set_prefs(p);
+    });
+    m_updaters.push_back(
+        [this, cr]() { cr->SetValue(m_get_prefs().chart_range); });
+
+    auto* ar = new ThemedButton(this, _("Nest second radar at 1/4"), m_theme,
+                                true);
+    content->Add(ar, 0, wxEXPAND | wxALL, 4);
+    ar->Bind(wxEVT_TOGGLEBUTTON, [this, ar](wxCommandEvent&) {
+      PpiPrefs p = m_get_prefs();
+      p.nest_range = ar->GetValue();
+      m_set_prefs(p);
+    });
+    m_updaters.push_back(
+        [this, ar]() { ar->SetValue(m_get_prefs().nest_range); });
+
     auto* rz = new ThemedButton(this, _("Reverse zoom wheel"), m_theme, true);
     content->Add(rz, 0, wxEXPAND | wxALL, 4);
     rz->Bind(wxEVT_TOGGLEBUTTON, [this, rz](wxCommandEvent&) {

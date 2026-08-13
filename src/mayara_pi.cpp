@@ -15,6 +15,7 @@
 #include <wx/fileconf.h>
 #include <wx/frame.h>
 #include <wx/radiobox.h>
+#include <wx/settings.h>
 #include <wx/spinctrl.h>
 #include <wx/statline.h>
 #include <wx/tokenzr.h>
@@ -34,6 +35,7 @@
 #include "MayaraClient.h"
 #include "MayaraServer.h"
 #include "MayaraTheme.h"
+#include "ControlsPanel.h"
 #include "PpiWindow.h"
 
 namespace {
@@ -137,16 +139,31 @@ int mayara_pi::Init() {
       _("Mayara Radar"), _("Show or hide the Mayara radar PPI window"),
       nullptr, -1, 0, this);
 
-  // Canvas right-click context-menu items (checkable), mirroring radar_pi.
+  // Canvas right-click context menu. The overlay entry pops a menu of its own
+  // rather than carrying a submenu: OpenCPN only began passing submenu clicks
+  // back to plugins in September 2025, and before that they were silently
+  // dropped -- an entry that does nothing is worse than one more click.
   {
-    m_mi_overlay_item = new wxMenuItem(
-        nullptr, wxID_ANY, _("Mayara radar overlay"), wxEmptyString,
-        wxITEM_CHECK);
+    m_mi_overlay_item = new wxMenuItem(nullptr, wxID_ANY,
+                                       _("Mayara radar overlay"),
+                                       wxEmptyString, wxITEM_NORMAL);
     m_mi_overlay = AddCanvasContextMenuItem(m_mi_overlay_item, this);
-    m_mi_ppi_item = new wxMenuItem(nullptr, wxID_ANY, _("Mayara PPI window"),
-                                   wxEmptyString, wxITEM_CHECK);
+
+    m_mi_menu_item = new wxMenuItem(nullptr, wxID_ANY, _("Mayara radar menu"),
+                                    wxEmptyString, wxITEM_NORMAL);
+    m_mi_menu = AddCanvasContextMenuItem(m_mi_menu_item, this);
+
+    // Label says what the click will do, so it is never a guess.
+    m_mi_ppi_item = new wxMenuItem(nullptr, wxID_ANY, _("Show Mayara PPI"),
+                                   wxEmptyString, wxITEM_NORMAL);
     m_mi_ppi = AddCanvasContextMenuItem(m_mi_ppi_item, this);
+
+    m_mi_ov_none = wxWindow::NewControlId();
+    m_mi_ov_all = wxWindow::NewControlId();
+    for (int k = 0; k < kMaxMenuRadars; ++k)
+      m_mi_ov_radar[k] = wxWindow::NewControlId();
   }
+
 
   // Optional mayara-server of our own: start it before the client so it is
   // already listening on loopback by the time discovery runs.
@@ -196,6 +213,12 @@ int mayara_pi::Init() {
     if (AnyWindowShown() && !m_ocpn_fullscreen) CaptureWindowState();
 
     PollGuardAlarms();
+    SyncChartRange();
+    SyncAutoRange();  // after it: the nested radar follows the outer one
+    FitChartMenu();
+    const int under = CanvasUnderMouse();
+    if (under >= 0) m_menu_canvas = under;
+    RefreshContextMenu(m_menu_canvas);
 
     // Remember the server that answered (fast reconnect next boot). Not gated
     // on a radar streaming: a server with nothing attached is still the right
@@ -239,6 +262,7 @@ int mayara_pi::Init() {
 }
 
 bool mayara_pi::DeInit() {
+  DestroyChartMenu();
   // Destroy the window first (synchronously) so its panels' timers stop calling
   // into the client before we free it.
   if (m_heartbeat) {
@@ -288,14 +312,59 @@ void mayara_pi::LoadConfig() {
   int windows = 1;
   cfg->Read("WindowsCount", &windows, 1);
   m_windows_count = windows < 1 ? 1 : windows;
+  // "OverlayOffCanvases" is a comma list; the old single OverlayEnabled flag is
+  // still honoured so an existing config does not silently switch the overlay
+  // back on.
+  // "OverlaySel" is "canvas:selection;..."; the older OverlayOffCanvases list
+  // and the original single flag are still honoured so an existing config keeps
+  // its meaning.
+  m_overlay_sel.clear();
   bool overlay = true;
   cfg->Read("OverlayEnabled", &overlay, true);
-  m_overlay_enabled = overlay;
+  wxString sel;
+  if (cfg->Read("OverlaySel", &sel) && !sel.IsEmpty()) {
+    wxStringTokenizer tok(sel, ";");
+    while (tok.HasMoreTokens()) {
+      const wxString pair = tok.GetNextToken();
+      const int colon = pair.Find(':');
+      long c = 0, v = 0;
+      if (colon != wxNOT_FOUND && pair.Left(colon).ToLong(&c) &&
+          pair.Mid(colon + 1).ToLong(&v))
+        m_overlay_sel[static_cast<int>(c)] = static_cast<int>(v);
+    }
+  } else {
+    wxString off;
+    if (cfg->Read("OverlayOffCanvases", &off) && !off.IsEmpty()) {
+      wxStringTokenizer tok(off, ",");
+      while (tok.HasMoreTokens()) {
+        long c = 0;
+        if (tok.GetNextToken().ToLong(&c))
+          m_overlay_sel[static_cast<int>(c)] = kOverlayNone;
+      }
+    } else if (!overlay) {
+      m_overlay_sel[0] = kOverlayNone;
+    }
+  }
   long hz = 5, autohide = 0;
   bool reverse_zoom = false;
   cfg->Read("RefreshHz", &hz, 5);
   cfg->Read("ReverseZoom", &reverse_zoom, false);
   cfg->Read("MenuAutoHide", &autohide, 0);
+  long alpha = 100;
+  bool ozones = true;
+  cfg->Read("OverlayAlpha", &alpha, 100);
+  cfg->Read("OverlayZones", &ozones, true);
+  // "AutoRange" was this setting's name when it was the only one; read it once
+  // so an existing config keeps its meaning, but write the honest name.
+  bool nrange = false, crange = false;
+  cfg->Read("AutoRange", &nrange, false);
+  cfg->Read("NestSecondRadar", &nrange, nrange);
+  cfg->Read("ChartScaleSetsRange", &crange, false);
+  m_prefs.nest_range = nrange;
+  m_prefs.chart_range = crange;
+  m_prefs.overlay_alpha =
+      static_cast<int>(alpha < 25 ? 25 : (alpha > 100 ? 100 : alpha));
+  m_prefs.overlay_zones = ozones;
   m_prefs.refresh_hz = static_cast<int>(hz < 1 ? 1 : (hz > 15 ? 15 : hz));
   m_prefs.reverse_zoom = reverse_zoom;
   m_prefs.menu_autohide =
@@ -471,10 +540,18 @@ void mayara_pi::SaveConfig() {
   if (!cfg) return;
   cfg->SetPath(kConfigGroup);
   cfg->Write("WindowsCount", m_windows_count);
-  cfg->Write("OverlayEnabled", m_overlay_enabled);
+  cfg->Write("OverlayEnabled", OverlayOnAny());
+  wxString sel;
+  for (const auto& kv : m_overlay_sel)
+    sel += wxString::Format("%d:%d;", kv.first, kv.second);
+  cfg->Write("OverlaySel", sel);
   cfg->Write("RefreshHz", static_cast<long>(m_prefs.refresh_hz));
   cfg->Write("ReverseZoom", m_prefs.reverse_zoom);
   cfg->Write("MenuAutoHide", static_cast<long>(m_prefs.menu_autohide));
+  cfg->Write("OverlayAlpha", static_cast<long>(m_prefs.overlay_alpha));
+  cfg->Write("OverlayZones", m_prefs.overlay_zones);
+  cfg->Write("NestSecondRadar", m_prefs.nest_range);
+  cfg->Write("ChartScaleSetsRange", m_prefs.chart_range);
   wxString orient;
   for (const auto& kv : m_orient)
     orient += wxString::Format("%s=%d;", kv.first.c_str(), kv.second);
@@ -630,6 +707,282 @@ void mayara_pi::UpdateAccessDialog() {
 
 // The client tries our own server ahead of mDNS, but only while we actually
 // have one; otherwise it must fall back to the network as before.
+// True when the overlay is on for at least one canvas. The View toggle shows
+// this, and switching it flips every canvas together -- a panel button has no
+// canvas of its own to act on, and "some are on" is not a state a checkbox can
+// express honestly.
+int mayara_pi::OverlaySel(int canvas) const {
+  auto it = m_overlay_sel.find(canvas);
+  return it == m_overlay_sel.end() ? kOverlayAll : it->second;
+}
+
+// The radars this canvas draws. "All" is every shown radar, which the caller
+// then sorts by range so the shorter one nests inside the longer.
+std::vector<int> mayara_pi::OverlayRadars(int canvas) const {
+  std::vector<int> out;
+  if (!m_client) return out;
+  const int sel = OverlaySel(canvas);
+  if (sel == kOverlayNone) return out;
+  for (int i : m_client->ShownRadars())
+    if (sel == kOverlayAll || sel == i) out.push_back(i);
+  return out;
+}
+
+bool mayara_pi::OverlayOnAny() const {
+  const int n = GetCanvasCount();
+  for (int c = 0; c < (n > 0 ? n : 1); ++c)
+    if (OverlayOn(c)) return true;
+  return false;
+}
+
+void mayara_pi::SetOverlayAll(bool on) {
+  const int n = GetCanvasCount();
+  m_overlay_sel.clear();
+  if (!on)
+    for (int c = 0; c < (n > 0 ? n : 1); ++c) m_overlay_sel[c] = kOverlayNone;
+  SaveConfig();
+}
+
+// With two radars nested on one canvas, the inner picture is only useful if it
+// is meaningfully shorter than the outer. This keeps it at the settable range
+// closest to a quarter of the longer one -- radars accept only the ranges in
+// their own schema, so an exact quarter is usually not one of them.
+void mayara_pi::SyncAutoRange() {
+  if (!m_prefs.nest_range || !m_client) return;
+  // Only when some canvas actually nests them; otherwise the two radars are
+  // independent pictures and their ranges are the operator's business.
+  bool nested = false;
+  const int n = GetCanvasCount();
+  for (int c = 0; c < (n > 0 ? n : 1); ++c)
+    if (OverlaySel(c) == kOverlayAll && OverlayRadars(c).size() > 1)
+      nested = true;
+  if (!nested) return;
+
+  // A steers B, in the order the radars appear in the menu -- not "whichever is
+  // currently longer", which would swap the roles the moment B is ranged out
+  // past A and leave the two chasing each other.
+  std::vector<int> shown = m_client->ShownRadars();
+  if (shown.size() < 2) return;
+  const int outer = shown[0], inner = shown[1];
+
+  RadarControls* oc = m_client->ControlsAt(outer);
+  RadarControls* ic = m_client->ControlsAt(inner);
+  if (!oc || !ic) return;
+  const double outer_m = oc->Value("range").value;
+  if (outer_m <= 0) return;
+  const double want = outer_m / 4.0;
+
+  std::vector<int> vals;
+  for (const auto& d : ic->Schema())
+    if (d.id == "range") {
+      vals = d.validValues;
+      break;
+    }
+  if (vals.empty()) return;
+  int best = vals[0];
+  for (int v : vals)
+    if (std::fabs(v - want) < std::fabs(best - want)) best = v;
+
+  const double cur = ic->Value("range").value;
+  if (std::fabs(cur - best) < 1.0) return;  // already there
+  m_client->SetControlAt(inner, "range",
+                         "{\"value\":" + std::to_string(best) + "}");
+}
+
+// The controls on their own, drawn over the chart itself: a real child window
+// of the canvas, so it floats above the chart without being a window of its
+// own to manage, and it goes away with one click. Clicking the menu entry for
+// the canvas it is already on closes it again.
+// Let the chart's own zoom drive the radar: the operator zooms once and the
+// picture follows. The target is the shortest range the radar offers that
+// still covers the chart, so zooming in steps the radar down with it.
+void mayara_pi::SyncChartRange() {
+  if (!m_prefs.chart_range || !m_client) return;
+  for (const auto& kv : m_canvas_radius_m) {
+    const std::vector<int> radars = OverlayRadars(kv.first);
+    if (radars.empty() || kv.second <= 0) continue;
+    // Only the outer radar: a nested second one is steered by that one.
+    const int idx = radars.front();
+    RadarControls* c = m_client->ControlsAt(idx);
+    if (!c) continue;
+    std::vector<int> vals;
+    for (const auto& d : c->Schema())
+      if (d.id == "range") {
+        vals = d.validValues;
+        break;
+      }
+    if (vals.empty()) continue;
+    int want = 0;
+    for (int v : vals)
+      if (v >= kv.second && (want == 0 || v < want)) want = v;
+    if (want == 0)  // chart wider than the radar reaches: use its longest
+      for (int v : vals) want = std::max(want, v);
+    const ControlValue cur = c->Value("range");
+    if (cur.has_value && std::fabs(cur.value - want) < 1.0) continue;
+    m_client->SetControlAt(idx, "range",
+                           "{\"value\":" + std::to_string(want) + "}");
+  }
+}
+
+void mayara_pi::ShowRadarMenu(int canvas) {
+  const int was = m_chart_menu ? m_chart_menu_canvas : -1;
+  DestroyChartMenu();
+  if (was == canvas) return;  // second click on the same canvas: toggle off
+  if (!m_client || m_client->RadarCount() == 0) return;
+
+  wxWindow* cw = GetCanvasByIndex(canvas);
+  if (!cw) cw = GetOCPNCanvasWindow();
+  if (!cw) return;
+
+  auto* p = new ControlsPanel(cw, m_client.get(), m_client->ActiveIndex());
+  m_chart_menu = p;
+  m_chart_menu_canvas = canvas;
+
+  std::vector<int> all;
+  for (int i = 0; i < m_client->RadarCount(); ++i) all.push_back(i);
+  p->SetRadarList(all);
+  p->ApplyTheme(ThemeFor(m_color_scheme));
+
+  // Destroying a panel from inside its own button handler would unwind the
+  // handler's own window, so let the event finish first.
+  p->SetCloseCallback([this]() {
+    if (m_parent_window)
+      m_parent_window->CallAfter([this]() { DestroyChartMenu(); });
+  });
+  p->SetSettingsCallback([this]() { ShowSettings(m_parent_window); });
+  p->SetViewControls([this]() { return OverlayOnAny(); },
+                     [this](bool on) {
+                       SetOverlayAll(on);
+                       GetOCPNCanvasWindow()->Refresh(false);
+                     },
+                     [this]() { return AnyWindowShown(); },
+                     [this](bool show) {
+                       if (show) {
+                         RaisePpiWindows();
+                       } else {
+                         m_windows_visible = false;
+                         for (MayaraPpiWindow* w : m_windows)
+                           if (w) w->ShowWindow(false);
+                         SetToolbarItemState(m_tool_id, false);
+                       }
+                     });
+  p->SetOrientationControl(
+      [this, p]() { return OrientationFor(m_client->RadarId(p->RadarIndex())); },
+      [this, p](int o) {
+        SetOrientationFor(m_client->RadarId(p->RadarIndex()), o);
+      });
+  p->SetThresholdControl(
+      [this, p]() { return ThresholdFor(m_client->RadarId(p->RadarIndex())); },
+      [this, p](int l) {
+        SetThresholdFor(m_client->RadarId(p->RadarIndex()), l);
+      });
+  p->SetDockControl([this]() { return m_docked; },
+                    [this](bool on) {
+                      if (on == m_docked) return;
+                      m_docked = on;
+                      SaveConfig();
+                      if (m_parent_window)
+                        m_parent_window->CallAfter([this]() { RebuildWindows(); });
+                    });
+  p->SetPrefsControl([this]() { return m_prefs; },
+                     [this](const PpiPrefs& q) {
+                       m_prefs = q;
+                       SaveConfig();
+                       for (MayaraPpiWindow* w : m_windows)
+                         if (w) w->ApplyPrefs();
+                       GetOCPNCanvasWindow()->Refresh(false);
+                     });
+  // Guard zones can still be edited from here; there is no picture to drag
+  // handles on, so this edit is the panel's own and is drawn on the chart.
+  p->SetZoneEditHandlers(
+      [this]() { return m_chart_zone; },
+      [this](const ZoneEdit& z, bool commit) {
+        m_chart_zone = z;
+        if (commit && z.active && m_client) {
+          char buf[256];
+          std::snprintf(buf, sizeof(buf),
+                        "{\"value\":%s,\"endValue\":%s,\"startDistance\":%s,"
+                        "\"endDistance\":%s,\"enabled\":true}",
+                        JsonNum(z.start_rad).c_str(), JsonNum(z.end_rad).c_str(),
+                        JsonNum(z.start_m).c_str(), JsonNum(z.end_m).c_str());
+          m_client->SetControlAt(z.radar_index, z.id, buf);
+        }
+        if (m_chart_menu) m_chart_menu->SyncNow();
+        GetOCPNCanvasWindow()->Refresh(false);
+      });
+
+  // Top-left, clear of the chart bar along the bottom. Height is capped to the
+  // canvas so a long control list scrolls rather than running off the chart --
+  // and the scrollbar is kept permanently, both because a panel that can be
+  // scrolled should say so, and because a bar that comes and goes reflows the
+  // controls under the pointer.
+  // The canvas owns its children, so a canvas that goes away (a layout change,
+  // shutdown) takes the panel with it. Notice, rather than keep a dead pointer.
+  p->Bind(wxEVT_DESTROY, [this](wxWindowDestroyEvent& e) {
+    if (e.GetWindow() == m_chart_menu) {
+      m_chart_menu = nullptr;
+      m_chart_menu_canvas = -1;
+    }
+    e.Skip();
+  });
+  FitChartMenu();
+  p->Show();
+  p->Raise();
+}
+
+// The panel builds itself from the schema on its own timer, so at this point
+// it holds a "waiting for radar" placeholder and knows nothing about how wide
+// it wants to be. Size it to the canvas now and keep following it: full height,
+// because a control list is always longer than the room for it, and the wider
+// of its own idea and a readable minimum.
+void mayara_pi::FitChartMenu() {
+  if (!m_chart_menu) return;
+  wxWindow* cw = m_chart_menu->GetParent();
+  if (!cw) return;
+  const wxSize cs = cw->GetClientSize();
+  const wxSize best = m_chart_menu->GetEffectiveMinSize();  // gutter included
+  const int w = std::min(cs.x - 2 * kChartMenuMargin, std::max(320, best.x));
+  // As tall as it needs, never taller than the chart: a panel sized to the
+  // canvas is mostly empty, and one sized to a placeholder scrolls everything
+  // real off the bottom.
+  const int h = std::min(cs.y - 2 * kChartMenuMargin, std::max(240, best.y));
+  if (m_chart_menu->GetSize() == wxSize(w, h)) return;
+  m_chart_menu->SetSize(kChartMenuMargin, kChartMenuMargin, w, h);
+  m_chart_menu->Layout();
+  m_chart_menu->FitInside();  // virtual size from the content: the bar's range
+}
+
+void mayara_pi::DestroyChartMenu() {
+  if (!m_chart_menu) return;
+  ControlsPanel* p = m_chart_menu;  // clear first: Destroy() is deferred
+  m_chart_menu = nullptr;
+  m_chart_menu_canvas = -1;
+  p->Destroy();
+}
+
+// Shown *and* in front. A window buried behind the chart is not showing as far
+// as anyone looking at the screen is concerned, so the menu offers to show it.
+bool mayara_pi::PpiFrontmost() const {
+  for (MayaraPpiWindow* win : m_windows) {
+    if (!win) continue;
+    if (!const_cast<MayaraPpiWindow*>(win)->IsWindowShown()) continue;
+    wxFrame* f = win->HostFrame();
+    if (!f || f->IsActive()) return true;  // docked panes are always in front
+  }
+  return false;
+}
+
+void mayara_pi::RaisePpiWindows() {
+  if (m_windows.empty()) RebuildWindows();
+  m_windows_visible = true;
+  for (MayaraPpiWindow* win : m_windows)
+    if (win) {
+      win->ShowWindow(true);
+      if (wxFrame* f = win->HostFrame()) f->Raise();
+    }
+  SetToolbarItemState(m_tool_id, true);
+}
+
 void mayara_pi::SyncLocalServerUrl() {
   if (!m_client) return;
   const bool use_local = m_server && m_server->Enabled() &&
@@ -1046,21 +1399,129 @@ void mayara_pi::OnToolbarToolCallback(int id) {
 }
 
 void mayara_pi::OnContextMenuItemCallback(int id) {
+  // The canvas is whatever the pointer was over when the menu opened; hold it,
+  // because the pointer moves onto the menu itself from here on.
+  const int canvas = m_menu_canvas;
   if (id == m_mi_overlay) {
-    m_overlay_enabled = !m_overlay_enabled;
-    SaveConfig();
-    GetOCPNCanvasWindow()->Refresh(false);
+    // Not from inside the host menu's own event handler: let it close first.
+    if (m_parent_window)
+      m_parent_window->CallAfter([this, canvas]() { ShowOverlayMenu(canvas); });
+  } else if (id == m_mi_menu) {
+    ShowRadarMenu(canvas);
   } else if (id == m_mi_ppi) {
-    TogglePpiWindow();
+    // "Show" also means "bring to the front": a window hidden behind the chart
+    // is not showing as far as anyone looking at the screen is concerned.
+    if (PpiFrontmost())
+      TogglePpiWindow();
+    else
+      RaisePpiWindows();
   }
 }
 
 // Called just before the canvas context menu is shown; sync the check marks
 // to the live state.
-void mayara_pi::PrepareContextMenu(int /*canvasIndex*/) {
-  if (m_mi_overlay_item) m_mi_overlay_item->Check(m_overlay_enabled);
+void mayara_pi::PrepareContextMenu(int canvasIndex) {
+  // The menu item acts on the canvas whose menu this is, so remember it: the
+  // callback that follows is not told which canvas it came from.
+  m_menu_canvas = canvasIndex;
+  RefreshContextMenu(canvasIndex);
+}
+
+// OpenCPN copies our items' labels and check marks when it builds the popup,
+// so everything shown here has to be right before the menu opens. It calls
+// PrepareContextMenu for that, but only for API versions it knows about, so
+// the heartbeat runs this as well against the canvas under the pointer.
+void mayara_pi::RefreshContextMenu(int canvas) {
+  if (m_mi_overlay_item) {
+    // Name the canvas only when there is more than one, so the single-canvas
+    // case does not carry a number that means nothing.
+    const wxString what = OverlayLabel(canvas);
+    m_mi_overlay_item->SetItemLabel(
+        GetCanvasCount() > 1
+            ? wxString::Format(_("Mayara radar overlay (chart %d): %s"),
+                               canvas + 1, what)
+            : wxString::Format(_("Mayara radar overlay: %s"), what));
+  }
   if (m_mi_ppi_item)
-    m_mi_ppi_item->Check(AnyWindowShown());
+    m_mi_ppi_item->SetItemLabel(PpiFrontmost() ? _("Hide Mayara PPI")
+                                               : _("Show Mayara PPI"));
+}
+
+// What this canvas is currently set to, for the menu entry.
+wxString mayara_pi::OverlayLabel(int canvas) const {
+  const int sel = OverlaySel(canvas);
+  if (sel == kOverlayNone) return _("none");
+  if (sel == kOverlayAll) return _("all radars");
+  const std::vector<std::string> names =
+      m_client ? m_client->RadarNames() : std::vector<std::string>();
+  if (sel >= 0 && sel < static_cast<int>(names.size()))
+    return wxString::FromUTF8(names[sel].c_str());
+  return wxString::Format(_("radar %d"), sel + 1);
+}
+
+// Our own popup, on the canvas that was right-clicked. Ours to build and ours
+// to read, so it works whatever the host does with plugin submenus.
+void mayara_pi::ShowOverlayMenu(int canvas) {
+  if (!m_client) return;
+  const std::vector<std::string> names = m_client->RadarNames();
+  wxWindow* cw = GetCanvasByIndex(canvas);
+  if (!cw) cw = GetOCPNCanvasWindow();
+  if (!cw) return;
+
+  wxMenu menu;
+  menu.AppendRadioItem(m_mi_ov_none, _("None"));
+  const int shown = std::min(static_cast<int>(names.size()), kMaxMenuRadars);
+  for (int i = 0; i < shown; ++i)
+    menu.AppendRadioItem(m_mi_ov_radar[i], wxString::FromUTF8(names[i].c_str()));
+  if (shown > 1) menu.AppendRadioItem(m_mi_ov_all, _("All radars"));
+
+  const int sel = OverlaySel(canvas);
+  int on = m_mi_ov_none;
+  if (sel == kOverlayAll && shown > 1)
+    on = m_mi_ov_all;
+  else if (sel >= 0 && sel < shown)
+    on = m_mi_ov_radar[sel];
+  if (wxMenuItem* it = menu.FindItem(on)) it->Check(true);
+
+  const int got =
+      cw->GetPopupMenuSelectionFromUser(menu, cw->ScreenToClient(wxGetMousePosition()));
+  if (got == wxID_NONE) return;  // dismissed
+
+  int now = kOverlayNone;
+  if (got == m_mi_ov_all) {
+    now = kOverlayAll;
+  } else {
+    for (int i = 0; i < kMaxMenuRadars; ++i)
+      if (got == m_mi_ov_radar[i]) now = i;
+  }
+  m_overlay_sel[canvas] = now;
+  SaveConfig();
+  // Asking to see a radar on the chart means asking it to run: a radar in
+  // standby would draw nothing. One-shot, on the selection itself -- putting
+  // it back in standby afterwards is the operator's call and is left alone.
+  for (int i : OverlayRadars(canvas)) {
+    RadarControls* c = m_client->ControlsAt(i);
+    if (!c) continue;
+    const ControlValue pw = c->Value("power");
+    if (pw.has_value && pw.value < 2.0)
+      m_client->SetControlAt(i, "power", "{\"value\":2}");
+  }
+  SyncAutoRange();
+  RefreshContextMenu(canvas);
+  GetOCPNCanvasWindow()->Refresh(false);
+}
+
+// Right-clicking pops the menu where the pointer is, so the canvas under the
+// pointer is the canvas the menu belongs to.
+int mayara_pi::CanvasUnderMouse() const {
+  const wxPoint p = wxGetMousePosition();
+  const int n = GetCanvasCount();
+  for (int i = 0; i < n; ++i) {
+    wxWindow* w = GetCanvasByIndex(i);
+    if (!w) continue;
+    if (wxRect(w->GetScreenPosition(), w->GetSize()).Contains(p)) return i;
+  }
+  return -1;
 }
 
 // Split the discovered radars into m_windows_count near-even groups. Window w
@@ -1175,9 +1636,9 @@ void mayara_pi::RebuildWindows() {
       });
     }
     win->ApplyTheme(ThemeFor(m_color_scheme));
-    win->SetOverlayControl([this]() { return m_overlay_enabled; },
+    win->SetOverlayControl([this]() { return OverlayOnAny(); },
                            [this](bool on) {
-                             m_overlay_enabled = on;
+                             SetOverlayAll(on);
                              SaveConfig();
                              GetOCPNCanvasWindow()->Refresh(false);
                            });
@@ -1332,11 +1793,24 @@ void mayara_pi::TogglePpiWindow() {
 bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
                                            PlugIn_ViewPort* vp, int canvasIndex,
                                            int priority) {
-  if (!m_overlay_enabled || !m_client || !vp || !vp->bValid) return false;
+  if (!OverlayOn(canvasIndex) || !m_client || !vp || !vp->bValid)
+    return false;
   // OpenCPN calls this once per priority level per frame. Draw only at the
   // legacy chart-overlay layer; the higher passes (OVER_EMBOSS/OVER_UI) render
   // on top of the toolbar and chart bar, so drawing there paints over them.
   if (priority != OVERLAY_LEGACY) return false;
+  // What this chart is showing, in real metres, for "chart scale sets range".
+  // Same Mercator correction as the overlay itself: view_scale_ppm is pixels
+  // per Mercator metre. The radius is half the shorter side, i.e. the largest
+  // circle the canvas holds -- a radar covering that covers the chart.
+  {
+    const double coslat =
+        std::max(0.02, std::cos(vp->clat * M_PI / 180.0));
+    const double ppm = vp->view_scale_ppm / coslat;
+    if (ppm > 0)
+      m_canvas_radius_m[canvasIndex] =
+          0.5 * std::min(vp->pix_width, vp->pix_height) / ppm;
+  }
   const int n = m_client->RadarCount();
   if (n == 0) return false;
   if (static_cast<int>(m_overlay_tex.size()) != n)
@@ -1350,7 +1824,7 @@ bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
     uint32_t range;
   };
   std::vector<Item> items;
-  for (int i : m_client->ShownRadars()) {  // at most two displayed radars
+  for (int i : OverlayRadars(canvasIndex)) {
     RadarState* st = m_client->StateAt(i);
     if (st && st->RangeMeters() > 0) items.push_back({i, st->RangeMeters()});
   }
@@ -1361,7 +1835,8 @@ bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glEnable(GL_TEXTURE_2D);
-  glColor4f(m_radar_intensity, m_radar_intensity, m_radar_intensity, 1.0f);
+  const float alpha = m_prefs.overlay_alpha / 100.0f;
+  glColor4f(m_radar_intensity, m_radar_intensity, m_radar_intensity, alpha);
 
   // Each radar is drawn as an annulus from the next-shorter shown radar's range
   // out to its own range; the shortest is a full disc. So the shorter radar
@@ -1377,6 +1852,10 @@ bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
 
   glBindTexture(GL_TEXTURE_2D, 0);
   glDisable(GL_TEXTURE_2D);
+  // Guard zones over the chart, in the same colours as the PPI so a zone reads
+  // as the same thing in both places.
+  if (m_prefs.overlay_zones)
+    for (const Item& it : items) DrawZonesOverlay(it.idx, vp);
   glDisable(GL_BLEND);
   return drew;
 }
@@ -1463,6 +1942,71 @@ bool mayara_pi::DrawRadarOverlay(int index, PlugIn_ViewPort* vp,
   }
   glPopMatrix();
   return true;
+}
+
+// The guard zones of one radar, drawn on the chart. Geometry matches
+// DrawGuardZones on the PPI: bow-relative radians, metres, and the same
+// 1/cos(lat) correction the echo disc uses -- without it a zone would sit at a
+// different distance from the echoes it is watching.
+void mayara_pi::DrawZonesOverlay(int index, PlugIn_ViewPort* vp) {
+  RadarControls* ctrl = m_client ? m_client->ControlsAt(index) : nullptr;
+  RadarState* state = m_client ? m_client->StateAt(index) : nullptr;
+  if (!ctrl || !state) return;
+
+  double lat = m_ownship_lat, lon = m_ownship_lon;
+  if (lat == 0.0 && lon == 0.0)
+    if (!state->Position(lat, lon)) return;
+  wxPoint centre;
+  GetCanvasPixLL(vp, &centre, lat, lon);
+  const double coslat = std::max(0.02, std::cos(lat * M_PI / 180.0));
+  const double ppm = vp->view_scale_ppm / coslat;
+
+  double heading = m_heading_true, sh = 0.0;
+  if (heading == 0.0 && state->Heading(sh)) heading = sh;
+  // Screen angle trails the bearing by 90 degrees, and the chart may be
+  // rotated under us.
+  const double base = (heading + vp->rotation * 180.0 / M_PI) * M_PI / 180.0 -
+                      M_PI / 2.0;
+
+  const float fill[2][4] = {{144 / 255.f, 238 / 255.f, 144 / 255.f, 0.25f},
+                            {173 / 255.f, 216 / 255.f, 230 / 255.f, 0.25f}};
+  const float line[2][4] = {{0.0f, 128 / 255.f, 0.0f, 0.6f},
+                            {0.0f, 0.0f, 1.0f, 0.6f}};
+  const char* ids[2] = {"guardZone1", "guardZone2"};
+
+  for (int z = 0; z < 2; ++z) {
+    const ControlValue v = ctrl->Value(ids[z]);
+    if (!v.has_enabled || !v.enabled) continue;
+    if (v.endDistance <= v.startDistance) continue;
+    const double r_in = v.startDistance * ppm, r_out = v.endDistance * ppm;
+    if (r_out < 2) continue;
+    double a0 = base + v.value, a1 = base + v.endValue;
+    if (std::fabs(v.endValue - v.value) < 0.001) a1 = a0 + 2.0 * M_PI;
+    if (a1 < a0) a1 += 2.0 * M_PI;
+    const int seg = std::max(8, static_cast<int>((a1 - a0) * 24));
+
+    glColor4fv(fill[z]);
+    glBegin(GL_TRIANGLE_STRIP);
+    for (int i = 0; i <= seg; ++i) {
+      const double a = a0 + (a1 - a0) * i / seg;
+      const double c = std::cos(a), sn = std::sin(a);
+      glVertex2f(centre.x + r_in * c, centre.y + r_in * sn);
+      glVertex2f(centre.x + r_out * c, centre.y + r_out * sn);
+    }
+    glEnd();
+
+    glColor4fv(line[z]);
+    glLineWidth(1.0f);
+    for (double r : {r_in, r_out}) {
+      glBegin(GL_LINE_STRIP);
+      for (int i = 0; i <= seg; ++i) {
+        const double a = a0 + (a1 - a0) * i / seg;
+        glVertex2f(centre.x + r * std::cos(a), centre.y + r * std::sin(a));
+      }
+      glEnd();
+    }
+  }
+  glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 }
 
 void mayara_pi::SetPositionFixEx(PlugIn_Position_Fix_Ex& pfix) {

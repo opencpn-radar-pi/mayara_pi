@@ -32,10 +32,6 @@ class ControlsPanel : public wxScrolledWindow {
   // one) the set of radars its selector may switch between.
   void SetRadarIndex(int index);
   int RadarIndex() const { return m_index; }
-  // View-only mode shows just the View controls (opened by the View icon);
-  // full mode shows everything else.
-  void SetViewMode(bool view_only);
-  bool IsViewMode() const { return m_view_only; }
   // Single-control mode shows just one control (opened by a gauge icon).
   void SetSingleControl(const std::string& id);
   const std::string& SingleControl() const { return m_single_id; }
@@ -99,8 +95,14 @@ class ControlsPanel : public wxScrolledWindow {
                        std::function<void(const PpiPrefs&)> set);
 
  private:
+  static const int kScrollBarW = 10;  // gutter for the scrollbar we draw
+  wxSizer* WithScrollGutter(wxSizer* content);
+  wxRect ThumbRect() const;
+  void OnPaint(wxPaintEvent& event);
+  void OnBarMouse(wxMouseEvent& event);
   wxSizer* MakeCloseRow();  // a "Controls  ×" header row
   void ThemeChildren();
+  void ScrollSectionIntoView(wxWindow* header, wxSizer* content);
   void AddCollapsibleSection(wxSizer* root, const wxString& title,
                              const std::string& key,
                              std::function<void(wxSizer*)> fill);
@@ -134,7 +136,6 @@ class ControlsPanel : public wxScrolledWindow {
   MayaraClient* m_client;  // not owned
   int m_index = 0;         // which radar these controls drive
   std::vector<int> m_radar_list;  // radars this window hosts (for the selector)
-  bool m_view_only = false;       // show only the View controls
   std::string m_single_id;        // non-empty: show only this control
   wxTimer m_timer;
   uint64_t m_last_gen = ~0ull;
@@ -160,7 +161,8 @@ class ControlsPanel : public wxScrolledWindow {
   std::function<void(int)> m_set_threshold;
   std::function<bool()> m_get_dock;
   std::function<void(bool)> m_set_dock;
-  bool m_rebuilding = false;  // true while widgets are being destroyed
+  bool m_rebuilding = false;
+  bool m_dragging_bar = false;  // the drawn scrollbar's thumb  // true while widgets are being destroyed
   std::function<VrmEbl(int)> m_vrm_get;
   std::function<void(int, const VrmEbl&)> m_vrm_set;
   std::function<ZoneEdit()> m_zone_get;
