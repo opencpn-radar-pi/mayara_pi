@@ -213,6 +213,8 @@ int mayara_pi::Init() {
     if (AnyWindowShown() && !m_ocpn_fullscreen) CaptureWindowState();
 
     PollGuardAlarms();
+    FeedHeading();
+    FeedTargets();
     SyncChartRange();
     SyncAutoRange();  // after it: the nested radar follows the outer one
     FitChartMenu();
@@ -356,6 +358,11 @@ void mayara_pi::LoadConfig() {
   cfg->Read("OverlayZones", &ozones, true);
   // "AutoRange" was this setting's name when it was the only one; read it once
   // so an existing config keeps its meaning, but write the honest name.
+  bool fhead = false, ftarg = false;
+  cfg->Read("SendHeadingToOpenCPN", &fhead, false);
+  cfg->Read("SendTargetsToOpenCPN", &ftarg, false);
+  m_feed_heading = fhead;
+  m_feed_targets = ftarg;
   bool nrange = false, crange = false;
   cfg->Read("AutoRange", &nrange, false);
   cfg->Read("NestSecondRadar", &nrange, nrange);
@@ -550,6 +557,8 @@ void mayara_pi::SaveConfig() {
   cfg->Write("MenuAutoHide", static_cast<long>(m_prefs.menu_autohide));
   cfg->Write("OverlayAlpha", static_cast<long>(m_prefs.overlay_alpha));
   cfg->Write("OverlayZones", m_prefs.overlay_zones);
+  cfg->Write("SendHeadingToOpenCPN", m_feed_heading);
+  cfg->Write("SendTargetsToOpenCPN", m_feed_targets);
   cfg->Write("NestSecondRadar", m_prefs.nest_range);
   cfg->Write("ChartScaleSetsRange", m_prefs.chart_range);
   wxString orient;
@@ -796,6 +805,100 @@ void mayara_pi::SyncAutoRange() {
 // Let the chart's own zoom drive the radar: the operator zooms once and the
 // picture follows. The target is the shortest range the radar offers that
 // still covers the chart, so zooming in steps the radar down with it.
+// --- Feeding OpenCPN -------------------------------------------------------
+// OpenCPN already knows how to draw a heading and a tracked target; what it
+// lacks is the radar's version of them. These push NMEA 0183 into its own
+// stream, so the radar's heading can drive the chart and its targets land in
+// OpenCPN's target list rather than only in our picture.
+
+// $-sentence with the XOR checksum appended. `body` excludes the leading '$'.
+static wxString NmeaSentence(const std::string& body) {
+  unsigned char sum = 0;
+  for (char c : body) sum ^= static_cast<unsigned char>(c);
+  return wxString::Format("$%s*%02X\r\n", body.c_str(), sum);
+}
+
+// A number with a fixed number of decimals, whatever the locale thinks a
+// decimal point is: NMEA says '.', and LC_NUMERIC would happily write ','.
+static std::string NmeaNum(double v, int decimals) {
+  char buf[32];
+  std::snprintf(buf, sizeof(buf), "%.*f", decimals, v);
+  for (char* p = buf; *p; ++p)
+    if (*p == ',') *p = '.';
+  return buf;
+}
+
+void mayara_pi::FeedHeading() {
+  if (!m_feed_heading || !m_client) return;
+  // The radar's own heading, not OpenCPN's: feeding its own value back to it
+  // would be a loop that says nothing.
+  double hdt = 0.0;
+  bool have = false;
+  for (int i = 0; i < m_client->RadarCount() && !have; ++i) {
+    RadarState* st = m_client->StateAt(i);
+    if (st && st->Heading(hdt)) have = true;
+  }
+  if (!have) return;
+  while (hdt < 0) hdt += 360.0;
+  while (hdt >= 360.0) hdt -= 360.0;
+  PushNMEABuffer(NmeaSentence("RAHDT," + NmeaNum(hdt, 1) + ",T"));
+}
+
+void mayara_pi::FeedTargets() {
+  if (!m_feed_targets || !m_client) return;
+  const wxDateTime now = wxDateTime::UNow().ToUTC();
+  const std::string stamp = NmeaNum(now.GetHour() * 10000 + now.GetMinute() * 100 +
+                                        now.GetSecond() +
+                                        now.GetMillisecond() / 1000.0,
+                                    2);
+
+  for (int i = 0; i < m_client->RadarCount(); ++i) {
+    for (const RadarTarget& t : m_client->TargetsAt(i)) {
+      // TTM's target number is two digits, and target ids are not: hand out
+      // small numbers and keep them for as long as the target lives, so a
+      // target does not change identity under OpenCPN mid-track.
+      const std::string key = std::to_string(i) + ":" + std::to_string(t.id);
+      auto it = m_ttm_number.find(key);
+      if (it == m_ttm_number.end()) {
+        if (t.status == RadarTarget::kLost) continue;  // no number to spare
+        int n = 0;
+        std::set<int> used;
+        for (const auto& kv : m_ttm_number) used.insert(kv.second);
+        while (n < 100 && used.count(n)) ++n;
+        if (n >= 100) continue;  // all 100 in use; drop this one rather than
+                                 // steal a number a tracked target is using
+        it = m_ttm_number.emplace(key, n).first;
+      }
+      const int num = it->second;
+      if (t.status == RadarTarget::kLost) m_ttm_number.erase(key);
+
+      double brg = t.bearing_deg;
+      while (brg < 0) brg += 360.0;
+      while (brg >= 360.0) brg -= 360.0;
+      const char status = t.status == RadarTarget::kLost      ? 'L'
+                          : t.status == RadarTarget::kAcquiring ? 'Q'
+                                                              : 'T';
+      char nbuf[8];
+      std::snprintf(nbuf, sizeof(nbuf), "%02d", num);
+      std::string body = std::string("RATTM,") + nbuf;
+      body += "," + NmeaNum(t.distance_m / 1852.0, 3);
+      body += "," + NmeaNum(brg, 1) + ",T";
+      body += "," + (t.has_motion ? NmeaNum(t.speed_kn, 1) : std::string());
+      body += "," + (t.has_motion ? NmeaNum(t.course_deg, 1) : std::string());
+      body += ",T";
+      body += "," + (t.has_danger ? NmeaNum(t.cpa_m / 1852.0, 3) : std::string());
+      body += "," + (t.has_danger ? NmeaNum(t.tcpa_s / 60.0, 1) : std::string());
+      body += ",N,,";  // speed/distance units, then the (unnamed) target
+      body += status;
+      body += ",,";  // reference target: none
+      body += stamp;
+      body += ",";
+      body += t.manual ? 'M' : 'A';
+      PushNMEABuffer(NmeaSentence(body));
+    }
+  }
+}
+
 void mayara_pi::SyncChartRange() {
   if (!m_prefs.chart_range || !m_client) return;
   for (const auto& kv : m_canvas_radius_m) {
@@ -1257,6 +1360,26 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
         "per window)."));
   whint->Wrap(330);
   dbox->Add(whint, 0, wxALL, 8);
+
+  dbox->Add(new wxStaticLine(dpage), 0, wxEXPAND | wxALL, 8);
+  dbox->Add(new wxStaticText(dpage, wxID_ANY, _("Feed OpenCPN")), 0,
+            wxLEFT | wxRIGHT, 8);
+  auto* cb_head = new wxCheckBox(dpage, wxID_ANY,
+                                 _("Radar heading as NMEA HDT"));
+  auto* cb_targ = new wxCheckBox(dpage, wxID_ANY,
+                                 _("Radar targets as NMEA TTM"));
+  cb_head->SetValue(m_feed_heading);
+  cb_targ->SetValue(m_feed_targets);
+  dbox->Add(cb_head, 0, wxLEFT | wxRIGHT | wxTOP, 8);
+  dbox->Add(cb_targ, 0, wxLEFT | wxRIGHT | wxTOP, 8);
+  auto* fhint = new wxStaticText(
+      dpage, wxID_ANY,
+      _("Sent into OpenCPN's own data stream once a second, so the radar can "
+        "drive the chart's heading and its targets appear in OpenCPN's target "
+        "list alongside AIS. Leave both off if another source already "
+        "provides them."));
+  fhint->Wrap(330);
+  dbox->Add(fhint, 0, wxALL, 8);
   dpage->SetSizer(dbox);
   book->AddPage(dpage, _("Display"));
 
@@ -1317,6 +1440,14 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
 
   dlg.SetSizerAndFit(top);
   if (dlg.ShowModal() != wxID_OK) return;
+
+  if (cb_head->GetValue() != m_feed_heading ||
+      cb_targ->GetValue() != m_feed_targets) {
+    m_feed_heading = cb_head->GetValue();
+    m_feed_targets = cb_targ->GetValue();
+    if (!m_feed_targets) m_ttm_number.clear();
+    SaveConfig();
+  }
 
   const int chosen = spin->GetValue();
   if (chosen != m_windows_count) {

@@ -74,11 +74,20 @@ fixed server-side once the two endpoints were compared.
 
 ## Feeding OpenCPN
 
-- **Radar heading → NMEA HDM/HDT** (`pass_heading_to_opencpn`), for boats where
-  the radar is the best heading source.
-- **ARPA targets → TTM / AIVDM** (`TTMtoO`, `AIVDMtoO`), so targets land in
-  OpenCPN's own target list instead of only being drawn by us.
-- **Target-mixer address** — forward targets to another host.
+- **Radar heading → NMEA HDT** — done. Settings → Display → Feed OpenCPN. The
+  radar's own heading, not OpenCPN's fix fed back to it, at 1 Hz. Off by
+  default: on most boats another source already provides heading, and two
+  disagreeing sources is worse than one.
+- **ARPA targets → TTM** — done, same place. TTM's target number is two digits
+  and target ids are not, so numbers are handed out and held for the life of a
+  target; a target that goes lost is reported once as `L` and gives its number
+  back.
+- **ARPA targets → AIVDM** — not done. TTM is what OpenCPN's own target list
+  wants; AIVDM would mean minting AIS identities for radar contacts, which
+  makes them indistinguishable from real AIS traffic downstream.
+- **Target-mixer address** — not done. Forwarding to another host is
+  mayara-server's business: it already serves every client on the network,
+  which is the same job done once instead of per plugin.
 
 ## Colours
 

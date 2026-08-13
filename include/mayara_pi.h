@@ -153,7 +153,13 @@ class mayara_pi : public opencpn_plugin_121 {
   std::vector<int> OverlayRadars(int canvas) const;
   // Keep the shorter-range radar at a quarter of the longer one's range.
   void SyncAutoRange();
-  void SyncChartRange();  // the chart's zoom drives the overlaid radar
+  void SyncChartRange();
+  // NMEA out: the radar's heading and its tracked targets, for OpenCPN itself.
+  void FeedHeading();
+  void FeedTargets();
+  bool m_feed_heading = false;
+  bool m_feed_targets = false;
+  std::map<std::string, int> m_ttm_number;  // target key -> TTM target number  // the chart's zoom drives the overlaid radar
   std::map<int, double> m_canvas_radius_m;  // per canvas, what the chart shows
   // Open the controls with no picture, for someone who only wants the menu.
   // The controls drawn over the chart canvas, without a picture.
