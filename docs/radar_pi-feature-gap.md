@@ -91,9 +91,31 @@ fixed server-side once the two endpoints were compared.
 
 ## Colours
 
-radar_pi lets the user set trail start/end, Doppler approaching/receding,
-strong/intermediate/weak, ARPA edge, AIS text and PPI background. mayara_pi
-takes the legend wholesale from the server with no user override.
+Done, and answering radar_pi issue
+[#294](https://github.com/opencpn-radar-pi/radar_pi/issues/294) ("Color palette
+templates") rather than radar_pi's own eleven separate colour settings.
+
+A palette re-colours the server's legend **by role** instead of replacing it:
+the legend says which indices are the echo-strength ramp, which is the static
+background, which two are Doppler and where the trail history starts, so eight
+colours cover any radar whatever legend length it reports. Anything the layout
+does not account for is left exactly as the server sent it.
+
+Four profiles ship, in Settings → Colours:
+
+1. **Standard Mayara** — the radar's own legend, untouched.
+2. **Navico red**
+3. **Garmin**
+4. **Furuno**
+
+The three named after makers are in the spirit of their displays, not measured
+from them. None of the four can be edited in place: changing a colour copies the
+profile to one of your own first, so "Navico red" means the same thing on every
+boat. User profiles are stored in the OpenCPN config; the built-ins are rebuilt
+from code each start, so improving one reaches everybody.
+
+Not covered: ARPA edge and AIS text (drawn from the UI theme, not the legend)
+and the PPI background (black, and the picture is designed against it).
 
 ## Diagnostics and testing
 

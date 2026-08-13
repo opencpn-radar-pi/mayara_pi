@@ -17,9 +17,8 @@
 #include <mutex>
 #include <vector>
 
-struct Rgba {
-  uint8_t r = 0, g = 0, b = 0, a = 0;
-};
+#include "RadarPalette.h"
+#include "Rgba.h"
 
 // One server-tracked ARPA/MARPA target (the server owns tracking; the plugin
 // only renders what it streams). Position is polar from the radar: bearing is
@@ -38,6 +37,17 @@ struct RadarTarget {
   double tcpa_s = 0.0;
   bool is_dangerous = false;
   bool manual = false;        // acquisition == "manual"
+};
+
+// Which legend index means what, straight from the server's legend block. The
+// palette needs this to know which entries are echo strength, which are trail
+// history and which are the two Doppler colours.
+struct LegendLayout {
+  int pixel_colors = 0;      // echo ramp is [1, pixel_colors)
+  int static_background = -1;
+  int doppler_approaching = -1;
+  int doppler_receding = -1;
+  int history_start = -1;    // trail ramp is [history_start, legend size)
 };
 
 class RadarState {
@@ -85,6 +95,12 @@ class RadarState {
   // Echo brightness scale (1.0 = full; lower dims the PPI at dusk/night).
   void SetIntensity(float f);
 
+  // What the legend's indices mean, and the palette to paint them with. The
+  // server legend is kept as it arrived, so switching back to "from the
+  // server" costs nothing and every palette change starts from the same place.
+  void SetLegendLayout(const LegendLayout& layout);
+  void SetPalette(const RadarPalette& palette);
+
   // Legend intensity-band boundaries (from the server legend: lowReturn /
   // mediumReturn / strongReturn indices), used by the display threshold.
   void SetLegendBands(int low, int medium, int strong);
@@ -106,7 +122,12 @@ class RadarState {
   int maxlen_ = 0;
   std::vector<uint8_t> raster_;      // spokes_ * maxlen_ legend indices
   std::vector<uint16_t> spoke_len_;  // valid cells per spoke
-  std::vector<Rgba> legend_;
+  std::vector<Rgba> legend_;      // in use: the server's, or re-coloured
+  std::vector<Rgba> legend_src_;  // exactly as the server sent it
+  LegendLayout layout_;
+  void RebuildLegend();  // legend_ = legend_src_ through the current palette
+  RadarPalette palette_;
+  bool has_palette_ = false;
   uint32_t range_ = 0;
   uint64_t generation_ = 0;
   bool has_data_ = false;

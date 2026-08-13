@@ -20,6 +20,7 @@
 #include "ocpn_plugin.h"
 
 #include "NavState.h"
+#include "RadarPalette.h"
 #include "RadarDisplayPanel.h"  // PpiPrefs, ZoneEdit
 
 // Forward declarations keep implementation types out of this header.
@@ -154,6 +155,14 @@ class mayara_pi : public opencpn_plugin_121 {
   // Keep the shorter-range radar at a quarter of the longer one's range.
   void SyncAutoRange();
   void SyncChartRange();
+  // Echo colour profiles: the four built-ins plus whatever the user has made
+  // from them. The active one is applied to every radar.
+  std::vector<RadarPalette> m_palettes;
+  std::string m_palette_active;
+  void LoadPalettes(wxFileConfig* cfg);
+  void SavePalettes(wxFileConfig* cfg);
+  const RadarPalette& ActivePalette() const;
+  void ApplyPalette();
   // NMEA out: the radar's heading and its tracked targets, for OpenCPN itself.
   void FeedHeading();
   void FeedTargets();
