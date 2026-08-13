@@ -52,9 +52,17 @@ fixed server-side once the two endpoints were compared.
   overlays (None / each radar by name / All), so two charts can carry one radar
   each, the same one, or both nested. The View toggle still acts on every
   canvas, since a panel button has no canvas of its own.
-- **Auto-range the nested radar** — done, off by default. With a canvas set to
+- **Nest the second radar** — done, off by default. With a canvas set to
   "All", the second radar is held at the settable range nearest a quarter of
-  the first's, so the inner picture stays worth looking at.
+  the first's, so the inner picture stays worth looking at. Each radar is drawn
+  as an annulus from the next-shorter radar's range out to its own, so the
+  shorter radar owns the inner circle outright rather than blending with the
+  longer one there.
+- **Chart scale sets range** — done, off by default, and not something radar_pi
+  offers per canvas: the chart's own zoom drives the overlaid radar to the
+  shortest range that still covers the canvas.
+- **Transmit on selection** — picking a radar to overlay takes it out of
+  standby, since a standby radar draws nothing.
 - **Overlay opacity** — done, 25/50/75/100% in the View section.
 - **Guard zones on the overlay** — done, in the PPI's colours.
 - **Trails on overlay** — not applicable. mayara-server bakes trails into the
