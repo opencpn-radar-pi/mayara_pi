@@ -368,14 +368,17 @@ void mayara_pi::LoadConfig() {
   cfg->Read("FixedLat", &fla, 0.0);
   cfg->Read("FixedLon", &flo, 0.0);
   cfg->Read("LogLevel", &lvl, 0);
-  m_diag.heading_source = static_cast<int>(hs);
-  m_diag.heading_timeout_s = static_cast<int>(hto);
+  m_diag.heading_source =
+      static_cast<int>(hs < 0 ? 0 : (hs > Diagnostics::kFixedHeading
+                                         ? Diagnostics::kFixedHeading
+                                         : hs));
+  m_diag.heading_timeout_s = static_cast<int>(hto < 0 ? 0 : (hto > 3600 ? 3600 : hto));
   m_diag.fixed_heading = fh;
   m_diag.cog_as_heading = cog;
   m_diag.fixed_position = fpos;
   m_diag.fixed_lat = fla;
   m_diag.fixed_lon = flo;
-  m_diag.log_level = static_cast<int>(lvl);
+  m_diag.log_level = static_cast<int>(lvl < 0 ? 0 : (lvl > 2 ? 2 : lvl));
   // "OverlayOffCanvases" is a comma list; the old single OverlayEnabled flag is
   // still honoured so an existing config does not silently switch the overlay
   // back on.
@@ -1139,7 +1142,7 @@ void mayara_pi::LogSettings() const {
              "fallback %s), fixed position %s, palette \"%s\", overlay "
              "alpha %d%%, chart-scale range %s, nest second radar %s, feed "
              "HDT %s, feed TTM %s",
-             kSources[m_diag.heading_source & 3], m_diag.fixed_heading,
+             kSources[m_diag.heading_source], m_diag.fixed_heading,
              m_diag.heading_timeout_s, m_diag.cog_as_heading ? "on" : "off",
              m_diag.fixed_position ? "on" : "off",
              wxString::FromUTF8(m_palette_active.c_str()),
@@ -1910,9 +1913,12 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
                    : wxString(_("none — the overlay cannot be drawn"))));
   };
   update_live();
-  auto* live_timer = new wxTimer(&dlg);
+  // On the stack, after dlg: it is destroyed first, so it stops before the
+  // handler it posts to dies. Heap-allocated it leaked, and on Cancel (which
+  // returns early) it kept ticking into a destroyed dialog.
+  wxTimer live_timer(&dlg);
   dlg.Bind(wxEVT_TIMER, [update_live](wxTimerEvent&) { update_live(); });
-  live_timer->Start(1000);
+  live_timer.Start(1000);
 
   top->Add(book, 1, wxEXPAND | wxALL, 8);
   top->Add(dlg.CreateButtonSizer(wxOK | wxCANCEL), 0, wxALIGN_RIGHT | wxALL, 8);
@@ -1972,7 +1978,6 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   dlg.SetSizerAndFit(top);
   if (dlg.ShowModal() != wxID_OK) return;
 
-  live_timer->Stop();
   {
     Diagnostics d = m_diag;
     d.heading_source = hchoice->GetSelection();
@@ -2351,6 +2356,9 @@ void mayara_pi::RebuildWindows() {
                                 [this]() { RebuildWindows(); });
                         });
     win->SetNavProvider([this]() { return m_nav; });
+    win->SetHeadingProvider([this](int radar, double& deg) {
+      return ResolveHeading(radar, &deg, nullptr);
+    });
     // Costs nothing when logging is off: the panel only calls this when it is
     // set, and it is only set while the operator is asking.
     if (m_diag.log_level >= 2)

@@ -284,8 +284,11 @@ void RadarState::Clear() {
 bool RadarState::RenderOverlayRGBA(uint8_t* rgba, int size, double rot_deg,
                                    double inner_frac) {
   std::lock_guard<std::mutex> lock(m_);
+  // Guard first: a negative size wraps the length and the memset would run off
+  // into whatever follows.
+  if (size <= 0) return false;
   std::memset(rgba, 0, static_cast<size_t>(size) * size * 4);
-  if (!has_data_ || disc_size_ <= 0 || size <= 0) return false;
+  if (!has_data_ || disc_size_ <= 0) return false;
   EnsureDisc();
 
   const double dcenter = disc_size_ / 2.0;

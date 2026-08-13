@@ -166,7 +166,9 @@ std::string MayaraClient::StatusLine() {
 // left running for a week is a leak.
 void MayaraClient::LogLine(int level, const std::string& msg) {
   std::lock_guard<std::mutex> lock(m_log_mutex);
-  if (m_log.size() >= 500) return;
+  // Evict the oldest rather than refuse the newest: a burst that overruns the
+  // cap between two drains ends in the lines that explain it.
+  if (m_log.size() >= 500) m_log.erase(m_log.begin());
   m_log.push_back({level, msg});
 }
 

@@ -112,6 +112,14 @@ class RadarDisplayPanel : public wxPanel {
   void SetPerfLog(std::function<void(const wxString&)> cb) {
     m_perf_log = std::move(cb);
   }
+
+  // Where the heading comes from, decided by the plugin rather than here, so
+  // the Diagnostics settings (source, fixed value, timeout) mean the same
+  // thing on the picture as on the chart. Falls back to the panel's own
+  // OpenCPN-then-radar order when unset.
+  void SetHeadingProvider(std::function<bool(int, double&)> cb) {
+    m_heading_provider = std::move(cb);
+  }
   void SetOrientationChangedCallback(std::function<void(int)> cb) {
     m_on_orientation = std::move(cb);
   }
@@ -225,6 +233,7 @@ class RadarDisplayPanel : public wxPanel {
   wxTimer m_timer;
   std::function<void()> m_on_menu;
   std::function<void(const wxString&)> m_perf_log;
+  std::function<bool(int, double&)> m_heading_provider;
   wxBitmap m_picture;      // the rasterised sweep, reused until it changes
   PpiCacheKey m_picture_key;
   int64_t m_render_us = 0, m_convert_us = 0;
@@ -284,7 +293,7 @@ class RadarDisplayPanel : public wxPanel {
   wxRect m_icon_sea;     // icon-bar: Sea gauge
   wxRect m_icon_rain;    // icon-bar: Rain gauge
   wxRect m_icon_ebl;
-  wxRect m_orient_rect;  // lozenge: which way is up, click to cycle     // icon-bar: EBL/VRM
+  wxRect m_orient_rect;  // lozenge: which way is up, click to cycle
   wxRect m_power_rect;
   wxRect m_range_minus_rect;
   wxRect m_range_plus_rect;

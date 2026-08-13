@@ -144,7 +144,7 @@ class MayaraClient {
   // wxLog defers a worker thread's messages to the main thread's next flush,
   // which can land after this dylib has been unloaded. Level 1 is a problem,
   // 2 is chatter.
-  std::vector<std::pair<int, std::string>> TakeLog();  // apply echo dimming to every radar
+  std::vector<std::pair<int, std::string>> TakeLog();
 
   // Per-radar access (for the composite overlay and multi-PPI windows).
   RadarState* StateAt(int index);

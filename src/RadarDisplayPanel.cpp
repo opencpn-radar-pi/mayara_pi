@@ -443,12 +443,19 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
     double up = 0.0, rot = 0.0, hdg = 0.0;
     bool has_heading = false;
     ResolveOrientation(up, rot, hdg, has_heading);
-    // Course-up needs a course as well as a heading; without one it falls back
-    // to head-up, and saying "CU" then would be a lie.
+    // Head-up asks nothing of anyone: the picture is bow-relative as it
+    // arrives. North-up needs a heading to rotate by, and course-up needs a
+    // course as well -- without either it is really head-up, and the lozenge
+    // says which input is missing rather than just going quiet.
     NavState nav;
     if (m_nav) nav = m_nav();
-    const bool honoured =
-        has_heading && (m_orientation != kCourseUp || nav.has_cog);
+    const bool needs_heading = m_orientation != kHeadUp;
+    const bool needs_cog = m_orientation == kCourseUp;
+    const bool honoured = (!needs_heading || has_heading) &&
+                          (!needs_cog || nav.has_cog);
+    const wxString missing = !has_heading && needs_heading ? _("no heading")
+                             : needs_cog && !nav.has_cog   ? _("no course")
+                                                           : wxString();
     const wxString label = m_orientation == kNorthUp   ? _("North up")
                            : m_orientation == kCourseUp ? _("Course up")
                                                         : _("Head up");
@@ -469,10 +476,11 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
     dc.DrawText(label, x + 11, y + 6);
     m_orient_rect = wxRect(x, y, w, h);
     if (!honoured) {
-      // No heading: the picture is head-up whatever the setting says.
+      // Whatever it says, the picture is head-up until the missing input
+      // arrives.
       dc.SetFont(f);
       dc.SetTextForeground(m_theme.accent_dim);
-      dc.DrawText(_("no heading"), x, y + h + 2);
+      dc.DrawText(missing, x, y + h + 2);
     }
   }
 
@@ -587,7 +595,9 @@ void RadarDisplayPanel::ResolveOrientation(double& up_bearing,
   if (m_nav) nav = m_nav();
   heading = 0.0;
   has_heading = false;
-  if (nav.has_hdt) {
+  if (m_heading_provider) {
+    has_heading = m_heading_provider(m_index, heading);
+  } else if (nav.has_hdt) {
     heading = nav.hdt;
     has_heading = true;
   } else if (RadarState* st = m_client ? m_client->StateAt(m_index) : nullptr) {

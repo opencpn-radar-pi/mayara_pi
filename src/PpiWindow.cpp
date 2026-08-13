@@ -216,6 +216,10 @@ void MayaraPpiWindow::SetPerfLog(std::function<void(const wxString&)> cb) {
   for (RadarDisplayPanel* p : m_radars) p->SetPerfLog(cb);
 }
 
+void MayaraPpiWindow::SetHeadingProvider(std::function<bool(int, double&)> cb) {
+  for (RadarDisplayPanel* p : m_radars) p->SetHeadingProvider(cb);
+}
+
 void MayaraPpiWindow::SetNavProvider(std::function<NavState()> provider) {
   for (RadarDisplayPanel* p : m_radars) p->SetNavProvider(provider);
 }

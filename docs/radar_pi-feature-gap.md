@@ -165,8 +165,14 @@ updated.
 
 Two behaviour fixes came out of it. Heading was previously taken as "0 means
 missing", which is a lie on a boat heading due north; and a missing heading now
-means the overlay is not drawn at all rather than drawn at north. Both go
-through one resolver used by every drawing path.
+means the chart overlay is not drawn at all rather than drawn at north.
+
+The PPI reaches the same resolver through a provider, so the heading source,
+the fixed heading and the timeout mean the same thing on the picture as on the
+chart. It does not share the second fix: a picture with no heading is still
+drawn, because a PPI is bow-relative to begin with and head-up needs no heading
+at all. Its orientation lozenge says which input is missing when north-up or
+course-up cannot be honoured.
 
 **Skew-factor correction** is not a gap: it corrects a brand's wire protocol,
 which is mayara-server's side of the line. **Radar description text** is already
