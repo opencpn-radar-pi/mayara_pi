@@ -189,7 +189,14 @@ jobs:
       # against an older SDK links it to a base OpenCPN is not on.
       SDK_VER: '25.08'
       FLATPAK_BRANCH: beta
-      WX_VER: '32'
+      # No WX_VER here on purpose. Set it, and PluginSetup.cmake puts "-32" in
+      # PKG_TARGET_WX_VER, which PluginConfigure.cmake folds into the packaging
+      # target the metadata publishes as <target>, giving "flatpak-32-aarch64".
+      # OpenCPN compares that string exactly against its own packaging/ABI
+      # target, "flatpak-aarch64" -- the form every flatpak plugin in its
+      # catalog uses -- so the suffix makes the tarball refuse to import with
+      # "incompatible plugin detected". Leaving it unset leaves the suffix out,
+      # and the SDK provides exactly one wxWidgets, so nothing is ambiguous.
     steps:
       - uses: actions/checkout@v5
         with: { submodules: recursive, fetch-depth: 0 }
