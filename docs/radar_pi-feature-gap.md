@@ -74,8 +74,9 @@ fixed server-side once the two endpoints were compared.
 
 ## Feeding OpenCPN
 
-- **Radar heading → NMEA HDT** — done. Settings → Display → Feed OpenCPN. The
-  radar's own heading, not OpenCPN's fix fed back to it, at 1 Hz. Off by
+- **Radar heading → NMEA HDT** — done, and seen arriving in OpenCPN as `$RAHDT`.
+  Settings → Display → Feed OpenCPN. The radar's own heading, not OpenCPN's fix
+  fed back to it, at 1 Hz. Off by
   default: on most boats another source already provides heading, and two
   disagreeing sources is worse than one.
 - **ARPA targets → TTM** — done, same place. TTM's target number is two digits

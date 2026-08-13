@@ -92,10 +92,12 @@ decides what belongs here.
 Both off by default, in Settings → Display:
 
 - **Radar heading as NMEA HDT** — the radar's own heading, for boats where it is
-  the best source. *Sent and logged; not yet confirmed adopted by OpenCPN, which
-  ranks heading sources by its own priority list.*
+  the best source. Whether OpenCPN then uses it is up to its own source
+  priorities: another heading source may outrank it.
 - **Radar targets as NMEA TTM** — so radar targets appear in OpenCPN's target
-  list alongside AIS. Confirmed working.
+  list alongside AIS.
+
+Both confirmed arriving in OpenCPN against live radar.
 
 ## Diagnostics
 
