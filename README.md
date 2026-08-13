@@ -12,9 +12,16 @@ Instead it consumes the [mayara-server](https://github.com/MarineYachtRadar/maya
 REST + WebSocket API (the Signal K Radar API), which handles discovery and
 communication with Navico, Garmin, Furuno and Raymarine radars. 
 
-This has two advantages:
+This has three advantages:
 1. mayara-server supports many more radars than radar_pi.
 2. mayara-server can run on a small router or computer with wired access to the radar, and you can now reliably run radar on OpenCPN on wirelessly connected computers.
+3. **No OpenGL required.** The PPI is a plain `wxPanel` blitting a bitmap that
+   a CPU rasteriser produced, and the chart overlay is drawn either through
+   OpenGL or through `wxGraphicsContext`, whichever OpenCPN is using. radar_pi
+   needs OpenGL for both: its radar window is a `wxGLCanvas`, and its
+   `RenderOverlay(wxDC&)` draws nothing at all — it only switches its own GL
+   mode off. So on a machine where OpenCPN's hardware acceleration is off or
+   unreliable, mayara_pi still shows radar.
 
 If you do not have a Signal K installation, the plugin will download mayara for you, but then advantage 2 disappears.
 

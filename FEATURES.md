@@ -43,7 +43,9 @@ decides what belongs here.
 - **Opacity** 25–100%, and **guard zones drawn on the chart** in the PPI's
   colours.
 - **Works with and without OpenGL.** With hardware acceleration off, the same
-  cached picture is drawn through `wxGraphicsContext`.
+  cached picture is drawn through `wxGraphicsContext`. The PPI never needed GL
+  in the first place — it blits a CPU-rendered bitmap — so the whole plugin runs
+  without it.
 - Optional, and off by default because they write to the hardware:
   **chart scale sets range** (the chart's zoom drives the radar) and
   **nest second radar at 1/4**.
