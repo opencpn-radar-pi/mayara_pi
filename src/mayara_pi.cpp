@@ -2526,6 +2526,37 @@ bool mayara_pi::RenderOverlayMultiCanvas(wxDC& dc, PlugIn_ViewPort* vp,
   std::unique_ptr<wxGraphicsContext> gc(
       wxGraphicsContext::CreateFromUnknownDC(dc));
   if (!gc) return false;
+
+  // The viewport is in physical pixels; a wxDC on a HiDPI screen draws in
+  // logical points. GL never had to care -- its viewport is physical too -- so
+  // on a Retina display every coordinate here was twice what it should be and
+  // the picture ended up in the bottom-right corner. Measure the ratio from
+  // the canvas rather than trusting GetContentScaleFactor(), which reports 1
+  // for this DC.
+  double scale = 1.0;
+  if (wxWindow* cw = GetCanvasByIndex(canvasIndex)) {
+    const wxSize cs = cw->GetClientSize();
+    if (cs.x > 0 && vp->pix_width > 0)
+      scale = static_cast<double>(cs.x) / vp->pix_width;
+  }
+  if (std::fabs(scale - 1.0) > 0.01) gc->Scale(scale, scale);
+
+  if (m_diag.log_level >= 2)
+    Log(2, wxString::Format("DC overlay: canvas %d, vp %dx%d, coordinate "
+                            "scale %.3f",
+                            canvasIndex, vp->pix_width, vp->pix_height, scale));
+  if (m_diag.log_level >= 2) {
+    const wxSize ds = dc.GetSize();
+    wxDouble gw = 0, gh = 0;
+    gc->GetSize(&gw, &gh);
+    wxPoint org = dc.GetDeviceOrigin();
+    wxPoint lorg = dc.GetLogicalOrigin();
+    Log(2, wxString::Format(
+               "DC overlay: dc %dx%d, gc %.0fx%.0f, vp %dx%d, device origin "
+               "%d,%d, logical origin %d,%d, scale %.2f",
+               ds.x, ds.y, gw, gh, vp->pix_width, vp->pix_height, org.x, org.y,
+               lorg.x, lorg.y, dc.GetContentScaleFactor()));
+  }
   gc->BeginLayer(m_prefs.overlay_alpha / 100.0);
   bool drew = false;
   for (size_t k = 0; k < items.size(); ++k) {
@@ -2596,6 +2627,11 @@ bool mayara_pi::DrawRadarOverlayDC(wxGraphicsContext* gc, int index,
   if (!cache.bmp.IsOk()) return false;
   gc->DrawBitmap(cache.bmp, centre.x - radius_px, centre.y - radius_px,
                  radius_px * 2, radius_px * 2);
+  if (m_diag.log_level >= 2)
+    Log(2, wxString::Format(
+               "DC overlay: radar %d centre %d,%d radius %.0f raster %d "
+               "rot %.1f",
+               index, centre.x, centre.y, radius_px, size, rot_deg));
   return true;
 }
 
