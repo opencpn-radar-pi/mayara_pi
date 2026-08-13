@@ -65,6 +65,10 @@ class MayaraPpiWindow : public wxPanel {
   // Wire the View section's "Dock in OpenCPN" toggle.
   void SetDockControl(std::function<bool()> get, std::function<void(bool)> set);
 
+  // Where the rendering time goes, for every picture in this window. Wired
+  // only while verbose logging is on.
+  void SetPerfLog(std::function<void(const wxString&)> cb);
+
   // Provide own-ship nav state to the radar pictures (COG/heading/AIS layers).
   void SetNavProvider(std::function<NavState()> provider);
 

@@ -86,11 +86,32 @@ struct PpiGeometry {
   bool valid = false;  // usable for placing anything geographic
 };
 
+// What the cached picture was rendered for. Anything here changing means the
+// bitmap has to be built again; nothing here changing means it does not.
+struct PpiCacheKey {
+  uint64_t generation = ~0ull;
+  int w = 0, h = 0;
+  double zoom = 0, rot = 0, off_x = 0, off_y = 0;
+  float intensity = 0;
+  int threshold = -1;
+  bool operator==(const PpiCacheKey& o) const {
+    return generation == o.generation && w == o.w && h == o.h &&
+           zoom == o.zoom && rot == o.rot && off_x == o.off_x &&
+           off_y == o.off_y && intensity == o.intensity &&
+           threshold == o.threshold;
+  }
+};
+
 class RadarDisplayPanel : public wxPanel {
  public:
   RadarDisplayPanel(wxWindow* parent, MayaraClient* client, int radar_index = 0);
 
   void SetMenuCallback(std::function<void()> cb) { m_on_menu = std::move(cb); }
+  // Where the rendering cost goes, for deciding whether the CPU rasteriser
+  // needs help. Set only when the operator asked for verbose logging.
+  void SetPerfLog(std::function<void(const wxString&)> cb) {
+    m_perf_log = std::move(cb);
+  }
   void SetOrientationChangedCallback(std::function<void(int)> cb) {
     m_on_orientation = std::move(cb);
   }
@@ -203,6 +224,11 @@ class RadarDisplayPanel : public wxPanel {
   int m_index = 0;         // which radar this panel shows
   wxTimer m_timer;
   std::function<void()> m_on_menu;
+  std::function<void(const wxString&)> m_perf_log;
+  wxBitmap m_picture;      // the rasterised sweep, reused until it changes
+  PpiCacheKey m_picture_key;
+  int64_t m_render_us = 0, m_convert_us = 0;
+  uint64_t m_render_count = 0, m_blit_count = 0;
   // Told when the lozenge cycles the orientation, so the setting is persisted
   // for this radar and the controls follow.
   std::function<void(int)> m_on_orientation;

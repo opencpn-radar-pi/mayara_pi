@@ -1990,6 +1990,13 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
     m_diag = d;
     SaveConfig();
     if (louder) LogSettings();
+    for (MayaraPpiWindow* w : m_windows)
+      if (w) {
+        if (m_diag.log_level >= 2)
+          w->SetPerfLog([this](const wxString& t) { Log(2, t); });
+        else
+          w->SetPerfLog(nullptr);
+      }
     if (wxWindow* c = GetOCPNCanvasWindow()) c->Refresh(false);
   }
 
@@ -2344,6 +2351,10 @@ void mayara_pi::RebuildWindows() {
                                 [this]() { RebuildWindows(); });
                         });
     win->SetNavProvider([this]() { return m_nav; });
+    // Costs nothing when logging is off: the panel only calls this when it is
+    // set, and it is only set while the operator is asking.
+    if (m_diag.log_level >= 2)
+      win->SetPerfLog([this](const wxString& s) { Log(2, s); });
     win->SetOrientationHandlers(
         [this](const std::string& id) { return OrientationFor(id); },
         [this](const std::string& id, int o) { SetOrientationFor(id, o); });
@@ -2541,21 +2552,19 @@ bool mayara_pi::RenderOverlayMultiCanvas(wxDC& dc, PlugIn_ViewPort* vp,
   }
   if (std::fabs(scale - 1.0) > 0.01) gc->Scale(scale, scale);
 
-  if (m_diag.log_level >= 2)
-    Log(2, wxString::Format("DC overlay: canvas %d, vp %dx%d, coordinate "
-                            "scale %.3f",
-                            canvasIndex, vp->pix_width, vp->pix_height, scale));
+  // Once per canvas geometry, not once per frame: this says how the plugin is
+  // mapping to the screen, and that only changes when the window does.
   if (m_diag.log_level >= 2) {
-    const wxSize ds = dc.GetSize();
-    wxDouble gw = 0, gh = 0;
-    gc->GetSize(&gw, &gh);
-    wxPoint org = dc.GetDeviceOrigin();
-    wxPoint lorg = dc.GetLogicalOrigin();
-    Log(2, wxString::Format(
-               "DC overlay: dc %dx%d, gc %.0fx%.0f, vp %dx%d, device origin "
-               "%d,%d, logical origin %d,%d, scale %.2f",
-               ds.x, ds.y, gw, gh, vp->pix_width, vp->pix_height, org.x, org.y,
-               lorg.x, lorg.y, dc.GetContentScaleFactor()));
+    const wxString shape = wxString::Format("%d:%dx%d@%.3f", canvasIndex,
+                                            vp->pix_width, vp->pix_height,
+                                            scale);
+    if (m_last_dc_shape != shape) {
+      m_last_dc_shape = shape;
+      Log(2, wxString::Format("DC overlay: canvas %d, vp %dx%d, coordinate "
+                              "scale %.3f",
+                              canvasIndex, vp->pix_width, vp->pix_height,
+                              scale));
+    }
   }
   gc->BeginLayer(m_prefs.overlay_alpha / 100.0);
   bool drew = false;
@@ -2627,7 +2636,7 @@ bool mayara_pi::DrawRadarOverlayDC(wxGraphicsContext* gc, int index,
   if (!cache.bmp.IsOk()) return false;
   gc->DrawBitmap(cache.bmp, centre.x - radius_px, centre.y - radius_px,
                  radius_px * 2, radius_px * 2);
-  if (m_diag.log_level >= 2)
+  if (m_diag.log_level >= 2 && ++m_dc_frames % 100 == 0)
     Log(2, wxString::Format(
                "DC overlay: radar %d centre %d,%d radius %.0f raster %d "
                "rot %.1f",

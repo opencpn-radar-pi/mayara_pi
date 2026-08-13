@@ -186,6 +186,32 @@ on ("Orientation (Halo A)"). The lozenge dims and says "no heading" when the
 picture is head-up because nothing reports a heading — course-up also needs a
 course, and claiming "CU" without one would be a lie.
 
+## Rendering: measured, not assumed
+
+Whether the PPI should be duplicated in OpenGL was asked and answered with
+numbers rather than opinion. The picture is now cached and only rasterised when
+something about it changes (spoke generation, size, zoom, rotation, off-centre,
+intensity, threshold), and with verbose logging on each picture reports what it
+costs:
+
+```
+PPI radar 0: 420x503, rasterise 1.6 ms + convert 0.2 ms, 288 rasterised / 12 blitted
+```
+
+Two things that says. The cost is small — under 2 ms per picture per frame at
+this size on an M-series Mac, so ~3% of one core for two radars at 10 Hz. And
+the cache almost never hits while a radar is transmitting: the generation bumps
+with every spoke batch, so the picture really is new nearly every frame. The
+"nineteen frames in twenty" that motivated the cache was wrong; it pays only in
+standby, when paused, or between batches.
+
+The number to watch is not this Mac's. A full-screen 1080p PPI samples ten
+times as many pixels, and a Raspberry Pi is a good deal slower per pixel, so
+that is where the measurement should be repeated before anyone writes a second
+renderer. If it does turn out to be too slow there, the cheaper fix comes first:
+`EnsureDisc()` rebuilds the whole cached disc (1024²) on every generation change
+even when the window sampling it is 420×503, which is most of the 1.6 ms.
+
 ## Not gaps, despite appearances
 
 - **Brand receivers and hardware controls** — mayara-server's job. The

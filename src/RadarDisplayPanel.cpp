@@ -3,6 +3,8 @@
  *****************************************************************************/
 #include "RadarDisplayPanel.h"
 
+#include <chrono>
+
 #include <algorithm>
 #include <cmath>
 #include <numeric>
@@ -149,6 +151,12 @@ RadarDisplayPanel::RadarDisplayPanel(wxWindow* parent, MayaraClient* client,
   m_timer.Start(200);  // ~5 Hz
 }
 
+static int64_t NowUs() {
+  return std::chrono::duration_cast<std::chrono::microseconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
+
 void RadarDisplayPanel::OnTimer(wxTimerEvent&) { Refresh(false); }
 
 void RadarDisplayPanel::ApplyTheme(const MayaraTheme& theme) {
@@ -179,12 +187,51 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
 
   if (state) {
     const int rw = std::max(16, sz.x - m_obscured_right), rh = sz.y;
-    std::vector<uint8_t> rgb(static_cast<size_t>(rw) * rh * 3);
-    if (state->RenderPPI(rgb.data(), rw, rh, zoom, g.raster_rot, g.offset.x,
-                         g.offset.y)) {
-      wxImage img(rw, rh, rgb.data(), true);
-      wxBitmap bmp(img);
-      dc.DrawBitmap(bmp, 0, 0, false);
+    // The picture only changes when the radar sends spokes or the operator
+    // moves the view, but the timer repaints regardless -- on a still boat at
+    // 10 Hz with a 2 s rotation that is nineteen frames in twenty rasterising
+    // the same image. Rasterise on a change, blit the rest of the time.
+    PpiCacheKey key;
+    key.generation = state->Generation();
+    key.w = rw;
+    key.h = rh;
+    key.zoom = zoom;
+    key.rot = g.raster_rot;
+    key.off_x = g.offset.x;  // int in a wxPoint, double here
+    key.off_y = g.offset.y;
+    key.intensity = m_theme.radar_intensity;
+    key.threshold = state->Threshold();
+    if (!m_picture.IsOk() || !(key == m_picture_key)) {
+      const int64_t t0 = NowUs();
+      std::vector<uint8_t> rgb(static_cast<size_t>(rw) * rh * 3);
+      if (state->RenderPPI(rgb.data(), rw, rh, zoom, g.raster_rot, g.offset.x,
+                           g.offset.y)) {
+        const int64_t t1 = NowUs();
+        // wxImage copies here (the `true` is static_data: it does not take
+        // ownership), and wxBitmap converts again -- both are part of the cost
+        // this cache exists to avoid, so both are inside the timing.
+        m_picture = wxBitmap(wxImage(rw, rh, rgb.data(), true));
+        m_picture_key = key;
+        m_render_us = t1 - t0;
+        m_convert_us = NowUs() - t1;
+        ++m_render_count;
+      } else {
+        m_picture = wxBitmap();
+      }
+    } else {
+      ++m_blit_count;
+    }
+    if (m_picture.IsOk()) dc.DrawBitmap(m_picture, 0, 0, false);
+    if (m_perf_log) {
+      // Once every 100 paints, so the log says what the picture costs without
+      // becoming the thing that costs.
+      if ((m_render_count + m_blit_count) % 100 == 0)
+        m_perf_log(wxString::Format(
+            "PPI radar %d: %dx%d, rasterise %.1f ms + convert %.1f ms, "
+            "%llu rasterised / %llu blitted",
+            m_index, rw, rh, m_render_us / 1000.0, m_convert_us / 1000.0,
+            static_cast<unsigned long long>(m_render_count),
+            static_cast<unsigned long long>(m_blit_count)));
     }
   }
 
