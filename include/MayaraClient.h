@@ -215,6 +215,10 @@ class MayaraClient {
   std::atomic<AuthState> m_auth{AuthState::kUnknown};
   std::atomic<bool> m_auth_busy{false};
   std::thread m_auth_thread;
+  // Targets over REST, for servers whose delta stream does not carry them.
+  void PollTargets();
+  std::thread m_targets_thread;
+  std::atomic<int64_t> m_last_target_delta_ms{0};
 
   std::mutex m_radars_mutex;  // guards m_radars membership (stable once up)
   std::vector<std::unique_ptr<Radar>> m_radars;

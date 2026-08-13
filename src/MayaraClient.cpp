@@ -149,6 +149,7 @@ void MayaraClient::Stop() {
   if (m_control_ws) m_control_ws->stop();
   if (m_thread.joinable()) m_thread.join();
   if (m_auth_thread.joinable()) m_auth_thread.join();
+  if (m_targets_thread.joinable()) m_targets_thread.join();
   {
     std::lock_guard<std::mutex> lock(m_radars_mutex);
     m_radars.clear();
@@ -382,6 +383,7 @@ void MayaraClient::NoteWriteStatus(int status_code, const std::string& base) {
 void MayaraClient::RequestAccess() {
   if (m_auth_busy.exchange(true)) return;  // one flow at a time
   if (m_auth_thread.joinable()) m_auth_thread.join();
+  if (m_targets_thread.joinable()) m_targets_thread.join();
   m_auth_thread = std::thread([this] {
     RunAccessRequest();
     m_auth_busy = false;
@@ -393,6 +395,7 @@ void MayaraClient::ResumeAccessRequest(std::string server, std::string href) {
   if (server.empty() || href.empty()) return;
   if (m_auth_busy.exchange(true)) return;
   if (m_auth_thread.joinable()) m_auth_thread.join();
+  if (m_targets_thread.joinable()) m_targets_thread.join();
   {
     std::lock_guard<std::mutex> lock(m_status_mutex);
     m_pending_server = server;
@@ -681,6 +684,8 @@ MayaraClient::Attempt MayaraClient::DiscoverAndConnect() {
     m_active = 0;
   }
   ConnectControlStream();
+  if (!m_targets_thread.joinable())
+    m_targets_thread = std::thread([this] { PollTargets(); });
   SetStatus("streaming " + std::to_string(RadarCount()) + " radar(s)");
   return Attempt::kConnected;
 }
@@ -842,6 +847,101 @@ bool MayaraClient::ConnectSpokes(Radar* radar) {
   return false;
 }
 
+// One target, from either shape the server offers: the delta value under
+// `radars.<id>.targets.<tid>`, or an element of the REST target list. They
+// agree on everything except the spelling of isDangerous.
+static RadarTarget ParseTarget(uint64_t id, const json& value) {
+  RadarTarget t;
+  t.id = id;
+  const std::string st = value.value("status", std::string());
+  t.status = st == "tracking" ? RadarTarget::kTracking
+             : st == "lost"   ? RadarTarget::kLost
+                              : RadarTarget::kAcquiring;
+  t.manual = value.value("acquisition", std::string()) == "manual";
+  if (value.contains("position") && value["position"].is_object()) {
+    const auto& p = value["position"];
+    t.bearing_deg = p.value("bearing", 0.0) * 180.0 / M_PI;
+    t.distance_m = p.value("distance", 0.0);
+  }
+  if (value.contains("motion") && value["motion"].is_object()) {
+    const auto& m = value["motion"];
+    t.has_motion = true;
+    t.course_deg = m.value("course", 0.0) * 180.0 / M_PI;
+    t.speed_kn = m.value("speed", 0.0) * 1.9438445;  // m/s -> kn
+  }
+  if (value.contains("danger") && value["danger"].is_object()) {
+    const auto& d = value["danger"];
+    t.has_danger = true;
+    t.cpa_m = d.value("cpa", 0.0);
+    t.tcpa_s = d.value("tcpa", 0.0);
+    t.is_dangerous = d.value("isDangerous", d.value("is_dangerous", false));
+  }
+  return t;
+}
+
+static int64_t NowMs() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
+
+// Targets over the delta stream are the good case: they arrive as they change.
+// But a Signal K server in front of mayara only republishes what its bridge
+// knows how to publish, and today that is controls -- the targets are there,
+// over the v2 REST API, just not in the data model. So when no target delta has
+// arrived for a while, ask for the list instead. Costs nothing on a server that
+// does stream them, since this never runs there.
+void MayaraClient::PollTargets() {
+  const int64_t kQuietMs = 5000;   // no deltas for this long -> ask directly
+  const int64_t kPeriodMs = 1000;  // targets move about once a second
+
+  while (!m_stop) {
+    for (int i = 0; i < kPeriodMs / 100 && !m_stop; ++i)
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    if (m_stop) return;
+    if (NowMs() - m_last_target_delta_ms < kQuietMs) continue;
+
+    std::vector<std::string> ids;
+    {
+      std::lock_guard<std::mutex> lock(m_radars_mutex);
+      for (auto& r : m_radars) ids.push_back(r->id);
+    }
+    const std::string base = m_base_url;
+    for (const std::string& id : ids) {
+      if (m_stop) return;
+      ix::HttpClient http(/*async=*/false);
+      auto args = http.createRequest();
+      args->connectTimeout = 5;
+      args->transferTimeout = 5;
+      const std::string tok = TokenFor(base);
+      if (!tok.empty()) args->extraHeaders["Authorization"] = "Bearer " + tok;
+      auto resp = http.get(
+          base + "/signalk/v2/api/vessels/self/radars/" + id + "/targets", args);
+      if (!resp || resp->statusCode != 200) continue;
+      std::map<uint64_t, RadarTarget> fresh;
+      try {
+        auto j = json::parse(resp->body);
+        if (!j.is_array()) continue;
+        for (const auto& tv : j) {
+          if (!tv.is_object() || !tv.contains("id")) continue;
+          const uint64_t tid = tv["id"].get<uint64_t>();
+          RadarTarget t = ParseTarget(tid, tv);
+          if (t.status == RadarTarget::kLost) continue;
+          fresh[tid] = t;
+        }
+      } catch (const std::exception& e) {
+        JsonError("targets", e.what());
+        continue;
+      }
+      // The list is the whole truth, so replace rather than merge: a target
+      // that has gone must go here too.
+      std::lock_guard<std::mutex> lock(m_radars_mutex);
+      for (auto& r : m_radars)
+        if (r->id == id) r->targets = std::move(fresh);
+    }
+  }
+}
+
 void MayaraClient::ConnectControlStream() {
   const std::string ctrl_url =
       WsBase(m_base_url) + "/signalk/v1/stream?subscribe=none";
@@ -937,32 +1037,8 @@ void MayaraClient::ConnectControlStream() {
               return;
             }
             if (!value.is_object()) return;
-            RadarTarget t;
-            t.id = tid;
-            const std::string st = value.value("status", std::string());
-            t.status = st == "tracking"   ? RadarTarget::kTracking
-                       : st == "lost"     ? RadarTarget::kLost
-                                          : RadarTarget::kAcquiring;
-            t.manual = value.value("acquisition", std::string()) == "manual";
-            if (value.contains("position") && value["position"].is_object()) {
-              const auto& p = value["position"];
-              t.bearing_deg = p.value("bearing", 0.0) * 180.0 / M_PI;
-              t.distance_m = p.value("distance", 0.0);
-            }
-            if (value.contains("motion") && value["motion"].is_object()) {
-              const auto& m = value["motion"];
-              t.has_motion = true;
-              t.course_deg = m.value("course", 0.0) * 180.0 / M_PI;
-              t.speed_kn = m.value("speed", 0.0) * 1.9438445;  // m/s -> kn
-            }
-            if (value.contains("danger") && value["danger"].is_object()) {
-              const auto& d = value["danger"];
-              t.has_danger = true;
-              t.cpa_m = d.value("cpa", 0.0);
-              t.tcpa_s = d.value("tcpa", 0.0);
-              t.is_dangerous = d.value("isDangerous", false);
-            }
-            r->targets[tid] = t;
+            r->targets[tid] = ParseTarget(tid, value);
+            m_last_target_delta_ms = NowMs();
             return;
           }
         };
