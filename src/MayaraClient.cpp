@@ -162,13 +162,38 @@ std::string MayaraClient::StatusLine() {
   return m_status;
 }
 
+// Capped: nobody reads a log nobody drains, and an unbounded one on a plugin
+// left running for a week is a leak.
+void MayaraClient::LogLine(int level, const std::string& msg) {
+  std::lock_guard<std::mutex> lock(m_log_mutex);
+  // Evict the oldest rather than refuse the newest: a burst that overruns the
+  // cap between two drains ends in the lines that explain it.
+  if (m_log.size() >= 500) m_log.erase(m_log.begin());
+  m_log.push_back({level, msg});
+}
+
+std::vector<std::pair<int, std::string>> MayaraClient::TakeLog() {
+  std::lock_guard<std::mutex> lock(m_log_mutex);
+  std::vector<std::pair<int, std::string>> out;
+  out.swap(m_log);
+  return out;
+}
+
 void MayaraClient::SetStatus(const std::string& s) {
   // Deliberately wx-free (this TU also pulls in IXWebSocket, whose ssize_t
   // typedef clashes with wxWidgets' on Win32). The status is surfaced via
-  // StatusLine(); we never call wxLog from these worker threads anyway (its
-  // deferred cross-thread flush can dereference our unloaded dylib).
-  std::lock_guard<std::mutex> lock(m_status_mutex);
-  m_status = s;
+  // StatusLine(); we never call wxLog from these worker threads (its deferred
+  // cross-thread flush can dereference our unloaded dylib), so diagnostics go
+  // into a queue the UI thread drains.
+  bool changed = false;
+  {
+    std::lock_guard<std::mutex> lock(m_status_mutex);
+    changed = s != m_status;
+    m_status = s;
+  }
+  // Every state this went through, in order, which is the whole point when a
+  // connection is flapping.
+  if (changed) LogLine(2, "status: " + s);
 }
 
 std::string MayaraClient::ServerApiVersion() {
@@ -183,6 +208,7 @@ bool MayaraClient::ApiVersionMismatch() {
 }
 
 void MayaraClient::JsonError(const std::string& context, const char* what) {
+  LogLine(1, "JSON error in " + context + ": " + (what ? what : "?"));
   const std::string sv = ServerApiVersion();
   if (!sv.empty() && sv != kRadarApiVersion) {
     SetStatus("!!!!!! RADAR API VERSION MISMATCH !!!!!!  server speaks " + sv +
@@ -923,12 +949,19 @@ static int64_t NowMs() {
 void MayaraClient::PollTargets() {
   const int64_t kQuietMs = 5000;   // no deltas for this long -> ask directly
   const int64_t kPeriodMs = 1000;  // targets move about once a second
+  bool polling = false;
 
   while (!m_stop) {
     for (int i = 0; i < kPeriodMs / 100 && !m_stop; ++i)
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
     if (m_stop) return;
-    if (NowMs() - m_last_target_delta_ms < kQuietMs) continue;
+    const bool quiet = NowMs() - m_last_target_delta_ms >= kQuietMs;
+    if (quiet != polling) {
+      polling = quiet;
+      LogLine(2, quiet ? "no target deltas: polling the REST target list"
+                       : "target deltas are arriving again: stopped polling");
+    }
+    if (!quiet) continue;
 
     std::vector<std::string> ids;
     {
@@ -1118,6 +1151,9 @@ void MayaraClient::SetControlAt(int index, const std::string& control_id,
     const std::string url = base + "/signalk/v2/api/vessels/self/radars/" +
                             radar_id + "/controls/" + control_id;
     auto resp = http.put(url, json_body, args);
+    LogLine(resp && resp->statusCode == 200 ? 2 : 1,
+            "PUT " + radar_id + "/" + control_id + " " + json_body + " -> " +
+                (resp ? std::to_string(resp->statusCode) : "no response"));
     // A refused control is otherwise invisible: the radar simply ignores the
     // click. Fold the status in so the UI can explain and ask for permission.
     if (resp) NoteWriteStatus(resp->statusCode, base);

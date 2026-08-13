@@ -24,6 +24,7 @@
 #include "RadarDisplayPanel.h"  // PpiPrefs, ZoneEdit
 
 // Forward declarations keep implementation types out of this header.
+class wxGraphicsContext;
 class ControlsPanel;
 class MayaraPpiWindow;
 class MayaraClient;
@@ -60,6 +61,9 @@ class mayara_pi : public opencpn_plugin_121 {
   // --- Chart overlay (filled in Phase 1) -----------------------------------
   bool RenderGLOverlayMultiCanvas(wxGLContext* pcontext, PlugIn_ViewPort* vp,
                                   int canvasIndex, int priority) override;
+  // The same overlay without OpenGL, for when hardware acceleration is off.
+  bool RenderOverlayMultiCanvas(wxDC& dc, PlugIn_ViewPort* vp, int canvasIndex,
+                                int priority) override;
 
   // --- Own-ship state ------------------------------------------------------
   void SetPositionFixEx(PlugIn_Position_Fix_Ex& pfix) override;
@@ -155,6 +159,35 @@ class mayara_pi : public opencpn_plugin_121 {
   // Keep the shorter-range radar at a quarter of the longer one's range.
   void SyncAutoRange();
   void SyncChartRange();
+
+  // --- Diagnostics ---------------------------------------------------------
+  // Everything here exists to answer "why is the picture in the wrong place",
+  // which is nearly always heading or position, and to let a bench setup run
+  // without a compass or a GPS.
+  struct Diagnostics {
+    enum HeadingSource { kAuto = 0, kOpenCpnOnly, kRadarOnly, kFixedHeading };
+    int heading_source = kAuto;
+    double fixed_heading = 0.0;
+    bool cog_as_heading = false;  // last resort when nothing reports heading
+    int heading_timeout_s = 5;    // 0 = a heading never goes stale
+    bool fixed_position = false;
+    double fixed_lat = 0.0, fixed_lon = 0.0;
+    int log_level = 0;  // 0 off, 1 problems, 2 verbose
+  };
+  Diagnostics m_diag;
+  int64_t m_hdt_ms = 0;  // when OpenCPN last gave us a usable heading
+
+  // The heading to draw with, and where it came from. `radar` may be -1 for
+  // "any radar". Returns false when nothing usable is available -- which is
+  // not the same as 0 degrees, and the difference shows on the chart.
+  bool ResolveHeading(int radar, double* deg, wxString* source) const;
+  // Own-ship position to draw from, honouring a fixed position.
+  bool ResolvePosition(int radar, double* lat, double* lon,
+                       wxString* source) const;
+  void Log(int level, const wxString& msg) const;
+  void LogSettings() const;  // the whole configuration, in one line
+  wxString m_last_heading_source;
+  int m_fix_flags = -1;  // position/COG/heading validity, to log transitions
   // Echo colour profiles: the four built-ins plus whatever the user has made
   // from them. The active one is applied to every radar.
   std::vector<RadarPalette> m_palettes;
@@ -167,9 +200,37 @@ class mayara_pi : public opencpn_plugin_121 {
   void FeedHeading();
   void FeedTargets();
   bool m_feed_heading = false;
+  uint64_t m_feed_hdt_count = 0;
+  uint64_t m_feed_ttm_ticks = 0;
+  bool m_feed_hdt_silent = false;  // warned once that there is nothing to send
   bool m_feed_targets = false;
   std::map<std::string, int> m_ttm_number;  // target key -> TTM target number  // the chart's zoom drives the overlaid radar
   std::map<int, double> m_canvas_radius_m;  // per canvas, what the chart shows
+  struct OverlayItem {
+    int idx;
+    uint32_t range;
+  };
+  std::vector<OverlayItem> OverlayItems(int canvasIndex);
+  void RecordCanvasRadius(PlugIn_ViewPort* vp, int canvasIndex);
+  bool DrawRadarOverlayDC(wxGraphicsContext* gc, int index, PlugIn_ViewPort* vp,
+                          double inner_frac);
+  void DrawZonesOverlayDC(wxGraphicsContext* gc, int index,
+                          PlugIn_ViewPort* vp);
+  // The rotated, scaled disc as a bitmap. Rebuilt only when the picture, the
+  // size, the rotation or the occluded middle changes: this is the path with
+  // no GPU to lean on.
+  struct OverlayBmp {
+    wxBitmap bmp;
+    uint64_t gen = ~0ull;
+    int size = 0;
+    int rot10 = -1;
+    double inner = -1.0;
+  };
+  std::vector<OverlayBmp> m_overlay_bmp;
+  // Per canvas: with two of them, a single value alternates and logs on every
+  // repaint, which is the opposite of what the throttle is for.
+  std::map<int, wxString> m_last_dc_shape;
+  uint64_t m_dc_frames = 0;
   // Open the controls with no picture, for someone who only wants the menu.
   // The controls drawn over the chart canvas, without a picture.
   void ShowRadarMenu(int canvas);

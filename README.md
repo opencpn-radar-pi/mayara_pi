@@ -12,11 +12,36 @@ Instead it consumes the [mayara-server](https://github.com/MarineYachtRadar/maya
 REST + WebSocket API (the Signal K Radar API), which handles discovery and
 communication with Navico, Garmin, Furuno and Raymarine radars. 
 
-This has two advantages:
+This has three advantages:
 1. mayara-server supports many more radars than radar_pi.
 2. mayara-server can run on a small router or computer with wired access to the radar, and you can now reliably run radar on OpenCPN on wirelessly connected computers.
+3. **No OpenGL required.** The PPI is a plain `wxPanel` blitting a bitmap that
+   a CPU rasteriser produced, and the chart overlay is drawn either through
+   OpenGL or through `wxGraphicsContext`, whichever OpenCPN is using. radar_pi
+   needs OpenGL for both: its radar window is a `wxGLCanvas`, and its
+   `RenderOverlay(wxDC&)` draws nothing at all — it only switches its own GL
+   mode off. So on a machine where OpenCPN's hardware acceleration is off or
+   unreliable, mayara_pi still shows radar.
 
 If you do not have a Signal K installation, the plugin will download mayara for you, but then advantage 2 disappears.
+
+## What it does
+
+Radar as a chart overlay and in PPI windows: several radars, several windows,
+per-canvas overlay assignment, guard zones with alarms, ARPA targets, VRM/EBL,
+colour profiles, and every control the radar exposes. See
+**[FEATURES.md](FEATURES.md)** for the full list, and
+**[CHANGELOG.md](CHANGELOG.md)** for what has landed so far.
+
+[docs/radar_pi-feature-gap.md](docs/radar_pi-feature-gap.md) tracks this against
+radar_pi, including the things deliberately not built here and why.
+
+## Installing
+
+Packages for every platform are published to Cloudsmith and reach the OpenCPN
+plugin catalog from there. To install one by hand — a CI build, say — use
+**Options → Plugins → Import plugin…** and give it the `.tar.gz`. On flatpak the
+file must live under your home directory, since the sandbox cannot see `/tmp`.
 
 ## Building
 
@@ -31,9 +56,14 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
 
-Requirements: CMake ≥ 3.15, a C++17 compiler, wxWidgets (3.2 for distributable
+Requirements: CMake ≥ 3.15, a C++ compiler, wxWidgets (3.2 for distributable
 builds; 3.3 works for local development), and gettext. macOS deployment target
 matching OpenCPN.
+
+Note that the effective language standard is **C++11**, not the C++17 that
+`CMAKE_CXX_STANDARD` asks for: the FE2 template's `cmake/PluginSetup.cmake`
+appends `-std=c++11` to `CMAKE_CXX_FLAGS` afterwards, and the flag wins. Code
+that compiles locally with a newer standard will fail in CI.
 
 ## CI / distribution
 

@@ -74,8 +74,9 @@ fixed server-side once the two endpoints were compared.
 
 ## Feeding OpenCPN
 
-- **Radar heading → NMEA HDT** — done. Settings → Display → Feed OpenCPN. The
-  radar's own heading, not OpenCPN's fix fed back to it, at 1 Hz. Off by
+- **Radar heading → NMEA HDT** — done, and seen arriving in OpenCPN as `$RAHDT`.
+  Settings → Display → Feed OpenCPN. The radar's own heading, not OpenCPN's fix
+  fed back to it, at 1 Hz. Off by
   default: on most boats another source already provides heading, and two
   disagreeing sources is worse than one.
 - **ARPA targets → TTM** — done, same place. TTM's target number is two digits
@@ -131,8 +132,92 @@ and the PPI background (black, and the picture is designed against it).
 
 ## Diagnostics and testing
 
-Fixed heading, fixed position, ignore-radar-heading, COG-as-heading, heading
-timeout, skew-factor correction, verbose log level, radar description text.
+Done, as a Diagnostics page in Settings. It opens with a live readout of the
+heading and position the drawing code would use *this instant*, and where each
+came from — because "why is the picture in the wrong place" is nearly always
+one of those two, and until now nothing said which.
+
+- **Heading source** — Automatic (OpenCPN, else the radar) / OpenCPN only /
+  Radar only / Fixed. Covers radar_pi's *ignore-radar-heading* and
+  *fixed heading* in one control.
+- **COG as heading** — off by default. COG is not heading; it differs by leeway
+  and set, so it is a last resort and the readout says when it is being used.
+- **Heading timeout** — a heading older than this is not used (0 = never
+  expires). Radar headings are now timestamped for this. It matters more than
+  it looks: a radar that stops transmitting keeps its last heading for ever,
+  and a stale heading points the picture the wrong way with no sign that
+  anything is wrong.
+- **Fixed position** — run on a bench with no GPS.
+- **Log level** — Off / Problems / Verbose, into OpenCPN's own log. Worker
+  threads never call `wxLog` (its deferred cross-thread flush can dereference
+  an unloaded plugin dylib), so the client queues its lines and the UI thread
+  drains them each heartbeat. Turning logging up writes the whole configuration
+  in one line, so a log sent by a user explains itself.
+
+Turning it on immediately earned its keep: it showed OpenCPN was handing the
+plugin no position fix at all. `SendPositionFixToAllPlugIns()` gates both
+`SetPositionFix` and `SetPositionFixEx` on `WANTS_NMEA_EVENTS`, which this
+plugin never declared — so COG, SOG, heading and position from OpenCPN had
+never arrived, and everything had been running on what the radar stamps into
+its own spokes. `INSTALLS_CONTEXTMENU_ITEMS` was missing too, which is what
+`PrepareAllPluginContextMenus()` checks before calling `PrepareContextMenu`;
+the menu items appear without it, so the only symptom was labels that never
+updated.
+
+Two behaviour fixes came out of it. Heading was previously taken as "0 means
+missing", which is a lie on a boat heading due north; and a missing heading now
+means the chart overlay is not drawn at all rather than drawn at north.
+
+The PPI reaches the same resolver through a provider, so the heading source,
+the fixed heading and the timeout mean the same thing on the picture as on the
+chart. It does not share the second fix: a picture with no heading is still
+drawn, because a PPI is bow-relative to begin with and head-up needs no heading
+at all. Its orientation lozenge says which input is missing when north-up or
+course-up cannot be honoured.
+
+**Skew-factor correction** is not a gap: it corrects a brand's wire protocol,
+which is mayara-server's side of the line. **Radar description text** is already
+there — name, model, firmware and serial are in the Info section, with the
+server URL.
+
+## PPI orientation
+
+Already per radar before this work (`m_orient`, keyed by radar id): Head up,
+North up, Course up, in the View section. What was missing is that the picture
+never said which one it was in, and in a two-radar window the controls follow
+whichever picture has focus, so the setting looked global.
+
+Each picture now carries an orientation lozenge under the power one, clicking it
+cycles that radar's own orientation, and the View rows name the radar they act
+on ("Orientation (Halo A)"). The lozenge dims and says "no heading" when the
+picture is head-up because nothing reports a heading — course-up also needs a
+course, and claiming "CU" without one would be a lie.
+
+## Rendering: measured, not assumed
+
+Whether the PPI should be duplicated in OpenGL was asked and answered with
+numbers rather than opinion. The picture is now cached and only rasterised when
+something about it changes (spoke generation, size, zoom, rotation, off-centre,
+intensity, threshold), and with verbose logging on each picture reports what it
+costs:
+
+```
+PPI radar 0: 420x503, rasterise 1.6 ms + convert 0.2 ms, 288 rasterised / 12 blitted
+```
+
+Two things that says. The cost is small — under 2 ms per picture per frame at
+this size on an M-series Mac, so ~3% of one core for two radars at 10 Hz. And
+the cache almost never hits while a radar is transmitting: the generation bumps
+with every spoke batch, so the picture really is new nearly every frame. The
+"nineteen frames in twenty" that motivated the cache was wrong; it pays only in
+standby, when paused, or between batches.
+
+The number to watch is not this Mac's. A full-screen 1080p PPI samples ten
+times as many pixels, and a Raspberry Pi is a good deal slower per pixel, so
+that is where the measurement should be repeated before anyone writes a second
+renderer. If it does turn out to be too slow there, the cheaper fix comes first:
+`EnsureDisc()` rebuilds the whole cached disc (1024²) on every generation change
+even when the window sampling it is 420×503, which is most of the 1.6 ms.
 
 ## Not gaps, despite appearances
 
@@ -144,6 +229,13 @@ timeout, skew-factor correction, verbose log level, radar description text.
   render.
 - **Timed idle/run, antenna offsets, no-transmit zones** — present as server
   controls (`TimedIdle`, `AntennaForward`, …), surfaced automatically.
-- **wxDC (non-GL) overlay** — radar_pi declares `WANTS_OVERLAY_CALLBACK`, but
-  its `RenderOverlay` is a no-op that only flips GL off. Both plugins are
-  GL-only.
+- **wxDC (non-GL) overlay** — was listed here as "not a gap" because radar_pi's
+  own `RenderOverlay` is a no-op that only flips a GL flag. That was wrong for
+  us: with OpenCPN's hardware acceleration off, our overlay simply vanished
+  while the PPI carried on (it never used GL — it is a `wxPanel` blitting a
+  CPU-rendered bitmap). `RenderOverlayMultiCanvas(wxDC&, …)` is now
+  implemented: same geometry, same cached disc, drawn through
+  `wxGraphicsContext` because a plain `wxDC` has no alpha. The disc is
+  rasterised at up to 1536 px and scaled up by the blit beyond that, and cached
+  against picture generation, size, rotation and the occluded middle — there is
+  no GPU on this path to waste work on.

@@ -3,6 +3,8 @@
  *****************************************************************************/
 #include "RadarDisplayPanel.h"
 
+#include <chrono>
+
 #include <algorithm>
 #include <cmath>
 #include <numeric>
@@ -149,6 +151,12 @@ RadarDisplayPanel::RadarDisplayPanel(wxWindow* parent, MayaraClient* client,
   m_timer.Start(200);  // ~5 Hz
 }
 
+static int64_t NowUs() {
+  return std::chrono::duration_cast<std::chrono::microseconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
+
 void RadarDisplayPanel::OnTimer(wxTimerEvent&) { Refresh(false); }
 
 void RadarDisplayPanel::ApplyTheme(const MayaraTheme& theme) {
@@ -179,12 +187,51 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
 
   if (state) {
     const int rw = std::max(16, sz.x - m_obscured_right), rh = sz.y;
-    std::vector<uint8_t> rgb(static_cast<size_t>(rw) * rh * 3);
-    if (state->RenderPPI(rgb.data(), rw, rh, zoom, g.raster_rot, g.offset.x,
-                         g.offset.y)) {
-      wxImage img(rw, rh, rgb.data(), true);
-      wxBitmap bmp(img);
-      dc.DrawBitmap(bmp, 0, 0, false);
+    // The picture only changes when the radar sends spokes or the operator
+    // moves the view, but the timer repaints regardless -- on a still boat at
+    // 10 Hz with a 2 s rotation that is nineteen frames in twenty rasterising
+    // the same image. Rasterise on a change, blit the rest of the time.
+    PpiCacheKey key;
+    key.generation = state->Generation();
+    key.w = rw;
+    key.h = rh;
+    key.zoom = zoom;
+    key.rot = g.raster_rot;
+    key.off_x = g.offset.x;  // int in a wxPoint, double here
+    key.off_y = g.offset.y;
+    key.intensity = m_theme.radar_intensity;
+    key.threshold = state->Threshold();
+    if (!m_picture.IsOk() || !(key == m_picture_key)) {
+      const int64_t t0 = NowUs();
+      std::vector<uint8_t> rgb(static_cast<size_t>(rw) * rh * 3);
+      if (state->RenderPPI(rgb.data(), rw, rh, zoom, g.raster_rot, g.offset.x,
+                           g.offset.y)) {
+        const int64_t t1 = NowUs();
+        // wxImage copies here (the `true` is static_data: it does not take
+        // ownership), and wxBitmap converts again -- both are part of the cost
+        // this cache exists to avoid, so both are inside the timing.
+        m_picture = wxBitmap(wxImage(rw, rh, rgb.data(), true));
+        m_picture_key = key;
+        m_render_us = t1 - t0;
+        m_convert_us = NowUs() - t1;
+        ++m_render_count;
+      } else {
+        m_picture = wxBitmap();
+      }
+    } else {
+      ++m_blit_count;
+    }
+    if (m_picture.IsOk()) dc.DrawBitmap(m_picture, 0, 0, false);
+    if (m_perf_log) {
+      // Once every 100 paints, so the log says what the picture costs without
+      // becoming the thing that costs.
+      if ((m_render_count + m_blit_count) % 100 == 0)
+        m_perf_log(wxString::Format(
+            "PPI radar %d: %dx%d, rasterise %.1f ms + convert %.1f ms, "
+            "%llu rasterised / %llu blitted",
+            m_index, rw, rh, m_render_us / 1000.0, m_convert_us / 1000.0,
+            static_cast<unsigned long long>(m_render_count),
+            static_cast<unsigned long long>(m_blit_count)));
     }
   }
 
@@ -312,7 +359,7 @@ void RadarDisplayPanel::DrawIconBar(wxDC& dc, const wxSize& sz) {
 
 void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
   m_menu_rect = m_icon_ais = m_icon_gain = m_icon_sea = m_icon_rain =
-      m_icon_ebl = wxRect();
+      m_icon_ebl = m_orient_rect = wxRect();
   m_power_rect = wxRect();
   m_range_minus_rect = wxRect();
   m_range_plus_rect = wxRect();
@@ -386,6 +433,55 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
     }
     dc.SetFont(base);
     m_power_rect = wxRect(x, y, w, h);
+  }
+
+  // --- Orientation lozenge, under the power one ---
+  // Which way is up is a per-radar decision, and on a two-radar window the
+  // controls drive whichever picture has focus -- so the picture itself has to
+  // say what it is doing. Click to cycle.
+  {
+    double up = 0.0, rot = 0.0, hdg = 0.0;
+    bool has_heading = false;
+    ResolveOrientation(up, rot, hdg, has_heading);
+    // Head-up asks nothing of anyone: the picture is bow-relative as it
+    // arrives. North-up needs a heading to rotate by, and course-up needs a
+    // course as well -- without either it is really head-up, and the lozenge
+    // says which input is missing rather than just going quiet.
+    NavState nav;
+    if (m_nav) nav = m_nav();
+    const bool needs_heading = m_orientation != kHeadUp;
+    const bool needs_cog = m_orientation == kCourseUp;
+    const bool honoured = (!needs_heading || has_heading) &&
+                          (!needs_cog || nav.has_cog);
+    const wxString missing = !has_heading && needs_heading ? _("no heading")
+                             : needs_cog && !nav.has_cog   ? _("no course")
+                                                           : wxString();
+    const wxString label = m_orientation == kNorthUp   ? _("North up")
+                           : m_orientation == kCourseUp ? _("Course up")
+                                                        : _("Head up");
+    const wxColour fg = honoured ? m_theme.text : m_theme.accent_dim;
+
+    wxFont f = GetFont();
+    dc.SetFont(f);
+    wxCoord tw, th;
+    dc.GetTextExtent(label, &tw, &th);
+    const int w = tw + 22, h = th + 12;
+    const int x = 10, y = m_power_rect.IsEmpty() ? 10
+                                                 : m_power_rect.GetBottom() + 8;
+    LozengeBg(dc, wxRect(x, y, w, h), std::min(h / 2, 12), m_theme);
+
+    // A small arrow for what is at the top of the picture: north gets a
+    // needle, course and heading get a bow.
+    dc.SetTextForeground(fg);
+    dc.DrawText(label, x + 11, y + 6);
+    m_orient_rect = wxRect(x, y, w, h);
+    if (!honoured) {
+      // Whatever it says, the picture is head-up until the missing input
+      // arrives.
+      dc.SetFont(f);
+      dc.SetTextForeground(m_theme.accent_dim);
+      dc.DrawText(missing, x, y + h + 2);
+    }
   }
 
   // --- Range lozenge (left edge, vertically centred) with - / + ---
@@ -499,7 +595,9 @@ void RadarDisplayPanel::ResolveOrientation(double& up_bearing,
   if (m_nav) nav = m_nav();
   heading = 0.0;
   has_heading = false;
-  if (nav.has_hdt) {
+  if (m_heading_provider) {
+    has_heading = m_heading_provider(m_index, heading);
+  } else if (nav.has_hdt) {
     heading = nav.hdt;
     has_heading = true;
   } else if (RadarState* st = m_client ? m_client->StateAt(m_index) : nullptr) {
@@ -1258,6 +1356,9 @@ void RadarDisplayPanel::HandleClick(const wxPoint& p) {
     CenterView();
   } else if (m_menu_rect.Contains(p)) {
     if (m_on_menu) m_on_menu();
+  } else if (m_orient_rect.Contains(p)) {
+    SetOrientation((m_orientation + 1) % 3);
+    if (m_on_orientation) m_on_orientation(m_orientation);
   } else if (m_icon_ais.Contains(p)) {
     m_layers.ais = !m_layers.ais;
     Refresh(false);
@@ -1320,7 +1421,8 @@ void RadarDisplayPanel::HandleClick(const wxPoint& p) {
 void RadarDisplayPanel::OnLeftDClick(wxMouseEvent& event) {
   const wxPoint p = event.GetPosition();
   // Double-clicking a control/lozenge is not an acquire gesture.
-  if (m_menu_rect.Contains(p) || m_icon_ais.Contains(p) || m_icon_ebl.Contains(p) ||
+  if (m_menu_rect.Contains(p) || m_orient_rect.Contains(p) ||
+      m_icon_ais.Contains(p) || m_icon_ebl.Contains(p) ||
       m_icon_gain.Contains(p) || m_icon_sea.Contains(p) ||
       m_icon_rain.Contains(p) || m_power_rect.Contains(p) ||
       m_range_minus_rect.Contains(p) || m_range_plus_rect.Contains(p)) {

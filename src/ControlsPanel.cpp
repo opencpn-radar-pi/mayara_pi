@@ -554,12 +554,26 @@ void ControlsPanel::FillViewSection(wxSizer* content) {
       if (dock && m_get_dock) dock->SetValue(m_get_dock());
     });
   }
+  // Orientation and threshold are per radar, so they name the radar they act
+  // on: in a window showing two, these follow whichever picture has focus and
+  // nothing else on the row would say which.
+  wxString whose;
+  if (m_client) {
+    const std::vector<std::string> names = m_client->RadarNames();
+    if (m_index >= 0 && m_index < static_cast<int>(names.size()))
+      whose = wxString::FromUTF8(names[m_index].c_str());
+  }
   if (m_get_orientation && m_set_orientation)
-    AddChoiceRow(content, _("Orientation"),
+    AddChoiceRow(content,
+                 whose.IsEmpty() ? wxString(_("Orientation"))
+                                 : wxString::Format(_("Orientation (%s)"), whose),
                  {_("Head up"), _("North up"), _("Course up")},
                  m_get_orientation, m_set_orientation);
   if (m_get_threshold && m_set_threshold)
-    AddChoiceRow(content, _("Echo threshold"),
+    AddChoiceRow(content,
+                 whose.IsEmpty()
+                     ? wxString(_("Echo threshold"))
+                     : wxString::Format(_("Echo threshold (%s)"), whose),
                  {_("All"), _("Medium"), _("Strong")}, m_get_threshold,
                  m_set_threshold);
   if (m_get_prefs && m_set_prefs) {

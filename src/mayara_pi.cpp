@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <chrono>
 #include <cstdlib>
 #include <random>
 
@@ -15,6 +16,7 @@
 #include <wx/display.h>
 #include <wx/fileconf.h>
 #include <wx/frame.h>
+#include <wx/graphics.h>
 #include <wx/radiobox.h>
 #include <wx/settings.h>
 #include <wx/spinctrl.h>
@@ -187,6 +189,7 @@ int mayara_pi::Init() {
   if (!m_sk_token.empty())
     m_client->SetAuthToken(m_sk_token_server, m_sk_token);
   m_client->SetPalette(ActivePalette());  // before the first radar arrives
+  LogSettings();
   m_client->Start();
   // An access request posted in an earlier session may still be waiting for
   // someone to approve it; pick it up where we left off.
@@ -215,6 +218,30 @@ int mayara_pi::Init() {
     // Snapshot geometry for persistence, but not while full-screen (that would
     // save the full-screen rects).
     if (AnyWindowShown() && !m_ocpn_fullscreen) CaptureWindowState();
+
+    if (m_client && m_diag.log_level > 0)
+      for (const auto& line : m_client->TakeLog())
+        Log(line.first, wxString::FromUTF8(line.second.c_str()));
+    else if (m_client)
+      m_client->TakeLog();  // keep the queue from filling while logging is off
+
+    // Say when the answer to "where is the picture" changes, which is the
+    // transition worth having in a log rather than the steady state.
+    {
+      double h = 0.0;
+      wxString src;
+      const bool have = ResolveHeading(-1, &h, &src);
+      const wxString now = have ? src : wxString("none");
+      if (now != m_last_heading_source) {
+        Log(have ? 2 : 1,
+            wxString::Format("heading source: %s -> %s",
+                             m_last_heading_source.IsEmpty()
+                                 ? wxString("(start)")
+                                 : m_last_heading_source,
+                             now));
+        m_last_heading_source = now;
+      }
+    }
 
     PollGuardAlarms();
     FeedHeading();
@@ -260,11 +287,22 @@ int mayara_pi::Init() {
   });
   m_heartbeat->Start(1000);
 
-  // Capabilities. The overlay callback is declared now but returns false until
-  // Phase 1 wires up the spoke renderer.
+  // Capabilities.
+  //
+  // WANTS_NMEA_EVENTS is what gets us SetPositionFixEx at all:
+  // SendPositionFixToAllPlugIns() gates *both* the basic and the extended fix
+  // on that flag, so without it OpenCPN never hands over position, COG, SOG or
+  // heading -- the plugin was running entirely on what the radar stamps into
+  // its own spokes.
+  //
+  // INSTALLS_CONTEXTMENU_ITEMS is what gets PrepareContextMenu called:
+  // PrepareAllPluginContextMenus() skips any plugin without it. The menu items
+  // themselves appear regardless, which is why this was invisible -- the menu
+  // was there, it just never got the chance to update its labels.
   return WANTS_OPENGL_OVERLAY_CALLBACK | WANTS_OVERLAY_CALLBACK |
          WANTS_TOOLBAR_CALLBACK | INSTALLS_TOOLBAR_TOOL | WANTS_CURSOR_LATLON |
-         WANTS_PREFERENCES | USES_AUI_MANAGER;
+         WANTS_NMEA_EVENTS | INSTALLS_CONTEXTMENU_ITEMS | WANTS_PREFERENCES |
+         USES_AUI_MANAGER;
 }
 
 bool mayara_pi::DeInit() {
@@ -319,6 +357,28 @@ void mayara_pi::LoadConfig() {
   cfg->Read("WindowsCount", &windows, 1);
   m_windows_count = windows < 1 ? 1 : windows;
   LoadPalettes(cfg);
+  long hs = 0, hto = 5, lvl = 0;
+  bool cog = false, fpos = false;
+  double fh = 0.0, fla = 0.0, flo = 0.0;
+  cfg->Read("HeadingSource", &hs, 0);
+  cfg->Read("HeadingTimeout", &hto, 5);
+  cfg->Read("FixedHeading", &fh, 0.0);
+  cfg->Read("CogAsHeading", &cog, false);
+  cfg->Read("FixedPosition", &fpos, false);
+  cfg->Read("FixedLat", &fla, 0.0);
+  cfg->Read("FixedLon", &flo, 0.0);
+  cfg->Read("LogLevel", &lvl, 0);
+  m_diag.heading_source =
+      static_cast<int>(hs < 0 ? 0 : (hs > Diagnostics::kFixedHeading
+                                         ? Diagnostics::kFixedHeading
+                                         : hs));
+  m_diag.heading_timeout_s = static_cast<int>(hto < 0 ? 0 : (hto > 3600 ? 3600 : hto));
+  m_diag.fixed_heading = fh;
+  m_diag.cog_as_heading = cog;
+  m_diag.fixed_position = fpos;
+  m_diag.fixed_lat = fla;
+  m_diag.fixed_lon = flo;
+  m_diag.log_level = static_cast<int>(lvl < 0 ? 0 : (lvl > 2 ? 2 : lvl));
   // "OverlayOffCanvases" is a comma list; the old single OverlayEnabled flag is
   // still honoured so an existing config does not silently switch the overlay
   // back on.
@@ -553,6 +613,14 @@ void mayara_pi::SaveConfig() {
   cfg->SetPath(kConfigGroup);
   cfg->Write("WindowsCount", m_windows_count);
   SavePalettes(cfg);
+  cfg->Write("HeadingSource", static_cast<long>(m_diag.heading_source));
+  cfg->Write("HeadingTimeout", static_cast<long>(m_diag.heading_timeout_s));
+  cfg->Write("FixedHeading", m_diag.fixed_heading);
+  cfg->Write("CogAsHeading", m_diag.cog_as_heading);
+  cfg->Write("FixedPosition", m_diag.fixed_position);
+  cfg->Write("FixedLat", m_diag.fixed_lat);
+  cfg->Write("FixedLon", m_diag.fixed_lon);
+  cfg->Write("LogLevel", static_cast<long>(m_diag.log_level));
   cfg->Write("OverlayEnabled", OverlayOnAny());
   wxString sel;
   for (const auto& kv : m_overlay_sel)
@@ -844,14 +912,31 @@ void mayara_pi::FeedHeading() {
     RadarState* st = m_client->StateAt(i);
     if (st && st->Heading(hdt)) have = true;
   }
-  if (!have) return;
+  // Nothing to say is worth saying once: a radar that reports no heading of
+  // its own is the usual reason this feed appears to do nothing.
+  if (!have) {
+    if (!m_feed_hdt_silent) {
+      m_feed_hdt_silent = true;
+      Log(1, "HDT feed is on, but no radar reports a heading; nothing sent");
+    }
+    return;
+  }
+  m_feed_hdt_silent = false;
   while (hdt < 0) hdt += 360.0;
   while (hdt >= 360.0) hdt -= 360.0;
-  PushNMEABuffer(NmeaSentence("RAHDT," + NmeaNum(hdt, 1) + ",T"));
+  const wxString sentence = NmeaSentence("RAHDT," + NmeaNum(hdt, 1) + ",T");
+  PushNMEABuffer(sentence);
+  // Once a minute: enough to prove it is being sent and what it says, without
+  // a line a second. Whether OpenCPN then *uses* it is a question for its
+  // source priorities, not for us -- another source may outrank ours.
+  if (++m_feed_hdt_count % 60 == 1)
+    Log(2, wxString::Format("sent %s (%llu so far)", sentence.Strip(wxString::both),
+                            static_cast<unsigned long long>(m_feed_hdt_count)));
 }
 
 void mayara_pi::FeedTargets() {
   if (!m_feed_targets || !m_client) return;
+  int sent = 0;
   const wxDateTime now = wxDateTime::UNow().ToUTC();
   const std::string stamp = NmeaNum(now.GetHour() * 10000 + now.GetMinute() * 100 +
                                         now.GetSecond() +
@@ -901,8 +986,11 @@ void mayara_pi::FeedTargets() {
       body += ",";
       body += t.manual ? 'M' : 'A';
       PushNMEABuffer(NmeaSentence(body));
+      ++sent;
     }
   }
+  if (sent && ++m_feed_ttm_ticks % 60 == 1)
+    Log(2, wxString::Format("sent %d TTM sentence(s) this tick", sent));
 }
 
 // --- Echo colour profiles --------------------------------------------------
@@ -966,6 +1054,123 @@ void mayara_pi::ApplyPalette() {
     if (win) win->Refresh(false);
   if (wxWindow* c = GetOCPNCanvasWindow()) c->Refresh(false);
 }
+
+// --- Diagnostics -----------------------------------------------------------
+
+static int64_t DiagNowMs() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
+
+// Heading, in the order the operator asked for it. Returning false is a real
+// answer: without a heading the picture cannot be laid on the chart at all,
+// and drawing it at 0 degrees would be a confident lie.
+bool mayara_pi::ResolveHeading(int radar, double* deg, wxString* source) const {
+  auto give = [&](double d, const wxString& from) {
+    while (d < 0) d += 360.0;
+    while (d >= 360.0) d -= 360.0;
+    if (deg) *deg = d;
+    if (source) *source = from;
+    return true;
+  };
+
+  if (m_diag.heading_source == Diagnostics::kFixedHeading)
+    return give(m_diag.fixed_heading, _("fixed"));
+
+  // OpenCPN's, if it is a real number and has not gone stale.
+  if (m_diag.heading_source != Diagnostics::kRadarOnly && m_nav.has_hdt) {
+    const int64_t age = DiagNowMs() - m_hdt_ms;
+    if (m_diag.heading_timeout_s <= 0 ||
+        age <= m_diag.heading_timeout_s * 1000)
+      return give(m_nav.hdt, _("OpenCPN"));
+  }
+
+  // The radar's own, derived from the bearing stamped into its spokes.
+  if (m_diag.heading_source != Diagnostics::kOpenCpnOnly && m_client) {
+    const int first = radar >= 0 ? radar : 0;
+    const int last = radar >= 0 ? radar : m_client->RadarCount() - 1;
+    for (int i = first; i <= last; ++i) {
+      RadarState* st = m_client->StateAt(i);
+      double h = 0.0;
+      if (!st || !st->Heading(h)) continue;
+      const int64_t age = st->HeadingAgeMs();
+      if (m_diag.heading_timeout_s > 0 && age >= 0 &&
+          age > m_diag.heading_timeout_s * 1000)
+        continue;
+      return give(h, _("radar"));
+    }
+  }
+
+  // Course over ground is not heading -- it differs by leeway and set -- so it
+  // is only ever used when asked for, and it says so.
+  if (m_diag.cog_as_heading && m_nav.has_cog)
+    return give(m_nav.cog, _("COG"));
+
+  return false;
+}
+
+bool mayara_pi::ResolvePosition(int radar, double* lat, double* lon,
+                                wxString* source) const {
+  if (m_diag.fixed_position) {
+    if (lat) *lat = m_diag.fixed_lat;
+    if (lon) *lon = m_diag.fixed_lon;
+    if (source) *source = _("fixed");
+    return true;
+  }
+  if (m_nav.valid) {
+    if (lat) *lat = m_nav.lat;
+    if (lon) *lon = m_nav.lon;
+    if (source) *source = _("OpenCPN");
+    return true;
+  }
+  // The radar stamps its own position into the spoke data on sets that know
+  // it, which is what makes the overlay work on a boat where OpenCPN has no
+  // fix of its own.
+  if (m_client) {
+    const int first = radar >= 0 ? radar : 0;
+    const int last = radar >= 0 ? radar : m_client->RadarCount() - 1;
+    for (int i = first; i <= last; ++i) {
+      RadarState* st = m_client->StateAt(i);
+      double a = 0.0, o = 0.0;
+      if (st && st->Position(a, o)) {
+        if (lat) *lat = a;
+        if (lon) *lon = o;
+        if (source) *source = _("radar");
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// Goes to OpenCPN's own log, which is where anyone debugging a plugin already
+// looks. Off by default: a line per second per radar is noise until the moment
+// it is the only way to see what happened.
+void mayara_pi::Log(int level, const wxString& msg) const {
+  if (level > m_diag.log_level) return;
+  wxLogMessage("mayara_pi: %s", msg);
+}
+
+// What the plugin is set to do, written once when logging is turned on so a
+// log sent by a user explains itself without a second round trip.
+void mayara_pi::LogSettings() const {
+  static const char* kSources[] = {"auto", "OpenCPN only", "radar only",
+                                   "fixed"};
+  Log(2, wxString::Format(
+             "settings: heading source %s (fixed %.1f, timeout %ds, COG "
+             "fallback %s), fixed position %s, palette \"%s\", overlay "
+             "alpha %d%%, chart-scale range %s, nest second radar %s, feed "
+             "HDT %s, feed TTM %s",
+             kSources[m_diag.heading_source], m_diag.fixed_heading,
+             m_diag.heading_timeout_s, m_diag.cog_as_heading ? "on" : "off",
+             m_diag.fixed_position ? "on" : "off",
+             wxString::FromUTF8(m_palette_active.c_str()),
+             m_prefs.overlay_alpha, m_prefs.chart_range ? "on" : "off",
+             m_prefs.nest_range ? "on" : "off", m_feed_heading ? "on" : "off",
+             m_feed_targets ? "on" : "off"));
+}
+
 
 void mayara_pi::SyncChartRange() {
   if (!m_prefs.chart_range || !m_client) return;
@@ -1626,6 +1831,115 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
     });
   }
 
+  // --- Diagnostics page ----------------------------------------------------
+  // "Why is the picture in the wrong place" is nearly always heading or
+  // position, so the page says what is being used right now, live, above the
+  // switches that override it.
+  auto* gpage = new wxPanel(book);
+  auto* gbox = new wxBoxSizer(wxVERTICAL);
+
+  auto* live = new wxStaticText(gpage, wxID_ANY, wxEmptyString);
+  gbox->Add(live, 0, wxALL, 8);
+  gbox->Add(new wxStaticLine(gpage), 0, wxEXPAND | wxLEFT | wxRIGHT, 8);
+
+  gbox->Add(new wxStaticText(gpage, wxID_ANY, _("Heading source")), 0,
+            wxLEFT | wxTOP, 8);
+  wxArrayString hsrc;
+  hsrc.Add(_("Automatic: OpenCPN, else the radar"));
+  hsrc.Add(_("OpenCPN only"));
+  hsrc.Add(_("Radar only"));
+  hsrc.Add(_("Fixed heading"));
+  auto* hchoice = new wxChoice(gpage, wxID_ANY, wxDefaultPosition,
+                               wxDefaultSize, hsrc);
+  hchoice->SetSelection(m_diag.heading_source);
+  gbox->Add(hchoice, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
+
+  auto* frow = new wxBoxSizer(wxHORIZONTAL);
+  frow->Add(new wxStaticText(gpage, wxID_ANY, _("Fixed heading (°T):")), 0,
+            wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+  auto* fhead = new wxTextCtrl(gpage, wxID_ANY,
+                               wxString::Format("%.1f", m_diag.fixed_heading),
+                               wxDefaultPosition, wxSize(80, -1));
+  frow->Add(fhead, 0, wxALIGN_CENTER_VERTICAL);
+  gbox->Add(frow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
+
+  auto* cb_cog = new wxCheckBox(
+      gpage, wxID_ANY, _("Use COG as heading when nothing reports one"));
+  cb_cog->SetValue(m_diag.cog_as_heading);
+  gbox->Add(cb_cog, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
+
+  auto* trow = new wxBoxSizer(wxHORIZONTAL);
+  trow->Add(new wxStaticText(gpage, wxID_ANY, _("Heading timeout (s, 0 = never):")),
+            0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+  auto* tspin = new wxSpinCtrl(gpage, wxID_ANY, wxEmptyString, wxDefaultPosition,
+                               wxDefaultSize, wxSP_ARROW_KEYS, 0, 120,
+                               m_diag.heading_timeout_s);
+  trow->Add(tspin, 0, wxALIGN_CENTER_VERTICAL);
+  gbox->Add(trow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
+
+  auto* cb_fpos = new wxCheckBox(gpage, wxID_ANY, _("Fixed own-ship position"));
+  cb_fpos->SetValue(m_diag.fixed_position);
+  gbox->Add(cb_fpos, 0, wxLEFT | wxRIGHT, 8);
+  auto* prow2 = new wxBoxSizer(wxHORIZONTAL);
+  prow2->Add(new wxStaticText(gpage, wxID_ANY, _("Lat:")), 0,
+             wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+  auto* flat = new wxTextCtrl(gpage, wxID_ANY,
+                              wxString::Format("%.6f", m_diag.fixed_lat),
+                              wxDefaultPosition, wxSize(110, -1));
+  prow2->Add(flat, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12);
+  prow2->Add(new wxStaticText(gpage, wxID_ANY, _("Lon:")), 0,
+             wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+  auto* flon = new wxTextCtrl(gpage, wxID_ANY,
+                              wxString::Format("%.6f", m_diag.fixed_lon),
+                              wxDefaultPosition, wxSize(110, -1));
+  prow2->Add(flon, 0, wxALIGN_CENTER_VERTICAL);
+  gbox->Add(prow2, 0, wxALL, 8);
+
+  auto* lrow = new wxBoxSizer(wxHORIZONTAL);
+  lrow->Add(new wxStaticText(gpage, wxID_ANY, _("Log to the OpenCPN log:")), 0,
+            wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+  wxArrayString llev;
+  llev.Add(_("Off"));
+  llev.Add(_("Problems"));
+  llev.Add(_("Verbose"));
+  auto* lchoice = new wxChoice(gpage, wxID_ANY, wxDefaultPosition,
+                               wxDefaultSize, llev);
+  lchoice->SetSelection(m_diag.log_level);
+  lrow->Add(lchoice, 0, wxALIGN_CENTER_VERTICAL);
+  gbox->Add(lrow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
+
+  auto* ghint = new wxStaticText(
+      gpage, wxID_ANY,
+      _("A fixed heading or position lets the radar be used on a bench with "
+        "no compass and no GPS. On a boat, leave them off: they do not follow "
+        "you, and the picture will be confidently wrong."));
+  ghint->Wrap(330);
+  gbox->Add(ghint, 0, wxALL, 8);
+  gpage->SetSizer(gbox);
+  book->AddPage(gpage, _("Diagnostics"));
+
+  // The readout is what the drawing code would use if it drew this instant.
+  auto update_live = [this, live]() {
+    double h = 0.0, la = 0.0, lo = 0.0;
+    wxString hs, ps;
+    const bool have_h = ResolveHeading(-1, &h, &hs);
+    const bool have_p = ResolvePosition(-1, &la, &lo, &ps);
+    live->SetLabel(
+        wxString::Format(
+            _("Heading: %s\nPosition: %s"),
+            have_h ? wxString::Format(_("%.1f°T from %s"), h, hs)
+                   : wxString(_("none — the overlay cannot be drawn")),
+            have_p ? wxString::Format("%.5f, %.5f (%s)", la, lo, ps)
+                   : wxString(_("none — the overlay cannot be drawn"))));
+  };
+  update_live();
+  // On the stack, after dlg: it is destroyed first, so it stops before the
+  // handler it posts to dies. Heap-allocated it leaked, and on Cancel (which
+  // returns early) it kept ticking into a destroyed dialog.
+  wxTimer live_timer(&dlg);
+  dlg.Bind(wxEVT_TIMER, [update_live](wxTimerEvent&) { update_live(); });
+  live_timer.Start(1000);
+
   top->Add(book, 1, wxEXPAND | wxALL, 8);
   top->Add(dlg.CreateButtonSizer(wxOK | wxCANCEL), 0, wxALIGN_RIGHT | wxALL, 8);
 
@@ -1683,6 +1997,33 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
 
   dlg.SetSizerAndFit(top);
   if (dlg.ShowModal() != wxID_OK) return;
+
+  {
+    Diagnostics d = m_diag;
+    d.heading_source = hchoice->GetSelection();
+    // A locale that writes 1,5 must still be able to type it: wx parses with
+    // the locale, and this is a user typing, not a wire format.
+    double v = 0.0;
+    if (fhead->GetValue().ToDouble(&v)) d.fixed_heading = v;
+    if (flat->GetValue().ToDouble(&v)) d.fixed_lat = v;
+    if (flon->GetValue().ToDouble(&v)) d.fixed_lon = v;
+    d.cog_as_heading = cb_cog->GetValue();
+    d.heading_timeout_s = tspin->GetValue();
+    d.fixed_position = cb_fpos->GetValue();
+    d.log_level = lchoice->GetSelection();
+    const bool louder = d.log_level > m_diag.log_level;
+    m_diag = d;
+    SaveConfig();
+    if (louder) LogSettings();
+    for (MayaraPpiWindow* w : m_windows)
+      if (w) {
+        if (m_diag.log_level >= 2)
+          w->SetPerfLog([this](const wxString& t) { Log(2, t); });
+        else
+          w->SetPerfLog(nullptr);
+      }
+    if (wxWindow* c = GetOCPNCanvasWindow()) c->Refresh(false);
+  }
 
   m_palettes = *palettes;
   m_palette_active = (*palettes)[*active].name;
@@ -2035,6 +2376,13 @@ void mayara_pi::RebuildWindows() {
                                 [this]() { RebuildWindows(); });
                         });
     win->SetNavProvider([this]() { return m_nav; });
+    win->SetHeadingProvider([this](int radar, double& deg) {
+      return ResolveHeading(radar, &deg, nullptr);
+    });
+    // Costs nothing when logging is off: the panel only calls this when it is
+    // set, and it is only set while the operator is asking.
+    if (m_diag.log_level >= 2)
+      win->SetPerfLog([this](const wxString& s) { Log(2, s); });
     win->SetOrientationHandlers(
         [this](const std::string& id) { return OrientationFor(id); },
         [this](const std::string& id, int o) { SetOrientationFor(id, o); });
@@ -2169,6 +2517,216 @@ void mayara_pi::TogglePpiWindow() {
   if (m_windows_visible) CaptureWindowState();
 }
 
+// What this chart is showing, in real metres, for "chart scale sets range".
+// Same Mercator correction as the overlay itself: view_scale_ppm is pixels per
+// Mercator metre. The radius is half the shorter side, i.e. the largest circle
+// the canvas holds -- a radar covering that covers the chart.
+void mayara_pi::RecordCanvasRadius(PlugIn_ViewPort* vp, int canvasIndex) {
+  const double coslat = std::max(0.02, std::cos(vp->clat * M_PI / 180.0));
+  const double ppm = vp->view_scale_ppm / coslat;
+  if (ppm > 0)
+    m_canvas_radius_m[canvasIndex] =
+        0.5 * std::min(vp->pix_width, vp->pix_height) / ppm;
+}
+
+// The radars this canvas draws, longest range first, so each is drawn as an
+// annulus out to its own range and the shortest owns the middle.
+std::vector<mayara_pi::OverlayItem> mayara_pi::OverlayItems(int canvasIndex) {
+  std::vector<OverlayItem> items;
+  for (int i : OverlayRadars(canvasIndex)) {
+    RadarState* st = m_client->StateAt(i);
+    if (st && st->RangeMeters() > 0) items.push_back({i, st->RangeMeters()});
+  }
+  std::sort(items.begin(), items.end(),
+            [](const OverlayItem& a, const OverlayItem& b) {
+              return a.range > b.range;
+            });
+  return items;
+}
+
+// The chart without OpenGL. OpenCPN calls this instead of the GL callback when
+// hardware acceleration is off, and until now the plugin inherited the base
+// class no-op -- so the overlay simply vanished, while the PPI (which never
+// used GL: it is a wxPanel blitting a CPU-rendered bitmap) carried on. Same
+// geometry as the GL path, same cached disc, drawn through wxGraphicsContext
+// because a plain wxDC has no alpha.
+bool mayara_pi::RenderOverlayMultiCanvas(wxDC& dc, PlugIn_ViewPort* vp,
+                                         int canvasIndex, int priority) {
+  if (!OverlayOn(canvasIndex) || !m_client || !vp || !vp->bValid) return false;
+  if (priority != OVERLAY_LEGACY) return false;
+  RecordCanvasRadius(vp, canvasIndex);
+  const int n = m_client->RadarCount();
+  if (n == 0) return false;
+  if (static_cast<int>(m_overlay_bmp.size()) != n) m_overlay_bmp.assign(n, OverlayBmp{});
+
+  std::vector<OverlayItem> items = OverlayItems(canvasIndex);
+  if (items.empty()) return false;
+
+  std::unique_ptr<wxGraphicsContext> gc(
+      wxGraphicsContext::CreateFromUnknownDC(dc));
+  if (!gc) return false;
+
+  // The viewport is in physical pixels; a wxDC on a HiDPI screen draws in
+  // logical points. GL never had to care -- its viewport is physical too -- so
+  // on a Retina display every coordinate here was twice what it should be and
+  // the picture ended up in the bottom-right corner. Measure the ratio from
+  // the canvas rather than trusting GetContentScaleFactor(), which reports 1
+  // for this DC.
+  double scale = 1.0;
+  if (wxWindow* cw = GetCanvasByIndex(canvasIndex)) {
+    const wxSize cs = cw->GetClientSize();
+    if (cs.x > 0 && vp->pix_width > 0)
+      scale = static_cast<double>(cs.x) / vp->pix_width;
+  }
+  if (std::fabs(scale - 1.0) > 0.01) gc->Scale(scale, scale);
+
+  // Once per canvas geometry, not once per frame: this says how the plugin is
+  // mapping to the screen, and that only changes when the window does.
+  if (m_diag.log_level >= 2) {
+    const wxString shape = wxString::Format("%dx%d@%.3f", vp->pix_width,
+                                            vp->pix_height, scale);
+    if (m_last_dc_shape[canvasIndex] != shape) {
+      m_last_dc_shape[canvasIndex] = shape;
+      Log(2, wxString::Format("DC overlay: canvas %d, vp %dx%d, coordinate "
+                              "scale %.3f",
+                              canvasIndex, vp->pix_width, vp->pix_height,
+                              scale));
+    }
+  }
+  gc->BeginLayer(m_prefs.overlay_alpha / 100.0);
+  bool drew = false;
+  for (size_t k = 0; k < items.size(); ++k) {
+    const double inner =
+        (k + 1 < items.size())
+            ? static_cast<double>(items[k + 1].range) / items[k].range
+            : 0.0;
+    if (DrawRadarOverlayDC(gc.get(), items[k].idx, vp, inner)) drew = true;
+  }
+  if (m_prefs.overlay_zones)
+    for (const OverlayItem& it : items) DrawZonesOverlayDC(gc.get(), it.idx, vp);
+  gc->EndLayer();
+  return drew;
+}
+
+bool mayara_pi::DrawRadarOverlayDC(wxGraphicsContext* gc, int index,
+                                   PlugIn_ViewPort* vp, double inner_frac) {
+  RadarState* state = m_client->StateAt(index);
+  if (!state) return false;
+  const uint32_t range_m = state->RangeMeters();
+  if (range_m == 0) return false;
+
+  double lat = 0.0, lon = 0.0, heading = 0.0;
+  if (!ResolvePosition(index, &lat, &lon, nullptr)) return false;
+  if (!ResolveHeading(index, &heading, nullptr)) return false;
+
+  wxPoint centre;
+  GetCanvasPixLL(vp, &centre, lat, lon);
+  if (std::abs(centre.x) > 1000000 || std::abs(centre.y) > 1000000) return false;
+  const double coslat = std::max(0.02, std::cos(lat * M_PI / 180.0));
+  const double radius_px = range_m * vp->view_scale_ppm / coslat;
+  if (radius_px < 1.0) return false;
+  const double rot_deg = heading + vp->rotation * 180.0 / M_PI;
+
+  // Rasterising is per pixel on the CPU here, so the disc is capped and scaled
+  // up by the blit when the chart is zoomed in past it. GL had no such worry.
+  const int size = std::max(4, std::min(1536, static_cast<int>(radius_px * 2)));
+  const int rot10 = static_cast<int>(rot_deg * 10) % 3600;
+
+  OverlayBmp& cache = m_overlay_bmp[index];
+  if (!cache.bmp.IsOk() || cache.gen != state->Generation() ||
+      cache.size != size || cache.rot10 != rot10 ||
+      std::fabs(cache.inner - inner_frac) > 0.001) {
+    std::vector<uint8_t> rgba(static_cast<size_t>(size) * size * 4);
+    uint64_t drawn_gen = 0;
+    if (!state->RenderOverlayRGBA(rgba.data(), size, rot_deg, inner_frac,
+                                  &drawn_gen))
+      return false;
+    // wxImage wants the colour and the alpha in separate buffers, and takes
+    // ownership of both.
+    unsigned char* rgb = static_cast<unsigned char*>(malloc(static_cast<size_t>(size) * size * 3));
+    unsigned char* alpha = static_cast<unsigned char*>(malloc(static_cast<size_t>(size) * size));
+    if (!rgb || !alpha) {
+      free(rgb);
+      free(alpha);
+      return false;
+    }
+    for (size_t i = 0; i < static_cast<size_t>(size) * size; ++i) {
+      rgb[i * 3 + 0] = rgba[i * 4 + 0];
+      rgb[i * 3 + 1] = rgba[i * 4 + 1];
+      rgb[i * 3 + 2] = rgba[i * 4 + 2];
+      alpha[i] = rgba[i * 4 + 3];
+    }
+    cache.bmp = wxBitmap(wxImage(size, size, rgb, alpha));
+    cache.gen = drawn_gen;  // what was drawn, not what has arrived since
+    cache.size = size;
+    cache.rot10 = rot10;
+    cache.inner = inner_frac;
+  }
+  if (!cache.bmp.IsOk()) return false;
+  gc->DrawBitmap(cache.bmp, centre.x - radius_px, centre.y - radius_px,
+                 radius_px * 2, radius_px * 2);
+  if (m_diag.log_level >= 2 && ++m_dc_frames % 100 == 0)
+    Log(2, wxString::Format(
+               "DC overlay: radar %d centre %d,%d radius %.0f raster %d "
+               "rot %.1f",
+               index, centre.x, centre.y, radius_px, size, rot_deg));
+  return true;
+}
+
+void mayara_pi::DrawZonesOverlayDC(wxGraphicsContext* gc, int index,
+                                   PlugIn_ViewPort* vp) {
+  RadarControls* ctrl = m_client ? m_client->ControlsAt(index) : nullptr;
+  if (!ctrl) return;
+  double lat = 0.0, lon = 0.0, heading = 0.0;
+  if (!ResolvePosition(index, &lat, &lon, nullptr)) return;
+  if (!ResolveHeading(index, &heading, nullptr)) return;
+
+  wxPoint centre;
+  GetCanvasPixLL(vp, &centre, lat, lon);
+  const double coslat = std::max(0.02, std::cos(lat * M_PI / 180.0));
+  const double ppm = vp->view_scale_ppm / coslat;
+  const double base = (heading + vp->rotation * 180.0 / M_PI) * M_PI / 180.0 -
+                      M_PI / 2.0;
+
+  const wxColour fill[2] = {wxColour(144, 238, 144, 64),
+                            wxColour(173, 216, 230, 64)};
+  const wxColour line[2] = {wxColour(0, 128, 0, 153), wxColour(0, 0, 255, 153)};
+  const char* ids[2] = {"guardZone1", "guardZone2"};
+
+  for (int z = 0; z < 2; ++z) {
+    const ControlValue v = ctrl->Value(ids[z]);
+    if (!v.has_enabled || !v.enabled) continue;
+    if (v.endDistance <= v.startDistance) continue;
+    const double r_in = v.startDistance * ppm, r_out = v.endDistance * ppm;
+    if (r_out < 2) continue;
+    double a0 = base + v.value, a1 = base + v.endValue;
+    const bool whole = std::fabs(v.endValue - v.value) < 0.001;
+    if (whole) a1 = a0 + 2.0 * M_PI;
+    if (a1 < a0) a1 += 2.0 * M_PI;
+
+    wxGraphicsPath path = gc->CreatePath();
+    if (whole) {
+      // Two full circles in one path: the odd-even rule leaves the hole.
+      path.AddCircle(centre.x, centre.y, r_out);
+      path.AddCircle(centre.x, centre.y, r_in);
+    } else {
+      path.MoveToPoint(centre.x + r_in * std::cos(a0),
+                       centre.y + r_in * std::sin(a0));
+      path.AddLineToPoint(centre.x + r_out * std::cos(a0),
+                          centre.y + r_out * std::sin(a0));
+      path.AddArc(centre.x, centre.y, r_out, a0, a1, true);
+      path.AddLineToPoint(centre.x + r_in * std::cos(a1),
+                          centre.y + r_in * std::sin(a1));
+      path.AddArc(centre.x, centre.y, r_in, a1, a0, false);
+      path.CloseSubpath();
+    }
+    gc->SetBrush(wxBrush(fill[z]));
+    gc->SetPen(wxPen(line[z], 1));
+    gc->FillPath(path, wxODDEVEN_RULE);
+    gc->StrokePath(path);
+  }
+}
+
 bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
                                            PlugIn_ViewPort* vp, int canvasIndex,
                                            int priority) {
@@ -2178,18 +2736,7 @@ bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
   // legacy chart-overlay layer; the higher passes (OVER_EMBOSS/OVER_UI) render
   // on top of the toolbar and chart bar, so drawing there paints over them.
   if (priority != OVERLAY_LEGACY) return false;
-  // What this chart is showing, in real metres, for "chart scale sets range".
-  // Same Mercator correction as the overlay itself: view_scale_ppm is pixels
-  // per Mercator metre. The radius is half the shorter side, i.e. the largest
-  // circle the canvas holds -- a radar covering that covers the chart.
-  {
-    const double coslat =
-        std::max(0.02, std::cos(vp->clat * M_PI / 180.0));
-    const double ppm = vp->view_scale_ppm / coslat;
-    if (ppm > 0)
-      m_canvas_radius_m[canvasIndex] =
-          0.5 * std::min(vp->pix_width, vp->pix_height) / ppm;
-  }
+  RecordCanvasRadius(vp, canvasIndex);
   const int n = m_client->RadarCount();
   if (n == 0) return false;
   if (static_cast<int>(m_overlay_tex.size()) != n)
@@ -2198,18 +2745,8 @@ bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
   // Collect radars that have data, sorted by range descending so the longest
   // range is drawn first and the shortest composites on top (short-range inner
   // disc, longer-range annulus beyond it).
-  struct Item {
-    int idx;
-    uint32_t range;
-  };
-  std::vector<Item> items;
-  for (int i : OverlayRadars(canvasIndex)) {
-    RadarState* st = m_client->StateAt(i);
-    if (st && st->RangeMeters() > 0) items.push_back({i, st->RangeMeters()});
-  }
+  std::vector<OverlayItem> items = OverlayItems(canvasIndex);
   if (items.empty()) return false;
-  std::sort(items.begin(), items.end(),
-            [](const Item& a, const Item& b) { return a.range > b.range; });
 
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -2234,7 +2771,7 @@ bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
   // Guard zones over the chart, in the same colours as the PPI so a zone reads
   // as the same thing in both places.
   if (m_prefs.overlay_zones)
-    for (const Item& it : items) DrawZonesOverlay(it.idx, vp);
+    for (const OverlayItem& it : items) DrawZonesOverlay(it.idx, vp);
   glDisable(GL_BLEND);
   return drew;
 }
@@ -2246,9 +2783,8 @@ bool mayara_pi::DrawRadarOverlay(int index, PlugIn_ViewPort* vp,
   const uint32_t range_m = state->RangeMeters();
   if (range_m == 0) return false;
 
-  double lat = m_ownship_lat, lon = m_ownship_lon;
-  if (lat == 0.0 && lon == 0.0)
-    if (!state->Position(lat, lon)) return false;
+  double lat = 0.0, lon = 0.0;
+  if (!ResolvePosition(index, &lat, &lon, nullptr)) return false;
 
   OverlayTex& t = m_overlay_tex[index];
   if (t.tex == 0) {
@@ -2285,8 +2821,8 @@ bool mayara_pi::DrawRadarOverlay(int index, PlugIn_ViewPort* vp,
   const double radius_px = range_m * vp->view_scale_ppm / coslat;
   if (radius_px < 1.0) return false;
 
-  double heading = m_heading_true, sh = 0.0;
-  if (heading == 0.0 && state->Heading(sh)) heading = sh;
+  double heading = 0.0;
+  if (!ResolveHeading(index, &heading, nullptr)) return false;
   const double rot_deg = heading + vp->rotation * 180.0 / M_PI;
 
   glBindTexture(GL_TEXTURE_2D, t.tex);
@@ -2332,16 +2868,15 @@ void mayara_pi::DrawZonesOverlay(int index, PlugIn_ViewPort* vp) {
   RadarState* state = m_client ? m_client->StateAt(index) : nullptr;
   if (!ctrl || !state) return;
 
-  double lat = m_ownship_lat, lon = m_ownship_lon;
-  if (lat == 0.0 && lon == 0.0)
-    if (!state->Position(lat, lon)) return;
+  double lat = 0.0, lon = 0.0;
+  if (!ResolvePosition(index, &lat, &lon, nullptr)) return;
   wxPoint centre;
   GetCanvasPixLL(vp, &centre, lat, lon);
   const double coslat = std::max(0.02, std::cos(lat * M_PI / 180.0));
   const double ppm = vp->view_scale_ppm / coslat;
 
-  double heading = m_heading_true, sh = 0.0;
-  if (heading == 0.0 && state->Heading(sh)) heading = sh;
+  double heading = 0.0;
+  if (!ResolveHeading(index, &heading, nullptr)) return;
   // Screen angle trails the bearing by 90 degrees, and the chart may be
   // rotated under us.
   const double base = (heading + vp->rotation * 180.0 / M_PI) * M_PI / 180.0 -
@@ -2404,6 +2939,21 @@ void mayara_pi::SetPositionFixEx(PlugIn_Position_Fix_Ex& pfix) {
   m_nav.sog = std::isnan(pfix.Sog) ? 0.0 : pfix.Sog;
   m_nav.has_hdt = !std::isnan(pfix.Hdt) && pfix.Hdt >= 0.0 && pfix.Hdt < 360.0;
   m_nav.hdt = m_nav.has_hdt ? pfix.Hdt : 0.0;
+  if (m_nav.has_hdt) m_hdt_ms = DiagNowMs();
+
+  // Which of these OpenCPN actually supplies is the first question when the
+  // picture is in the wrong place, so log the transitions.
+  const int now_flags = (m_nav.valid ? 1 : 0) | (m_nav.has_cog ? 2 : 0) |
+                        (m_nav.has_hdt ? 4 : 0);
+  if (now_flags != m_fix_flags) {
+    m_fix_flags = now_flags;
+    Log(2, wxString::Format(
+               "OpenCPN fix: position %s, COG %s, heading %s (lat %.5f lon "
+               "%.5f cog %.1f sog %.1f hdt %.1f)",
+               m_nav.valid ? "yes" : "no", m_nav.has_cog ? "yes" : "no",
+               m_nav.has_hdt ? "yes" : "no", m_nav.lat, m_nav.lon, m_nav.cog,
+               m_nav.sog, m_nav.hdt));
+  }
 }
 
 void mayara_pi::SetColorScheme(PI_ColorScheme cs) {

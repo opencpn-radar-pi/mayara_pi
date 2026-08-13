@@ -3,6 +3,8 @@
  *****************************************************************************/
 #include "RadarState.h"
 
+#include <chrono>
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -279,6 +281,52 @@ void RadarState::Clear() {
   ++generation_;  // forces disc/PPI to rebuild empty
 }
 
+bool RadarState::RenderOverlayRGBA(uint8_t* rgba, int size, double rot_deg,
+                                   double inner_frac, uint64_t* generation) {
+  std::lock_guard<std::mutex> lock(m_);
+  if (generation) *generation = generation_;
+  // Guard first: a negative size wraps the length and the memset would run off
+  // into whatever follows.
+  if (size <= 0) return false;
+  std::memset(rgba, 0, static_cast<size_t>(size) * size * 4);
+  if (!has_data_ || disc_size_ <= 0) return false;
+  EnsureDisc();
+
+  const double dcenter = disc_size_ / 2.0;
+  const double step = static_cast<double>(disc_size_) / size;
+  const double th = rot_deg * 3.14159265358979323846 / 180.0;
+  const double cs = std::cos(th), sn = std::sin(th);
+  const double oc = size / 2.0;
+  // Squared radii in destination pixels: outside the disc there is nothing to
+  // sample, inside the hole a shorter-range radar is drawing instead.
+  const double r_out2 = oc * oc;
+  const double r_in = inner_frac > 0 ? inner_frac * oc : -1.0;
+  const double r_in2 = r_in * r_in;
+
+  for (int y = 0; y < size; ++y) {
+    const double fy = y - oc;
+    uint8_t* orow = rgba + static_cast<size_t>(y) * size * 4;
+    for (int x = 0; x < size; ++x) {
+      const double fx = x - oc;
+      const double d2 = fx * fx + fy * fy;
+      if (d2 > r_out2) continue;
+      if (r_in > 0 && d2 < r_in2) continue;
+      const int sx = static_cast<int>(dcenter + (fx * cs + fy * sn) * step);
+      const int sy = static_cast<int>(dcenter + (-fx * sn + fy * cs) * step);
+      if (sx < 0 || sx >= disc_size_ || sy < 0 || sy >= disc_size_) continue;
+      const uint8_t* s =
+          &disc_[(static_cast<size_t>(sy) * disc_size_ + sx) * 4];
+      if (!s[3]) continue;
+      orow[x * 4 + 0] = static_cast<uint8_t>(s[0] * intensity_);
+      orow[x * 4 + 1] = static_cast<uint8_t>(s[1] * intensity_);
+      orow[x * 4 + 2] = static_cast<uint8_t>(s[2] * intensity_);
+      orow[x * 4 + 3] = s[3];
+    }
+  }
+  return true;
+}
+
+
 void RadarState::SetPosition(double lat, double lon) {
   std::lock_guard<std::mutex> lock(m_);
   radar_lat_ = lat;
@@ -302,6 +350,21 @@ void RadarState::SetHeadingFromBearing(uint32_t angle, uint32_t bearing) {
   if (diff < 0) diff += spokes_;
   heading_deg_ = diff * 360.0 / spokes_;
   has_heading_ = true;
+  heading_ms_ = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now().time_since_epoch())
+                    .count();
+}
+
+// How long ago that heading arrived. A radar that has stopped transmitting
+// keeps its last heading for ever otherwise, and a stale heading pointing the
+// picture the wrong way is worse than no heading at all.
+int64_t RadarState::HeadingAgeMs() const {
+  std::lock_guard<std::mutex> lock(m_);
+  if (!has_heading_) return -1;
+  const int64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                          std::chrono::steady_clock::now().time_since_epoch())
+                          .count();
+  return now - heading_ms_;
 }
 
 bool RadarState::Heading(double& degrees) const {

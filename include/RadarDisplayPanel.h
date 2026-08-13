@@ -7,6 +7,7 @@
 #ifndef MAYARA_RADAR_DISPLAY_PANEL_H_
 #define MAYARA_RADAR_DISPLAY_PANEL_H_
 
+#include <cstdint>
 #include <functional>
 #include <string>
 
@@ -86,11 +87,43 @@ struct PpiGeometry {
   bool valid = false;  // usable for placing anything geographic
 };
 
+// What the cached picture was rendered for. Anything here changing means the
+// bitmap has to be built again; nothing here changing means it does not.
+struct PpiCacheKey {
+  uint64_t generation = ~0ull;
+  int w = 0, h = 0;
+  double zoom = 0, rot = 0, off_x = 0, off_y = 0;
+  float intensity = 0;
+  int threshold = -1;
+  bool operator==(const PpiCacheKey& o) const {
+    return generation == o.generation && w == o.w && h == o.h &&
+           zoom == o.zoom && rot == o.rot && off_x == o.off_x &&
+           off_y == o.off_y && intensity == o.intensity &&
+           threshold == o.threshold;
+  }
+};
+
 class RadarDisplayPanel : public wxPanel {
  public:
   RadarDisplayPanel(wxWindow* parent, MayaraClient* client, int radar_index = 0);
 
   void SetMenuCallback(std::function<void()> cb) { m_on_menu = std::move(cb); }
+  // Where the rendering cost goes, for deciding whether the CPU rasteriser
+  // needs help. Set only when the operator asked for verbose logging.
+  void SetPerfLog(std::function<void(const wxString&)> cb) {
+    m_perf_log = std::move(cb);
+  }
+
+  // Where the heading comes from, decided by the plugin rather than here, so
+  // the Diagnostics settings (source, fixed value, timeout) mean the same
+  // thing on the picture as on the chart. Falls back to the panel's own
+  // OpenCPN-then-radar order when unset.
+  void SetHeadingProvider(std::function<bool(int, double&)> cb) {
+    m_heading_provider = std::move(cb);
+  }
+  void SetOrientationChangedCallback(std::function<void(int)> cb) {
+    m_on_orientation = std::move(cb);
+  }
   // Open a single control (gauge icons): the callback gets the control id.
   void SetControlCallback(std::function<void(const std::string&)> cb) {
     m_on_control = std::move(cb);
@@ -200,6 +233,15 @@ class RadarDisplayPanel : public wxPanel {
   int m_index = 0;         // which radar this panel shows
   wxTimer m_timer;
   std::function<void()> m_on_menu;
+  std::function<void(const wxString&)> m_perf_log;
+  std::function<bool(int, double&)> m_heading_provider;
+  wxBitmap m_picture;      // the rasterised sweep, reused until it changes
+  PpiCacheKey m_picture_key;
+  int64_t m_render_us = 0, m_convert_us = 0;
+  uint64_t m_render_count = 0, m_blit_count = 0;
+  // Told when the lozenge cycles the orientation, so the setting is persisted
+  // for this radar and the controls follow.
+  std::function<void(int)> m_on_orientation;
   std::function<void(const std::string&)> m_on_control;
   std::function<void()> m_on_focus;
   std::function<NavState()> m_nav;  // own-ship nav provider (may be null)
@@ -251,7 +293,8 @@ class RadarDisplayPanel : public wxPanel {
   wxRect m_icon_gain;    // icon-bar: Gain gauge
   wxRect m_icon_sea;     // icon-bar: Sea gauge
   wxRect m_icon_rain;    // icon-bar: Rain gauge
-  wxRect m_icon_ebl;     // icon-bar: EBL/VRM
+  wxRect m_icon_ebl;
+  wxRect m_orient_rect;  // lozenge: which way is up, click to cycle
   wxRect m_power_rect;
   wxRect m_range_minus_rect;
   wxRect m_range_plus_rect;

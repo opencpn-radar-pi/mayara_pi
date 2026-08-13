@@ -77,6 +77,16 @@ class RadarState {
   bool RenderPPI(uint8_t* rgb, int w, int h, double zoom = 1.0,
                  double rot_deg = 0.0, double off_x = 0.0, double off_y = 0.0);
 
+  // The same walk as RenderPPI, but straight RGBA for compositing over a
+  // chart: no black background to blend against, and an optional transparent
+  // hole in the middle so a shorter-range radar occludes this one there.
+  // `size` is the diameter in pixels; the radar's range fills size/2.
+  // `generation` (optional) returns the generation these pixels were rendered
+  // from, read under the same lock: a caller that asks afterwards can be handed
+  // a newer one than it drew, and would then cache a stale image against it.
+  bool RenderOverlayRGBA(uint8_t* rgba, int size, double rot_deg,
+                         double inner_frac, uint64_t* generation = nullptr);
+
   // Radar position stamped into the spoke data (best-effort). Used to place the
   // chart overlay when OpenCPN has no own-ship fix of its own.
   void SetPosition(double lat, double lon);
@@ -87,6 +97,7 @@ class RadarState {
   // true heading of its own.
   void SetHeadingFromBearing(uint32_t angle, uint32_t bearing);
   bool Heading(double& degrees) const;
+  int64_t HeadingAgeMs() const;  // -1 when there has never been one
 
   // Drop all echoes (e.g. when the radar goes to Standby) so the picture is
   // erased until the next sweep repopulates it.
@@ -136,6 +147,7 @@ class RadarState {
   bool has_pos_ = false;
   double heading_deg_ = 0.0;
   bool has_heading_ = false;
+  int64_t heading_ms_ = 0;
   float intensity_ = 1.0f;
   int band_medium_ = 0;     // legend index where the medium return starts
   int band_strong_ = 0;     // legend index where the strong return starts
