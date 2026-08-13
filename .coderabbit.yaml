@@ -1,0 +1,177 @@
+language: en-US
+
+reviews:
+  profile: assertive
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    drafts: false
+    ignore_title_keywords:
+      - '[skip review]'
+      - 'WIP'
+    ignore_usernames:
+      - 'dependabot[bot]'
+      - 'renovate[bot]'
+      - 'github-actions[bot]'
+
+  # `opencpn-libs/` is vendored verbatim from OpenCPN (the plugin API headers
+  # and shared cmake); it is upstream's code and must not be reviewed as ours.
+  # `build/` is CMake output. Binary assets and translation catalogues are not
+  # reviewable as code.
+  path_filters:
+    - '!opencpn-libs/**'
+    - '!build/**'
+    - '!**/*.png'
+    - '!**/*.ico'
+    - '!**/*.icns'
+    - '!**/*.mo'
+    - '!**/*.min.js'
+
+  high_level_summary_instructions: |
+    Say what the change does for someone using the plugin, then what it
+    does in the code. Name the OpenCPN or radar behaviour involved.
+    Do not list files.
+
+  path_instructions:
+    - path: '**/*'
+      instructions: |
+        ## Project at a glance
+        mayara_pi is an OpenCPN plugin (plugin API 1.21, `opencpn_plugin_121`)
+        that renders marine radar served by mayara-server over the Signal K
+        Radar API. C++ with wxWidgets 3.2, built by CMake, talking HTTP +
+        WebSocket via IXWebSocket and nlohmann/json.
+
+        ## The plugin renders; the server owns the radar
+        mayara-server owns radar I/O, ARPA target tracking, trails and
+        guard-zone detection. The plugin draws what the server streams and
+        writes controls back. A PR that re-implements tracking, trail
+        history or zone occupancy in the plugin is doing the server's job:
+        say so. Trails in particular are baked into the spoke legend as
+        history colours, so they arrive as pixels, not as objects.
+
+        ## Two servers, two shapes
+        The plugin talks to either mayara-server directly or a Signal K
+        server in front of it. They do not carry the same things: Signal K
+        republishes `radars.<id>.controls.*` deltas but not
+        `radars.<id>.targets.<tid>`, so anything that depends on a delta
+        arriving needs a REST fallback (`/signalk/v2/api/vessels/self/
+        radars/<id>/...`). Flag new stream-only dependencies.
+
+        ## OpenCPN version compatibility is not optional
+        Users run whatever OpenCPN their platform ships. Two traps already
+        hit this plugin, both silent:
+        - `PrepareAllPluginContextMenus()` dispatches `PrepareContextMenu`
+          through a `switch (m_api_version)` listing only the versions that
+          build knows, so it may never be called.
+        - Plugin submenu clicks were dropped entirely before OpenCPN
+          commit 7a464b66b (2025-09-11).
+        Flag any new reliance on a host callback or menu feature without a
+        path that still works when the host does not cooperate.
+
+        ## Comments explain why
+        The house style is prose comments that give the reason a thing is
+        the way it is -- the constraint, the trap, the thing that was tried
+        and did not work. Restating the code in words is noise; a missing
+        reason on a non-obvious choice is a real gap. Flag both.
+
+        ## One logical change per PR
+        A feature, its config, its UI and its documentation belong together.
+        An unrelated refactor does not. PR titles here are plain prose, not
+        conventional commits -- do not ask for a `feat:` prefix.
+
+        ## Say what was not tested
+        Much of this plugin can only be judged against live radar hardware.
+        A PR that claims a behaviour works should say how that was checked,
+        and a PR that could not check something should say which part. Flag
+        a claim of "tested" that the diff shows could not have been.
+
+    - path: '{src,include}/**/*.{cpp,h}'
+      instructions: |
+        ## The build lands on C++11, whatever CMakeLists says
+        `CMAKE_CXX_STANDARD 17` is set, but `cmake/PluginSetup.cmake`
+        appends `-std=c++11` to `CMAKE_CXX_FLAGS` afterwards and the flag
+        wins. Aggregate-initialising a struct that has default member
+        initialisers (`Rgba c{1,2,3,4}`) fails to compile. Flag C++14/17
+        constructs.
+
+        ## Never let the locale into a wire format
+        `printf("%g")` and friends follow `LC_NUMERIC`, which writes a
+        decimal comma in half of Europe. That has already produced invalid
+        JSON that silently zeroed guard zones, and it would equally corrupt
+        NMEA. Numbers going into JSON must use `JsonNum()`
+        (include/RadarControls.h); numbers going into NMEA must use the
+        locale-proof helper in mayara_pi.cpp. Flag any new `%g`/`%f`/
+        `std::to_string` on a double headed for a wire format.
+
+        ## view_scale_ppm is Mercator metres, not ground metres
+        OpenCPN's `toSM()` maps easting as `dlon*R`, leaving out the
+        `cos(lat)` that makes it a ground distance. Anything converting
+        metres to pixels for a chart overlay must divide by `cos(lat)`
+        (clamped near the poles). Without it the overlay is drawn
+        `cos(lat)` too small -- 40% short at 53N.
+
+        ## The spoke's range is the truth
+        Scale radar geometry by the range reported in the RadarMessage
+        spoke data (`RadarState::RangeMeters()`), never by the notional
+        range in a control value. They disagree, and the picture follows
+        the spokes.
+
+        ## Threads
+        The network thread writes RadarState and the radar list; the UI
+        thread reads them. RadarState has its own mutex, MayaraClient has
+        `m_radars_mutex`. Flag new shared state without a lock, a lock held
+        across an HTTP call, and any wx call from a non-UI thread.
+
+        ## One rasteriser
+        Rendering is CPU-only by design: RadarState builds one cached
+        cartesian disc through a precomputed polar LUT, and the PPI, the GL
+        overlay and any wxDC surface are thin blit/scale/rotate sinks over
+        it. Flag a second rendering path, per-pixel work added to
+        `EnsureDisc()`, or a disc rebuilt when the generation has not
+        changed.
+
+        ## wxWidgets traps this codebase has already paid for
+        - `wxSizer::Show(sizer, bool, /*recursive=*/true)` un-hides children
+          a control deliberately hid; re-push the model afterwards.
+        - `FindFocus()` never matches a `wxTextCtrl` on macOS -- focus sits
+          on an inner native view. Track focus explicitly.
+        - A `wxScrolledWindow`'s virtual size is not its client size;
+          proportion-1 children stretch to the virtual width and run off
+          screen.
+        - Native scrollbars do not show inside a plugin's child window on
+          macOS, which is why ControlsPanel draws its own.
+        - Destroying a window from inside its own event handler needs
+          `CallAfter`.
+
+        ## Nothing writes to the radar unasked
+        Ranging, transmit and control writes change hardware behaviour.
+        Anything automatic (auto-range, nesting, transmit-on-select) must
+        be off by default or triggered by an explicit user action, and must
+        not fight a value the operator has just set. Flag new writes that
+        run on a timer without a user-visible switch.
+
+    - path: 'src/LocalServerHttp.cpp'
+      instructions: |
+        This translation unit is deliberately free of wxWidgets. IXWebSocket
+        and wxWidgets both typedef `ssize_t` on MSVC and cannot meet in one
+        file (`error C2371: 'ssize_t': redefinition`). Flag any wx include
+        or wx type introduced here.
+
+    - path: '.github/workflows/**'
+      instructions: |
+        Builds run on Ubuntu, Debian (bookworm and trixie), Fedora, flatpak,
+        macOS and Windows, and upload to Cloudsmith. Distribution package
+        names differ per release and have already broken the build once
+        (trixie dropped `libgdk-pixbuf2.0-dev`, `libunarr-dev` and GTK2);
+        a new dependency needs to be right per distribution, not copied
+        between them. `actions/checkout@v4` is superseded -- do not
+        reintroduce it. Flag secrets referenced by a name that is not
+        configured, and any step that would upload from a pull request
+        opened by a fork.
+
+    - path: 'docs/radar_pi-feature-gap.md'
+      instructions: |
+        This is the record of what radar_pi does that mayara_pi does not.
+        An entry moved to "done" must match what the PR actually
+        implements, and an item deliberately not built must say why rather
+        than disappear. Flag a claim here that the diff does not support.
