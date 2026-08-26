@@ -41,8 +41,30 @@ fi
 sudo dpkg --add-architecture armhf
 
 sudo apt-get -qq update
+# GitHub-hosted runners ship a lot of pre-installed amd64 packages. A
+# Multi-Arch: foreign package (e.g. libglib2.0-dev-bin) that a fresh
+# armhf :dev package depends on at an exact version won't be pulled in as
+# a foreign-arch match if the already-installed host copy is older and
+# build-dep doesn't upgrade it on its own -- so bring the host up to date
+# first, before it can conflict with an exact-version armhf dependency.
+sudo apt-get -y upgrade
 sudo apt-get install -y --no-install-recommends \
-    devscripts equivs crossbuild-essential-armhf
+    devscripts equivs crossbuild-essential-armhf python3-pip
+
+# jammy's own cmake (3.22) has a FindwxWidgets bug: it comes back with
+# wxWidgets_LIBRARIES empty even though `wx-config --libs` (which it does
+# call, correctly) prints the right flags -- verified by running the exact
+# same configure with a newer cmake, which resolves wxWidgets fine. Pull a
+# current cmake from PyPI rather than chase the cmake-side bug.
+# --break-system-packages (needed on noble's PEP 668-enforcing pip) doesn't
+# exist on jammy's older pip, which errors on an unrecognized option.
+if pip3 install --help 2>&1 | grep -q -- --break-system-packages; then
+    pip3 install --quiet --break-system-packages "cmake>=3.28"
+else
+    pip3 install --quiet "cmake>=3.28"
+fi
+export PATH="$HOME/.local/bin:$PATH"
+cmake --version
 
 # Install extra build libs
 ME=$(echo ${0##*/} | sed 's/\.sh//g')
