@@ -2826,6 +2826,7 @@ bool mayara_pi::DrawRadarOverlay(int index, PlugIn_ViewPort* vp,
   const double rot_deg = heading + vp->rotation * 180.0 / M_PI;
 
   glBindTexture(GL_TEXTURE_2D, t.tex);
+  glMatrixMode(GL_MODELVIEW);
   glPushMatrix();
   glTranslatef(center.x, center.y, 0.0f);
   glRotatef(rot_deg, 0.0f, 0.0f, 1.0f);
