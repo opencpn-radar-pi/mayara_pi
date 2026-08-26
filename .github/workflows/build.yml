@@ -104,9 +104,15 @@ jobs:
           - { name: debian-bookworm-arm64,  runs-on: ubuntu-24.04-arm, container: 'debian:bookworm', script: ci/circleci-build-debian.sh, target: bookworm, env: debian }
           - { name: debian-trixie-x86_64,   runs-on: ubuntu-latest,    container: 'debian:trixie',   script: ci/circleci-build-debian.sh, target: trixie,   env: debian }
           - { name: debian-trixie-arm64,    runs-on: ubuntu-24.04-arm, container: 'debian:trixie',   script: ci/circleci-build-debian.sh, target: trixie,   env: debian }
-          # ubuntu-jammy (22.04) needs wx >= 3.2.2 which isn't in its repos
-          # (only 3.2.1); it needs a wx PPA step. Noble covers modern Ubuntu.
           - { name: ubuntu-noble,           runs-on: ubuntu-24.04,     container: '',                script: ci/circleci-build-debian.sh, target: noble,    env: debian }
+          - { name: ubuntu-noble-armhf,     runs-on: ubuntu-24.04,     container: '',                script: ci/circleci-build-debian-armhf.sh, target: noble, env: debian }
+          # jammy (22.04) needs wx >= 3.2.2, which isn't in its own repos
+          # (only 3.2.1) -- the opencpn PPA carries the same 3.2.2 build
+          # noble ships, for amd64/arm64/armhf alike, so both jammy jobs pull
+          # from it (wx_ppa: true) instead of skipping jammy as covered by
+          # noble.
+          - { name: ubuntu-jammy,           runs-on: ubuntu-latest,    container: 'ubuntu:22.04',   script: ci/circleci-build-debian.sh, target: jammy,    env: debian, wx_ppa: 'true' }
+          - { name: ubuntu-jammy-armhf,     runs-on: ubuntu-latest,    container: 'ubuntu:22.04',   script: ci/circleci-build-debian-armhf.sh, target: jammy, env: debian, wx_ppa: 'true' }
           - { name: fedora,                 runs-on: ubuntu-latest,    container: 'fedora:41',       script: ci/circleci-build-fedora.sh, target: fedora,   env: fedora }
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runs-on }}
@@ -137,6 +143,14 @@ jobs:
           git config --global --add safe.directory '*'
       - uses: actions/checkout@v5
         with: { submodules: recursive, fetch-depth: 0 }
+      - name: Add OpenCPN PPA (wx 3.2.2, needed on jammy)
+        if: matrix.wx_ppa == 'true'
+        shell: sh
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends software-properties-common
+          add-apt-repository -y ppa:opencpn/opencpn
+          apt-get update
       - name: Build
         run: bash ${{ matrix.script }}
       - name: Publish to Cloudsmith
