@@ -8,6 +8,36 @@
 #
 set -xe
 
+# Ubuntu doesn't mirror armhf (or any non-x86 arch) on archive.ubuntu.com /
+# security.ubuntu.com -- those only ever carried amd64/i386. armhf lives on
+# the separate ports.ubuntu.com archive, so the default sources need
+# restricting to amd64 and a matching armhf source added, or `apt-get
+# update` 404s on every armhf index once the architecture is added.
+suite="$OCPN_TARGET"
+if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+    # deb822 format (Ubuntu 24.04+, e.g. the bare GitHub runner for noble).
+    sudo sed -i '/^Types: deb$/a Architectures: amd64' \
+        /etc/apt/sources.list.d/ubuntu.sources
+    cat <<EOF | sudo tee /etc/apt/sources.list.d/armhf.sources > /dev/null
+Types: deb
+URIs: http://ports.ubuntu.com/ubuntu-ports
+Suites: $suite $suite-updates $suite-security $suite-backports
+Components: main universe restricted multiverse
+Architectures: armhf
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+EOF
+else
+    # One-line sources.list format (Ubuntu 22.04 and earlier, e.g. the
+    # ubuntu:22.04 container for jammy).
+    sudo sed -i -E "s#^deb (http://(archive|security)\.ubuntu\.com\S*)#deb [arch=amd64] \1#" \
+        /etc/apt/sources.list
+    for c in main restricted universe multiverse; do
+        for s in "$suite" "$suite-updates" "$suite-security"; do
+            echo "deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports $s $c"
+        done
+    done | sudo tee -a /etc/apt/sources.list > /dev/null
+fi
+
 sudo dpkg --add-architecture armhf
 
 sudo apt-get -qq update

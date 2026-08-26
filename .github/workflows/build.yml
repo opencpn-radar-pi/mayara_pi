@@ -148,7 +148,9 @@ jobs:
         shell: sh
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends software-properties-common
+          # gnupg is needed for add-apt-repository's key import; the minimal
+          # ubuntu:22.04 image ships neither it nor a gpg-agent.
+          apt-get install -y --no-install-recommends software-properties-common gnupg
           add-apt-repository -y ppa:opencpn/opencpn
           apt-get update
       - name: Build
