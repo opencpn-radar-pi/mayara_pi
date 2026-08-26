@@ -13,12 +13,15 @@ set(CMAKE_SYSTEM_PROCESSOR arm)
 set(CMAKE_C_COMPILER arm-linux-gnueabihf-gcc)
 set(CMAKE_CXX_COMPILER arm-linux-gnueabihf-g++)
 
-# Multiarch layout, not a sysroot: only libraries/includes come from the
-# armhf tree, programs (cmake helpers, code generators) stay host-native.
+# Multiarch layout, not a sysroot: libraries come from the armhf tree,
+# programs (cmake helpers, code generators) stay host-native. Headers are
+# BOTH: arch-independent packages (e.g. wx3.2-headers) install to plain
+# /usr/include/foo, outside CMAKE_FIND_ROOT_PATH, and ONLY would make
+# FindwxWidgets' find_file(wx/version.h) miss them.
 set(CMAKE_FIND_ROOT_PATH /usr/lib/arm-linux-gnueabihf)
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
-set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE BOTH)
 set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 
 # crossbuild-essential-armhf provides this wrapper, which points pkg-config
@@ -30,6 +33,8 @@ endif ()
 # find_package(wxWidgets) shells out to wx-config to read target flags; it
 # must run the armhf build of wx-config, not the host's. WX_CONFIG is the
 # same override MacosWxwidgets.cmake uses to steer the same CMake module.
+# (wx-config is itself a shell script, not an ELF binary, so this needs no
+# QEMU/binfmt -- it just runs.)
 if (NOT DEFINED ENV{WX_CONFIG})
   execute_process(
     COMMAND sh -c "ls /usr/lib/arm-linux-gnueabihf/wx/config/*-3.2 2>/dev/null | head -1"

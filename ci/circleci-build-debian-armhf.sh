@@ -2,9 +2,9 @@
 
 #
 # Cross-compile the Debian/Ubuntu armhf (32-bit ARM) artifact on an x86_64
-# runner: multiarch dev libraries + crossbuild-essential-armhf, no QEMU
-# emulation of the actual build (only wx-config, invoked once by cmake to
-# read target compiler/linker flags, runs under qemu-user-static/binfmt).
+# runner: multiarch dev libraries + crossbuild-essential-armhf. No QEMU: the
+# armhf wx-config that cmake shells out to for target compiler/linker flags
+# is itself a shell script, not an ELF binary, so it just runs.
 #
 set -xe
 
@@ -42,7 +42,7 @@ sudo dpkg --add-architecture armhf
 
 sudo apt-get -qq update
 sudo apt-get install -y --no-install-recommends \
-    devscripts equivs crossbuild-essential-armhf qemu-user-static
+    devscripts equivs crossbuild-essential-armhf
 
 # Install extra build libs
 ME=$(echo ${0##*/} | sed 's/\.sh//g')
@@ -63,9 +63,16 @@ pwd
 
 git submodule update --init opencpn-libs
 
-# Foreign-arch Build-Depends (":armhf" library packages); host-arch tools
-# (cmake, debhelper, ...) are left alone -- apt resolves both correctly.
-sudo apt-get build-dep -y -a armhf ./ci/control
+# `apt-get build-dep -a` only accepts a directory containing debian/control,
+# not an arbitrary control file path -- stage a copy there. python3-pip is
+# dropped: it's "Architecture: all" but (unlike python3-setuptools) lacks a
+# "Multi-Arch: foreign" tag, so cross build-dep resolution looks for a
+# nonexistent "python3-pip:armhf" and fails the whole transaction; it isn't
+# actually used by this plugin's build, only by the FE2 template ci/control
+# shares with the native (non-cross) jobs, which resolve it natively fine.
+mkdir -p /tmp/build-dep/debian
+grep -v '^ python3-pip,\?$' ./ci/control > /tmp/build-dep/debian/control
+sudo apt-get build-dep -y -a armhf /tmp/build-dep
 
 rm -rf build && mkdir build && cd build
 
