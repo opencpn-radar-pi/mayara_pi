@@ -69,6 +69,13 @@ if [ "$FLATPAK_BRANCH" = "beta" ]; then
         https://dl.flathub.org/beta-repo/flathub-beta.flatpakrepo
     flatpak install --user -y flathub-beta \
         org.opencpn.OpenCPN >/dev/null
+    # The flathub-beta build from 2026-08-18 onward no longer ships
+    # /app/include/wx-3.2 (wx/version.h and friends), breaking any plugin
+    # extension build against it -- reported upstream. Pin to the last
+    # build known to still have the headers until that's sorted out.
+    flatpak update --user -y \
+        --commit=b97e68fe68b0917258965d59c5bb05ef33baa8a8fed6d280a991e5fb0c1d5595 \
+        org.opencpn.OpenCPN >/dev/null
 else
     flatpak install --user -y flathub org.freedesktop.Sdk//$SDK_VER >/dev/null
     flatpak remote-add --user --if-not-exists flathub \
