@@ -73,9 +73,16 @@ if [ "$FLATPAK_BRANCH" = "beta" ]; then
     # /app/include/wx-3.2 (wx/version.h and friends), breaking any plugin
     # extension build against it -- reported upstream. Pin to the last
     # build known to still have the headers until that's sorted out.
-    flatpak update --user -y \
-        --commit=b97e68fe68b0917258965d59c5bb05ef33baa8a8fed6d280a991e5fb0c1d5595 \
-        org.opencpn.OpenCPN >/dev/null
+    # Each arch has its own commit for the same "Release_5.14.0" build.
+    case "$BUILD_ARCH" in
+        aarch64)
+            GOOD_COMMIT=5d906f7b8879576bb335ae30d0e33714ce8e040343ee1f15e58226b0d73194cb
+            ;;
+        *)
+            GOOD_COMMIT=b97e68fe68b0917258965d59c5bb05ef33baa8a8fed6d280a991e5fb0c1d5595
+            ;;
+    esac
+    flatpak update --user -y --commit=$GOOD_COMMIT org.opencpn.OpenCPN >/dev/null
 else
     flatpak install --user -y flathub org.freedesktop.Sdk//$SDK_VER >/dev/null
     flatpak remote-add --user --if-not-exists flathub \
