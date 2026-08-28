@@ -2754,6 +2754,12 @@ bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
   const float alpha = m_prefs.overlay_alpha / 100.0f;
   glColor4f(m_radar_intensity, m_radar_intensity, m_radar_intensity, alpha);
 
+  // DrawRadarOverlay selects GL_MODELVIEW; glPopMatrix() undoes its matrix
+  // contents but not that selection, so restore whatever mode the caller had
+  // before handing control back.
+  GLint saved_matrix_mode;
+  glGetIntegerv(GL_MATRIX_MODE, &saved_matrix_mode);
+
   // Each radar is drawn as an annulus from the next-shorter shown radar's range
   // out to its own range; the shortest is a full disc. So the shorter radar
   // occludes the longer one within its radius.
@@ -2773,6 +2779,7 @@ bool mayara_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
   if (m_prefs.overlay_zones)
     for (const OverlayItem& it : items) DrawZonesOverlay(it.idx, vp);
   glDisable(GL_BLEND);
+  glMatrixMode(saved_matrix_mode);
   return drew;
 }
 
@@ -2826,6 +2833,7 @@ bool mayara_pi::DrawRadarOverlay(int index, PlugIn_ViewPort* vp,
   const double rot_deg = heading + vp->rotation * 180.0 / M_PI;
 
   glBindTexture(GL_TEXTURE_2D, t.tex);
+  glMatrixMode(GL_MODELVIEW);
   glPushMatrix();
   glTranslatef(center.x, center.y, 0.0f);
   glRotatef(rot_deg, 0.0f, 0.0f, 1.0f);
