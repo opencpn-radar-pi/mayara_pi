@@ -47,7 +47,23 @@ sudo apt-get -qq update
 # a foreign-arch match if the already-installed host copy is older and
 # build-dep doesn't upgrade it on its own -- so bring the host up to date
 # first, before it can conflict with an exact-version armhf dependency.
-sudo apt-get -y upgrade
+#
+# The upgrade touches every pre-installed package, including runner
+# bloatware this build never needs (browsers, mainly) whose maintainer
+# scripts make their own network calls and have hit transient failures
+# there (e.g. a snapcraft.io assertion fetch timing out). Hold the ones
+# that don't matter here, and retry the upgrade itself in case something
+# else hits a similar transient blip.
+sudo apt-mark hold firefox google-chrome-stable microsoft-edge-stable 2>/dev/null || true
+for attempt in 1 2 3; do
+    if sudo apt-get -y upgrade; then
+        break
+    fi
+    echo "apt-get upgrade failed (attempt $attempt/3), retrying..." >&2
+    [ "$attempt" -eq 3 ] && exit 1
+    sudo dpkg --configure -a || true
+    sleep 10
+done
 sudo apt-get install -y --no-install-recommends \
     devscripts equivs crossbuild-essential-armhf python3-pip
 # On the bare noble runner (not the jammy container), something about the
