@@ -163,9 +163,21 @@ jobs:
           # A venv keeps this identical everywhere: pip --user puts the scripts
           # in a different place on macOS than on Linux, and the distro
           # containers ship no pip at all.
-          python3 -m venv "$HOME/cs-venv"
-          "$HOME/cs-venv/bin/pip" install --quiet cloudsmith-cli
-          export PATH="$HOME/cs-venv/bin:$PATH"
+          CS_BIN="$HOME/cs-venv/bin"
+          if python3 -m venv "$HOME/cs-venv"; then
+            "$CS_BIN/pip" install --quiet cloudsmith-cli
+          else
+            # ubuntu-noble-armhf has been hitting "ensurepip is not available"
+            # here despite python3-venv being present and reinstalled -- not
+            # reproducible from a clean image, so fall back instead of
+            # chasing it further. --break-system-packages doesn't exist on
+            # older pip (e.g. jammy's), hence the plain retry.
+            echo "python3 -m venv failed; falling back to pip3 --user"
+            pip3 install --quiet --user --break-system-packages cloudsmith-cli \
+              || pip3 install --quiet --user cloudsmith-cli
+            CS_BIN="$(python3 -m site --user-base)/bin"
+          fi
+          export PATH="$CS_BIN:$PATH"
           cloudsmith --version
           bash ci/cloudsmith-upload.sh
       - uses: actions/upload-artifact@v4
