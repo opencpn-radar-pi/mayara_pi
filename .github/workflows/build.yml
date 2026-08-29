@@ -37,7 +37,7 @@ jobs:
       OCPN_TARGET: macos
       WX_VER: '32'
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with: { submodules: recursive, fetch-depth: 0 }
       - name: Build (arm64 + x86_64 universal)
         run: bash ci/circleci-build-macos-universal.sh
@@ -54,7 +54,7 @@ jobs:
           export PATH="$HOME/cs-venv/bin:$PATH"
           cloudsmith --version
           bash ci/cloudsmith-upload.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: mayara_pi-macos-universal
           path: |
@@ -69,7 +69,7 @@ jobs:
       OCPN_TARGET: MSVC
       WX_VER: '32'
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with: { submodules: recursive, fetch-depth: 0 }
       - name: Build
         shell: cmd
@@ -84,7 +84,7 @@ jobs:
           export PATH="$HOME/cs-venv/Scripts:$PATH"
           cloudsmith --version
           bash ci/cloudsmith-upload.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: mayara_pi-windows-msvc
           path: |
@@ -141,7 +141,7 @@ jobs:
           # container; let git operate on it (the FE2 scripts run submodule
           # update).
           git config --global --add safe.directory '*'
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with: { submodules: recursive, fetch-depth: 0 }
       - name: Add OpenCPN PPA (wx 3.2.2, needed on jammy)
         if: matrix.wx_ppa == 'true'
@@ -180,7 +180,7 @@ jobs:
           export PATH="$CS_BIN:$PATH"
           cloudsmith --version
           bash ci/cloudsmith-upload.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: mayara_pi-${{ matrix.name }}
           path: |
@@ -226,7 +226,7 @@ jobs:
       # "incompatible plugin detected". Leaving it unset leaves the suffix out,
       # and the SDK provides exactly one wxWidgets, so nothing is ambiguous.
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with: { submodules: recursive, fetch-depth: 0 }
       - name: Prerequisites
         run: |
@@ -251,7 +251,7 @@ jobs:
           export PATH="$HOME/cs-venv/bin:$PATH"
           cloudsmith --version
           bash ci/cloudsmith-upload.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: mayara_pi-${{ matrix.name }}
           path: build/*.tar.gz
@@ -272,7 +272,7 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with: { submodules: recursive, fetch-depth: 0 }
       - name: Build
         run: bash ${{ matrix.script }}
@@ -289,7 +289,7 @@ jobs:
           export PATH="$HOME/cs-venv/bin:$PATH"
           cloudsmith --version
           bash ci/cloudsmith-upload.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: mayara_pi-${{ matrix.name }}
           path: build/*.tar.gz
