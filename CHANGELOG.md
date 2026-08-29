@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **server:** let the plugin answer mayara-server's telemetry consent (#44) ([PR #44](https://github.com/opencpn-radar-pi/mayara_pi/pull/44))
+
 ### Fixed
 
 - detect GIT_REPOSITORY from origin, not tracking-branch status (#42) ([PR #42](https://github.com/opencpn-radar-pi/mayara_pi/pull/42))
