@@ -163,6 +163,7 @@ void MayaraServer::LoadConfig() {
   cfg->Read("LocalServerEnabled", &m_enabled, false);
   cfg->Read("LocalServerVersion", &m_installed_version);
   cfg->Read("LocalServerAllowWifi", &m_opts.allow_wifi, false);
+  cfg->Read("LocalServerTelemetry", &m_opts.telemetry, true);
   wxString brand;
   cfg->Read("LocalServerBrand", &brand);
   m_opts.brand = std::string(brand.mb_str());
@@ -180,6 +181,7 @@ void MayaraServer::SaveConfig() {
   cfg->Write("LocalServerEnabled", m_enabled);
   cfg->Write("LocalServerVersion", m_installed_version);
   cfg->Write("LocalServerAllowWifi", m_opts.allow_wifi);
+  cfg->Write("LocalServerTelemetry", m_opts.telemetry);
   cfg->Write("LocalServerBrand",
              wxString::FromUTF8(m_opts.brand.c_str()));
   cfg->Write("LocalServerLastCheck", static_cast<long>(m_last_check));
@@ -408,7 +410,17 @@ bool MayaraServer::Start() {
   } else if (!m_opts.brand.empty()) {
     cmd += " --brand " + wxString::FromUTF8(m_opts.brand.c_str());
   }
-  const long pid = wxExecute(cmd, wxEXEC_ASYNC | wxEXEC_HIDE_CONSOLE);
+  // MAYARA_DEPLOYMENT tells mayara-server's telemetry how it reached the
+  // boat, so "nobody runs Garmin radars" can be told apart from "nobody runs
+  // Garmin radars *through the OpenCPN plugin*". MAYARA_TELEMETRY answers its
+  // "inform developers?" question for it -- with either value set, that
+  // question is never asked, so the checkbox in our own Settings dialog is
+  // the only place it comes up when the server runs through us.
+  wxExecuteEnv env;
+  wxGetEnvMap(&env.env);
+  env.env["MAYARA_DEPLOYMENT"] = "mayara_pi";
+  env.env["MAYARA_TELEMETRY"] = m_opts.telemetry ? "true" : "false";
+  const long pid = wxExecute(cmd, wxEXEC_ASYNC | wxEXEC_HIDE_CONSOLE, nullptr, &env);
   if (pid <= 0) return false;
   m_pid = pid;
   Notify();
@@ -444,7 +456,9 @@ const std::vector<std::string>& MayaraServer::Brands() {
 }
 
 void MayaraServer::SetOptions(const LocalOptions& o) {
-  if (o.allow_wifi == m_opts.allow_wifi && o.brand == m_opts.brand) return;
+  if (o.allow_wifi == m_opts.allow_wifi && o.brand == m_opts.brand &&
+      o.telemetry == m_opts.telemetry)
+    return;
   m_opts = o;
   SaveConfig();
   // These are command-line arguments, read once at start-up, so they only take
