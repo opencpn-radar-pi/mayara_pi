@@ -90,6 +90,11 @@ class MayaraServer : public wxEvtHandler {
     // flag rather than a --brand value (--brand only filters the locator; the
     // fake radar is created only for --emulator).
     std::string brand;
+    // Answers mayara-server's "inform developers of successful deploy?"
+    // question for it via MAYARA_TELEMETRY, so its own GUI never has to ask:
+    // this plugin's checkbox is the only place a user sees that question when
+    // running mayara-server through it. Default on.
+    bool telemetry = true;
   };
   // What can be asked for, in menu order. "playback" is absent: it needs a
   // recording to play, which there is nowhere to choose here.

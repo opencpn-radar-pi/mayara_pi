@@ -1570,6 +1570,14 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   lbox->Add(dl, 0, wxBOTTOM, 6);
   auto* cb_wifi = new wxCheckBox(spage, wxID_ANY, _("Allow WiFi interfaces"));
   lbox->Add(cb_wifi, 0, wxBOTTOM, 6);
+  // mayara-server would otherwise ask this itself, in a GUI most users of the
+  // plugin never open; answering it here through MAYARA_TELEMETRY means they
+  // are never asked twice, or not at all.
+  auto* cb_telemetry = new wxCheckBox(
+      spage, wxID_ANY,
+      _("Report anonymous usage stats to the mayara developers"));
+  cb_telemetry->SetValue(true);
+  lbox->Add(cb_telemetry, 0, wxBOTTOM, 6);
   auto* brow = new wxBoxSizer(wxHORIZONTAL);
   brow->Add(new wxStaticText(spage, wxID_ANY, _("Radar:")), 0,
             wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
@@ -1949,6 +1957,7 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   if (have_server) {
     const MayaraServer::LocalOptions& o = m_server->Options();
     cb_wifi->SetValue(o.allow_wifi);
+    cb_telemetry->SetValue(o.telemetry);
     int sel = 0;
     for (size_t i = 0; i < MayaraServer::Brands().size(); ++i)
       if (MayaraServer::Brands()[i] == o.brand) sel = static_cast<int>(i) + 1;
@@ -1979,6 +1988,7 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
       dl->SetLabel(wxString::Format(
           _("Update to %s"), wxString::FromUTF8(m_server->Latest().tag.c_str())));
     cb_wifi->Enable(local && installed);
+    cb_telemetry->Enable(local && installed);
     brand->Enable(local && installed);
     server->Enable(!local);
     shint->Enable(!local);
@@ -2050,6 +2060,7 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   if (have_server) {
     MayaraServer::LocalOptions o;
     o.allow_wifi = cb_wifi->GetValue();
+    o.telemetry = cb_telemetry->GetValue();
     const int sel = brand->GetSelection();
     if (sel > 0 && sel <= static_cast<int>(MayaraServer::Brands().size()))
       o.brand = MayaraServer::Brands()[sel - 1];
