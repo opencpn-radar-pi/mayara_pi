@@ -1,0 +1,16 @@
+# Dependabot keeps GitHub Actions dependencies current.
+#
+# All Actions updates are grouped into one weekly PR since they're trivial
+# YAML edits, not something that needs one PR per action.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci"
+      include: "scope"
