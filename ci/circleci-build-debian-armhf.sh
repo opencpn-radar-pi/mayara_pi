@@ -50,6 +50,12 @@ sudo apt-get -qq update
 sudo apt-get -y upgrade
 sudo apt-get install -y --no-install-recommends \
     devscripts equivs crossbuild-essential-armhf python3-pip
+# On the bare noble runner (not the jammy container), something about the
+# upgrade + the armhf package transaction above has been leaving
+# `python3 -m venv` broken ("ensurepip is not available") for the later
+# Cloudsmith publish step. Not reproducible from a clean image, so whatever
+# it is, just make sure venv support is actually there afterward.
+sudo apt-get install -y --reinstall python3-venv
 
 # jammy's own cmake (3.22) has a FindwxWidgets bug: it comes back with
 # wxWidgets_LIBRARIES empty even though `wx-config --libs` (which it does
