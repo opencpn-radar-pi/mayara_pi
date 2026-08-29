@@ -7,7 +7,7 @@
 # The repository depends on the branch and use of tag to determine which repo.
 # ALPHA: Non-master branch no tag
 # BETA: Non-master branch with annotated tag
-# BETA: Master branch no tag
+# ALPHA: Master branch no tag
 # PROD: Master branch with annotated tag
 #
 # If this script is used on CIRCLECI, TRAVIS or APPVEYOR it will upload the correct files to the chosen repository
@@ -162,7 +162,8 @@ fi
 
 BUILD_BRANCH_LOWER=`echo $BUILD_BRANCH | tr '[A-Z]' '[a-z]'`
 # "main" is this repo's default branch; upstream FE2 only knows "master", so
-# every build of main was landing in the alpha repo and every release in beta.
+# without this every build of main was landing in the alpha repo and every
+# release in beta.
 if [ "$BUILD_BRANCH_LOWER" = "master" ] || [ "$BUILD_BRANCH_LOWER" = "main" ]; then
     echo "In master branch "
     if [ -n "$BUILD_TAG"  ]; then
@@ -172,7 +173,7 @@ if [ "$BUILD_BRANCH_LOWER" = "master" ] || [ "$BUILD_BRANCH_LOWER" = "main" ]; t
     else
         VERSION="@PROJECT_VERSION@+${BUILD_ID}.${commit}"
         echo "building without tag"
-        REPO="$BETA_REPO"
+        REPO="$ALPHA_REPO"
     fi
 else
     echo "In non master branch " $BUILD_BRANCH
