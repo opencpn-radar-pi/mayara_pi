@@ -165,6 +165,13 @@ do_release() {
     confirm "Tag and release $version?"
 
     check_changelog "$version"
+    # The release PR's commit needs an actual diff to commit -- major/minor/
+    # patch are already at $version (no suffix to strip, unlike Cargo's
+    # -dev/-beta.N), so without this, create_release_pr's `git commit` fails
+    # with "nothing to commit". Restamping VERSION_DATE to today gives it
+    # one, and correctly marks the release date on days it actually differs
+    # from whenever the version number was bumped.
+    set_version "$version"
     create_release_pr "$version"
 
     echo ""
