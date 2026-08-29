@@ -30,6 +30,11 @@ jobs:
         # an earlier run already merged.
         ref: main
         fetch-depth: 0
+        # GITHUB_TOKEN pushes don't trigger new workflow runs (GitHub's
+        # anti-recursion safeguard), so the changelog PR this job opens
+        # could never get real status checks and would sit unmergeable
+        # forever. A real user PAT is exempt from that.
+        token: ${{ secrets.RELEASE_PAT }}
 
     - name: Generate changelog
       uses: orhun/git-cliff-action@v4
@@ -46,7 +51,7 @@ jobs:
 
     - name: Create changelog PR
       env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ secrets.RELEASE_PAT }}
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
