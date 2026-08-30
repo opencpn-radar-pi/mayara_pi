@@ -14,6 +14,7 @@
 #include <memory>
 
 #include <wx/dcbuffer.h>
+#include <wx/dcgraph.h>
 #include <wx/graphics.h>
 #include <wx/image.h>
 
@@ -239,7 +240,26 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
   // are placed relative to whatever bearing is shown at screen-up.
   DrawLayers(dc, g);
 
-  DrawLozenges(dc, sz);
+  // The lozenges and the icon bar are hand-drawn: arcs built from short line
+  // segments, rounded rectangles, small triangles. On macOS a plain wxDC is
+  // backed by Core Graphics and antialiases all of that for free; on MSW it is
+  // GDI, which does not antialias at all, so the same code came out faceted and
+  // hard-edged, and the unblended edges made the fills read a shade harsher.
+  // Draw them through a graphics context so both platforms agree. The layers
+  // above make their own where they need it.
+  {
+    std::unique_ptr<wxGraphicsContext> gc(
+        wxGraphicsContext::CreateFromUnknownDC(dc));
+    if (gc) {
+      gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
+      wxGCDC gdc;
+      gdc.SetGraphicsContext(gc.release());
+      gdc.SetFont(dc.GetFont());  // sizes are derived from it
+      DrawLozenges(gdc, sz);
+    } else {
+      DrawLozenges(dc, sz);
+    }
+  }
 
   if (m_client && m_client->ApiVersionMismatch()) {
     // Loud, centred, two-line warning at menu-item point size.
