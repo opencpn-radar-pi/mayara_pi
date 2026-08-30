@@ -21,6 +21,7 @@
 #include <wx/fileconf.h>
 #include <wx/frame.h>
 #include <wx/graphics.h>
+#include <wx/hyperlink.h>
 #include <wx/radiobox.h>
 #include <wx/settings.h>
 #include <wx/spinctrl.h>
@@ -28,6 +29,7 @@
 #include <wx/textdlg.h>
 #include <wx/tokenzr.h>
 #include <wx/toplevel.h>
+#include <wx/utils.h>
 
 #ifdef __WXOSX__
 #include <OpenGL/gl.h>
@@ -268,25 +270,40 @@ int mayara_pi::Init() {
         SaveConfig();
       }
     }
-    // When the radar can't be found, offer the search/manual-entry dialog.
+    // When the radar can't be found, offer the search/manual-entry dialog --
+    // or, once we know exactly which server we're talking to, point at its
+    // own GUI instead (it has the brand-specific "why can't it find my
+    // radar" guidance; we don't need to duplicate that here).
     if (m_client && m_client->Connected()) {
       m_no_radar_ticks = 0;
+      m_no_radar_notice_dismissed = false;  // reset for the next time it goes quiet
       if (m_search_dialog) {
         m_search_dialog->Destroy();
         m_search_dialog = nullptr;
       }
     } else if (m_client) {
-      // The search dialog is for "we cannot find a server". When we are running
-      // one ourselves we know exactly where it is, so silence about a radar we
-      // have not found is the radar's problem, not the locator's -- offering to
-      // go looking for a server would just be wrong. If our own server is
-      // enabled but not running (the port was taken, it crashed), the dialog is
-      // still the right thing to show.
-      const bool own_server_up =
-          m_server && m_server->Enabled() && m_server->Running();
-      if (++m_no_radar_ticks >= 10 && !own_server_up && !m_search_dialog &&
-          !m_search_dismissed)
-        ShowSearchDialog();
+      ++m_no_radar_ticks;
+      const std::string connected_url = m_client->ConnectedUrl();
+      if (!connected_url.empty()) {
+        // The radar API answered but listed nothing. This is the right
+        // server either way (ours or a remote one) -- it just has no radar
+        // to show, so the "where's the server" dialog below does not apply.
+        if (m_no_radar_ticks >= 10 && !m_no_radar_notice_open &&
+            !m_no_radar_notice_dismissed)
+          ShowNoRadarNotice(connected_url);
+      } else {
+        // The search dialog is for "we cannot find a server". When we are
+        // running one ourselves we know exactly where it is, so silence about
+        // a radar we have not found is the radar's problem, not the
+        // locator's -- offering to go looking for a server would just be
+        // wrong. If our own server is enabled but not running (the port was
+        // taken, it crashed), the dialog is still the right thing to show.
+        const bool own_server_up =
+            m_server && m_server->Enabled() && m_server->Running();
+        if (m_no_radar_ticks >= 10 && !own_server_up && !m_search_dialog &&
+            !m_search_dismissed)
+          ShowSearchDialog();
+      }
     }
   });
   m_heartbeat->Start(1000);
@@ -1553,12 +1570,57 @@ void mayara_pi::ShowSearchDialog() {
   dlg->Show();
 }
 
+// Shown when mayara-server answered but listed no radars, for ~10 s straight.
+// mayara-server's own GUI already has the brand-specific "why can't it find
+// my radar" guidance (Furuno/Garmin IP ranges, Raymarine needing an MFD for
+// DHCP, ...); this just points at it rather than duplicating any of that here.
+void mayara_pi::ShowNoRadarNotice(const std::string& server_url) {
+  if (m_no_radar_notice_open) return;
+  m_no_radar_notice_open = true;
+  const wxString url = wxString::FromUTF8(server_url.c_str());
+  auto* dlg = new wxDialog(m_parent_window, wxID_ANY, _("No Radar Found"),
+                           wxDefaultPosition, wxDefaultSize,
+                           wxDEFAULT_DIALOG_STYLE);
+  auto* top = new wxBoxSizer(wxVERTICAL);
+  auto* msg = new wxStaticText(
+      dlg, wxID_ANY,
+      _("No radar found by mayara -- I recommend you open the following "
+        "link to investigate why:"));
+  msg->Wrap(400);
+  top->Add(msg, 0, wxALL, 12);
+  auto* link = new wxHyperlinkCtrl(dlg, wxID_ANY, url, url);
+  // The stock hyperlink blue is unreadable against OpenCPN's dark dialogs;
+  // same colour visited or not, so it does not fade to something worse
+  // after the first click.
+  link->SetNormalColour(wxColour(120, 180, 255));
+  link->SetVisitedColour(wxColour(120, 180, 255));
+  top->Add(link, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12);
+
+  auto* btns = new wxBoxSizer(wxHORIZONTAL);
+  auto* open = new wxButton(dlg, wxID_ANY, _("Open Link"));
+  auto* close_btn = new wxButton(dlg, wxID_OK, _("Dismiss"));
+  btns->AddStretchSpacer();
+  btns->Add(open, 0, wxRIGHT, 8);
+  btns->Add(close_btn, 0);
+  top->Add(btns, 0, wxEXPAND | wxALL, 12);
+  dlg->SetSizerAndFit(top);
+  dlg->SetEscapeId(wxID_OK);
+
+  open->Bind(wxEVT_BUTTON,
+            [url](wxCommandEvent&) { wxLaunchDefaultBrowser(url); });
+  dlg->ShowModal();
+  dlg->Destroy();
+  m_no_radar_notice_open = false;
+  m_no_radar_notice_dismissed = true;
+}
+
 // OpenCPN's "Preferences" button in the plugin manager routes here; our own
 // gear button routes here too. Both hand us a parent to centre on.
 void mayara_pi::ShowPreferencesDialog(wxWindow* parent) { ShowSettings(parent); }
 
 void mayara_pi::ShowSettings(wxWindow* parent) {
   const int radar_count = m_client ? m_client->RadarCount() : 0;
+  const std::string connected_url = m_client ? m_client->ConnectedUrl() : "";
   // With N radars you can spread them across 1..N windows; the per-window count
   // is N / windows (rounded up). Cap the spinner sensibly when nothing is found.
   const int max_windows = radar_count > 0 ? radar_count : 4;
@@ -1649,6 +1711,17 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
                                        radar_count)
                     : wxString(_("No radars discovered yet."))),
             0, wxALL, 8);
+  // Only shown once we actually know which server answered -- not while
+  // still searching for one, and not for a stale/never-reached address.
+  if (!connected_url.empty()) {
+    const wxString url = wxString::FromUTF8(connected_url.c_str());
+    auto* server_link =
+        new wxHyperlinkCtrl(dpage, wxID_ANY, _("Open mayara-server"), url);
+    // The stock hyperlink blue is unreadable against OpenCPN's dark dialogs.
+    server_link->SetNormalColour(wxColour(120, 180, 255));
+    server_link->SetVisitedColour(wxColour(120, 180, 255));
+    dbox->Add(server_link, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
+  }
   auto* wrow = new wxBoxSizer(wxHORIZONTAL);
   wrow->Add(new wxStaticText(dpage, wxID_ANY, _("Number of PPI windows:")), 0,
             wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
