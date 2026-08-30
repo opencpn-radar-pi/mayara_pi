@@ -218,6 +218,25 @@ if(NOT OCPN_FLATPAK_CONFIG)
     # codepage, so every non-ASCII literal (degree signs, ellipses, em dashes,
     # arrows, the gear and cross glyphs) is mangled at compile time.
     target_compile_options(${PACKAGE_NAME} PRIVATE /utf-8)
+
+    # OpenCPN 5.14.0's Windows installer ships a VS2017-era C++ runtime
+    # (msvcp140.dll 14.12.25810.0) next to opencpn.exe, and Windows
+    # resolves DLLs from the executable's directory first -- so that
+    # is the runtime every plugin gets, whatever it was built
+    # against.
+    #
+    # VS2022 17.10 gave std::mutex a constexpr constructor, so the
+    # mutex is zero-initialised inline in our own binary instead of
+    # by _Mtx_init_in_situ. Locking one of those against the older
+    # runtime dereferences null inside msvcp140 and takes the whole
+    # process down -- OpenCPN dies at our Init(), with no plugin
+    # frame on the stack to say why.
+    #
+    # This opt-out restores the non-constexpr constructor, which the
+    # shipped runtime understands. It can go when OpenCPN ships a
+    # current redistributable.
+    target_compile_definitions(${PACKAGE_NAME} PRIVATE
+      _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
   endif()
 endif()
 
