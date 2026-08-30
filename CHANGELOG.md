@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - detect GIT_REPOSITORY from origin, not tracking-branch status (#42) ([PR #42](https://github.com/opencpn-radar-pi/mayara_pi/pull/42))
+- **controls:** three bugs in the control panel (#49) ([PR #49](https://github.com/opencpn-radar-pi/mayara_pi/pull/49))
 
 ## [0.1.1] - 2026-08-29
 
