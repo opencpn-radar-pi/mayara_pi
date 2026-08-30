@@ -95,6 +95,8 @@ class mayara_pi : public opencpn_plugin_121 {
   void SyncRadarFullScreen(bool on);
   void ShowSettings(wxWindow* parent);
   void ShowSearchDialog();  // "looking for a server" + manual entry
+  // "found the server, it just isn't seeing a radar" + a link to its GUI.
+  void ShowNoRadarNotice(const std::string& server_url);
   // "the server won't let us control the radar" + the access-request flow.
   void ShowAccessDialog();
   void UpdateAccessDialog();  // live status while approval is pending
@@ -281,6 +283,8 @@ class mayara_pi : public opencpn_plugin_121 {
   std::set<std::string> m_alarms_raised;
   int m_no_radar_ticks = 0;          // heartbeat ticks with no radar
   bool m_search_dismissed = false;   // user closed the search dialog
+  bool m_no_radar_notice_open = false;       // the "no radar found" dialog is up
+  bool m_no_radar_notice_dismissed = false;  // user closed it; don't re-nag
 
   // GL chart-overlay: each radar's cached disc uploaded as a texture and drawn
   // as a rotated/scaled quad, re-uploaded only when its disc changes. Radars
