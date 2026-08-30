@@ -31,7 +31,7 @@ ThemedButton::ThemedButton(wxWindow* parent, const wxString& label,
   SetBackgroundStyle(wxBG_STYLE_PAINT);
   wxCoord tw, th;
   GetTextExtent(label, &tw, &th);  // uses the window font; no DC needed
-  SetMinSize(wxSize(tw + 22, th + 12));
+  SetMinSize(wxSize(tw + FromDIP(14), th + FromDIP(12)));
   Bind(wxEVT_PAINT, &ThemedButton::OnPaint, this);
   Bind(wxEVT_LEFT_DOWN, &ThemedButton::OnClick, this);
 }
@@ -58,7 +58,7 @@ void ThemedButton::OnPaint(wxPaintEvent&) {
              : m_theme.lozenge_bg;
   dc.SetBrush(wxBrush(bg));
   dc.SetPen(wxPen(active ? m_theme.text : m_theme.lozenge_border));
-  dc.DrawRoundedRectangle(0, 0, sz.x, sz.y, 5);
+  dc.DrawRoundedRectangle(0, 0, sz.x, sz.y, FromDIP(5));
   dc.SetTextForeground(IsEnabled() ? m_theme.text : m_theme.dim_text);
   dc.SetFont(GetFont());
   wxCoord tw, th;
@@ -88,7 +88,7 @@ ThemedSlider::ThemedSlider(wxWindow* parent, const MayaraTheme& theme)
                 wxBORDER_NONE),
       m_theme(theme) {
   SetBackgroundStyle(wxBG_STYLE_PAINT);
-  SetMinSize(wxSize(90, 24));
+  SetMinSize(wxSize(FromDIP(90), FromDIP(24)));
   Bind(wxEVT_PAINT, &ThemedSlider::OnPaint, this);
   Bind(wxEVT_LEFT_DOWN, &ThemedSlider::OnMouse, this);
   Bind(wxEVT_LEFT_UP, &ThemedSlider::OnMouse, this);
@@ -112,23 +112,23 @@ void ThemedSlider::OnPaint(wxPaintEvent&) {
   const wxSize sz = GetClientSize();
   dc.SetBackground(wxBrush(m_theme.panel_bg));
   dc.Clear();
-  const int m = 9, ty = sz.y / 2;
+  const int m = FromDIP(9), ty = sz.y / 2;
   const int x0 = m, x1 = sz.x - m;
   if (x1 <= x0) return;
   const int pos = x0 + (x1 - x0) * m_value / 1000;
   const bool en = IsEnabled();
-  dc.SetPen(wxPen(m_theme.lozenge_border, 3));
+  dc.SetPen(wxPen(m_theme.lozenge_border, FromDIP(3)));
   dc.DrawLine(x0, ty, x1, ty);
-  dc.SetPen(wxPen(en ? m_theme.text : m_theme.dim_text, 3));
+  dc.SetPen(wxPen(en ? m_theme.text : m_theme.dim_text, FromDIP(3)));
   dc.DrawLine(x0, ty, pos, ty);
   dc.SetBrush(wxBrush(en ? m_theme.text : m_theme.dim_text));
   dc.SetPen(*wxTRANSPARENT_PEN);
-  dc.DrawCircle(pos, ty, 6);
+  dc.DrawCircle(pos, ty, FromDIP(6));
 }
 
 void ThemedSlider::SetFromX(int x, bool dragging) {
   const wxSize sz = GetClientSize();
-  const int m = 9, x0 = m, x1 = sz.x - m;
+  const int m = FromDIP(9), x0 = m, x1 = sz.x - m;
   if (x1 <= x0) return;
   m_value = std::max(0, std::min(1000, (x - x0) * 1000 / (x1 - x0)));
   Refresh();
@@ -160,7 +160,7 @@ ThemedChoice::ThemedChoice(wxWindow* parent, const MayaraTheme& theme)
                 wxBORDER_NONE),
       m_theme(theme) {
   SetBackgroundStyle(wxBG_STYLE_PAINT);
-  SetMinSize(wxSize(60, 26));
+  SetMinSize(wxSize(FromDIP(60), FromDIP(26)));
   Bind(wxEVT_PAINT, &ThemedChoice::OnPaint, this);
   Bind(wxEVT_LEFT_DOWN, &ThemedChoice::OnClick, this);
 }
@@ -175,7 +175,8 @@ void ThemedChoice::Append(const wxString& label, int data) {
   wxCoord tw, th;
   GetTextExtent(label, &tw, &th);
   const wxSize cur = GetMinSize();
-  SetMinSize(wxSize(std::max(cur.x, tw + 34), std::max<int>(cur.y, th + 12)));
+  SetMinSize(wxSize(std::max(cur.x, tw + FromDIP(34)),
+                    std::max<int>(cur.y, th + FromDIP(12))));
 }
 
 void ThemedChoice::Clear() {
@@ -200,7 +201,7 @@ void ThemedChoice::OnPaint(wxPaintEvent&) {
   dc.Clear();
   dc.SetBrush(wxBrush(m_theme.lozenge_bg));
   dc.SetPen(wxPen(m_theme.lozenge_border));
-  dc.DrawRoundedRectangle(0, 0, sz.x, sz.y, 5);
+  dc.DrawRoundedRectangle(0, 0, sz.x, sz.y, FromDIP(5));
   dc.SetTextForeground(IsEnabled() ? m_theme.text : m_theme.dim_text);
   dc.SetFont(GetFont());
   const wxString label =
@@ -209,10 +210,12 @@ void ThemedChoice::OnPaint(wxPaintEvent&) {
           : wxString();
   wxCoord tw, th;
   dc.GetTextExtent(label, &tw, &th);
-  dc.DrawText(label, 8, (sz.y - th) / 2);
+  dc.DrawText(label, FromDIP(8), (sz.y - th) / 2);
   // disclosure triangle
-  const int ax = sz.x - 14, ay = sz.y / 2;
-  wxPoint tri[3] = {{ax - 4, ay - 2}, {ax + 4, ay - 2}, {ax, ay + 3}};
+  const int ax = sz.x - FromDIP(14), ay = sz.y / 2;
+  wxPoint tri[3] = {{ax - FromDIP(4), ay - FromDIP(2)},
+                    {ax + FromDIP(4), ay - FromDIP(2)},
+                    {ax, ay + FromDIP(3)}};
   dc.SetBrush(wxBrush(m_theme.text));
   dc.SetPen(*wxTRANSPARENT_PEN);
   dc.DrawPolygon(3, tri);

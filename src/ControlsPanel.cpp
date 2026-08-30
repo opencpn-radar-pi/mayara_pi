@@ -111,7 +111,7 @@ class SectionHeader : public wxPanel {
   SectionHeader(wxWindow* parent, const wxString& title,
                 const MayaraTheme& theme)
       : wxPanel(parent, wxID_ANY), m_title(title), m_theme(theme) {
-    SetMinSize(wxSize(-1, 24));
+    SetMinSize(wxSize(-1, FromDIP(24)));
     Bind(wxEVT_PAINT, &SectionHeader::OnPaint, this);
     Bind(wxEVT_LEFT_DOWN,
          [this](wxMouseEvent&) { if (m_onclick) m_onclick(); });
@@ -125,18 +125,18 @@ class SectionHeader : public wxPanel {
     const wxSize sz = GetClientSize();
     dc.SetBackground(wxBrush(m_theme.lozenge_bg));
     dc.Clear();
-    const int cy = sz.y / 2, cx = 10;
+    const int cy = sz.y / 2, cx = FromDIP(10);
     dc.SetBrush(wxBrush(m_theme.text));
     dc.SetPen(*wxTRANSPARENT_PEN);
     wxPoint tri[3];
     if (m_collapsed) {
-      tri[0] = wxPoint(cx - 3, cy - 5);
-      tri[1] = wxPoint(cx - 3, cy + 5);
-      tri[2] = wxPoint(cx + 4, cy);
+      tri[0] = wxPoint(cx - FromDIP(3), cy - FromDIP(5));
+      tri[1] = wxPoint(cx - FromDIP(3), cy + FromDIP(5));
+      tri[2] = wxPoint(cx + FromDIP(4), cy);
     } else {
-      tri[0] = wxPoint(cx - 5, cy - 3);
-      tri[1] = wxPoint(cx + 5, cy - 3);
-      tri[2] = wxPoint(cx, cy + 4);
+      tri[0] = wxPoint(cx - FromDIP(5), cy - FromDIP(3));
+      tri[1] = wxPoint(cx + FromDIP(5), cy - FromDIP(3));
+      tri[2] = wxPoint(cx, cy + FromDIP(4));
     }
     dc.DrawPolygon(3, tri);
     wxFont f = GetFont();
@@ -145,7 +145,7 @@ class SectionHeader : public wxPanel {
     dc.SetTextForeground(m_theme.text);
     wxCoord tw, th;
     dc.GetTextExtent(m_title, &tw, &th);
-    dc.DrawText(m_title, 22, (sz.y - th) / 2);
+    dc.DrawText(m_title, FromDIP(22), (sz.y - th) / 2);
   }
 
   wxString m_title;
@@ -167,7 +167,7 @@ ControlsPanel::ControlsPanel(wxWindow* parent, MayaraClient* client,
       m_client(client),
       m_index(radar_index),
       m_timer(this, kControlsTimerId) {
-  SetMinSize(wxSize(300, -1));
+  SetMinSize(wxSize(FromDIP(250), -1));
   SetScrollRate(0, 12);
 #ifdef __WXMSW__
   // Keep the native vertical scrollbar permanently. A bar that appears only
@@ -778,7 +778,7 @@ void ControlsPanel::AddNumber(wxSizer* outer, const ControlDef& def) {
 
   if (use_entry) {
     entry = new wxTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition,
-                           wxSize(80, -1), wxTE_PROCESS_ENTER);
+                           wxSize(FromDIP(80), -1), wxTE_PROCESS_ENTER);
     row->Add(entry, 0, wxALIGN_CENTER_VERTICAL);
     if (!def.units.empty())
       row->Add(new wxStaticText(this, wxID_ANY,
@@ -786,20 +786,20 @@ void ControlsPanel::AddNumber(wxSizer* outer, const ControlDef& def) {
                0, wxALIGN_CENTER_VERTICAL | wxLEFT, 4);
   } else {
     slider = new ThemedSlider(this, m_theme);
-    slider->SetMinSize(wxSize(90, 24));
+    slider->SetMinSize(wxSize(FromDIP(90), FromDIP(24)));
     row->Add(slider, 1, wxALIGN_CENTER_VERTICAL);
     if (use_steppers) {
       minus = new ThemedButton(this, "-", m_theme, /*toggle=*/false);
-      minus->SetMinSize(wxSize(24, 24));
+      minus->SetMinSize(wxSize(FromDIP(24), FromDIP(24)));
       row->Add(minus, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 2);
     }
     valtext = new wxStaticText(this, wxID_ANY, "", wxDefaultPosition,
-                               wxSize(46, -1),
+                               wxSize(FromDIP(46), -1),
                                wxALIGN_RIGHT | wxST_NO_AUTORESIZE);
     row->Add(valtext, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 4);
     if (use_steppers) {
       plus = new ThemedButton(this, "+", m_theme, /*toggle=*/false);
-      plus->SetMinSize(wxSize(24, 24));
+      plus->SetMinSize(wxSize(FromDIP(24), FromDIP(24)));
       row->Add(plus, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
     }
   }
