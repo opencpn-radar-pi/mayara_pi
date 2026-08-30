@@ -135,7 +135,7 @@ void MayaraClient::Rescan() {
     m_connected_url.clear();
     m_server_api_version.clear();
   }
-  SetStatus("reconnecting…");
+  SetStatus("reconnecting...");
   Start();
 }
 
@@ -456,7 +456,7 @@ void MayaraClient::RunAccessRequest() {
     SetAuth(AuthState::kNeeded, "not connected to a server yet");
     return;
   }
-  SetAuth(AuthState::kRequesting, "asking " + base + " for permission…");
+  SetAuth(AuthState::kRequesting, "asking " + base + " for permission...");
 
   json body = {{"clientId", client_id},
                {"description", "Mayara radar plugin for OpenCPN"},
@@ -597,7 +597,7 @@ void MayaraClient::Run() {
     } else {
       // Try the last-known-good server first (fast reconnect), then discover.
       if (!m_remembered.empty()) candidates.push_back(m_remembered);
-      SetStatus("searching for a mayara or Signal K server…");
+      SetStatus("searching for a mayara or Signal K server...");
       std::string found = MayaraDiscovery::FindServer(2000);
       if (!found.empty() && found != m_remembered) candidates.push_back(found);
       // A Signal K server OpenCPN is already configured to talk to. Not proof
