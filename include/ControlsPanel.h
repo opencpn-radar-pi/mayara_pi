@@ -95,7 +95,13 @@ class ControlsPanel : public wxScrolledWindow {
                        std::function<void(const PpiPrefs&)> set);
 
  private:
+#ifdef __WXMSW__
+  // Windows always shows a native scrollbar, so drawing our own would put a
+  // second bar beside it. Only macOS, which hides the native one, needs it.
+  static const int kScrollBarW = 0;
+#else
   static const int kScrollBarW = 10;  // gutter for the scrollbar we draw
+#endif
   wxSizer* WithScrollGutter(wxSizer* content);
   wxRect ThumbRect() const;
   void OnPaint(wxPaintEvent& event);

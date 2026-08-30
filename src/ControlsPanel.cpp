@@ -163,12 +163,21 @@ wxEND_EVENT_TABLE()
 ControlsPanel::ControlsPanel(wxWindow* parent, MayaraClient* client,
                              int radar_index)
     : wxScrolledWindow(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                       wxVSCROLL),
+                       wxVSCROLL | wxCLIP_CHILDREN),
       m_client(client),
       m_index(radar_index),
       m_timer(this, kControlsTimerId) {
   SetMinSize(wxSize(300, -1));
   SetScrollRate(0, 12);
+#ifdef __WXMSW__
+  // Keep the native vertical scrollbar permanently. A bar that appears only
+  // once the content grows narrows the client area *after* the children have
+  // been laid out, so their right edge ends up hidden behind it and nothing
+  // triggers a fresh layout. A constant client width also matches what this
+  // panel already wants elsewhere: a bar that comes and goes reflows the
+  // controls under the pointer.
+  ShowScrollbars(wxSHOW_SB_NEVER, wxSHOW_SB_ALWAYS);
+#endif
   SetBackgroundStyle(wxBG_STYLE_PAINT);
   auto* sizer = new wxBoxSizer(wxVERTICAL);
   sizer->Add(MakeCloseRow(), 0, wxEXPAND);
@@ -207,6 +216,7 @@ wxSizer* ControlsPanel::WithScrollGutter(wxSizer* content) {
 
 // Where the thumb sits, in client coordinates. Empty when everything fits.
 wxRect ControlsPanel::ThumbRect() const {
+  if (kScrollBarW <= 0) return wxRect();  // native scrollbar in use
   const wxSize cs = GetClientSize();
   const int vh = GetVirtualSize().y;
   if (vh <= cs.y || cs.y <= 0) return wxRect();

@@ -12,6 +12,10 @@
 
 #include <wx/display.h>
 
+#ifdef __WXMSW__
+#include <windows.h>
+#endif
+
 #include "ControlsPanel.h"
 #include "MayaraClient.h"
 #include "RadarDisplayPanel.h"
@@ -61,9 +65,31 @@ MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client,
   // One control panel, bound to the focused radar (the first by default). It
   // floats over the pictures (not in the sizer) so it can pop up next to
   // whichever picture's hamburger was clicked.
-  m_controls = new ControlsPanel(this, client, radar_indices.front());
+  // Child of m_grid, not of this: on MSW a window is only clipped against
+  // overlapping SIBLINGS. As a sibling of m_grid the controls sit in a
+  // different branch from the RadarDisplayPanels, so their repaint erased it
+  // whatever the z-order. As a sibling of the pictures, Raise() + the
+  // WS_CLIPSIBLINGS set below keeps them clipped out of the radar repaint.
+  m_controls = new ControlsPanel(m_grid, client, radar_indices.front());
   m_controls->SetRadarList(radar_indices);
   m_controls->Hide();  // opened via a picture's hamburger button
+
+#ifdef __WXMSW__
+  // wxMSW never sets WS_CLIPSIBLINGS -- see wxWidgets src/msw/window.cpp: it
+  // "officially doesn't support overlapping windows". This panel is designed to
+  // float over the pictures, so without that style Windows lets each radar
+  // repaint paint straight over it: the panel draws once, is erased, and only
+  // the widgets that refresh themselves ever reappear (they flash). Add it by
+  // hand, to the pictures (the windows doing the painting) and to the panel.
+  auto clip_siblings = [](wxWindow* w) {
+    if (!w || !w->GetHandle()) return;
+    HWND h = static_cast<HWND>(w->GetHandle());
+    ::SetWindowLong(h, GWL_STYLE,
+                    ::GetWindowLong(h, GWL_STYLE) | WS_CLIPSIBLINGS);
+  };
+  for (RadarDisplayPanel* p : m_radars) clip_siblings(p);
+  clip_siblings(m_controls);
+#endif
 
   auto* sizer = new wxBoxSizer(wxHORIZONTAL);
   sizer->Add(m_grid, 1, wxEXPAND);
@@ -235,7 +261,13 @@ RadarDisplayPanel* MayaraPpiWindow::FocusedPanel() {
 void MayaraPpiWindow::PositionControls(RadarDisplayPanel* focused,
                                        bool allow_grow) {
   if (!m_controls || !focused) return;
-  const int ctrl_w = std::max(320, m_controls->GetEffectiveMinSize().x);
+  int ctrl_w = std::max(320, m_controls->GetEffectiveMinSize().x);
+#ifdef __WXMSW__
+  // GetEffectiveMinSize() describes the content; the native vertical scrollbar
+  // sits outside the client area, so without this allowance the controls are
+  // laid out wider than the client and their right edge ends up under the bar.
+  ctrl_w += wxSystemSettings::GetMetric(wxSYS_VSCROLL_X, m_controls);
+#endif
   const int kMinPicture = 240;  // keep at least this much picture beside it
   // Right edge of the focused picture, in this panel's client coordinates.
   wxPoint tr = focused->GetScreenPosition();

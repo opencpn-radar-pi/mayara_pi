@@ -10,6 +10,10 @@
 #include <random>
 
 #include <wx/aui/framemanager.h>
+
+#ifdef __WXMSW__
+#include <windows.h>
+#endif
 #include <wx/bmpbndl.h>
 #include <wx/clrpicker.h>
 #include <wx/dcmemory.h>
@@ -1302,6 +1306,20 @@ void mayara_pi::ShowRadarMenu(int canvas) {
     e.Skip();
   });
   FitChartMenu();
+#ifdef __WXMSW__
+  // wxMSW never sets WS_CLIPSIBLINGS -- see wxWidgets src/msw/window.cpp, which
+  // states overlapping windows are officially unsupported. This panel is a
+  // sibling of glChartCanvas (a child of ChartCanvas, like us), and the GL
+  // canvas repaints the whole chart continuously, so without the style it paints
+  // straight over the panel: it draws once, is erased, and only the widgets that
+  // refresh themselves reappear. Give every sibling the style, this panel too.
+  for (wxWindow* sib : cw->GetChildren()) {
+    if (!sib || !sib->GetHandle()) continue;
+    HWND h = static_cast<HWND>(sib->GetHandle());
+    ::SetWindowLong(h, GWL_STYLE,
+                    ::GetWindowLong(h, GWL_STYLE) | WS_CLIPSIBLINGS);
+  }
+#endif
   p->Show();
   p->Raise();
 }
@@ -1317,7 +1335,12 @@ void mayara_pi::FitChartMenu() {
   if (!cw) return;
   const wxSize cs = cw->GetClientSize();
   const wxSize best = m_chart_menu->GetEffectiveMinSize();  // gutter included
-  const int w = std::min(cs.x - 2 * kChartMenuMargin, std::max(320, best.x));
+  int want_w = std::max(320, best.x);
+#ifdef __WXMSW__
+  // Room for the native vertical scrollbar, which sits outside the client area.
+  want_w += wxSystemSettings::GetMetric(wxSYS_VSCROLL_X, m_chart_menu);
+#endif
+  const int w = std::min(cs.x - 2 * kChartMenuMargin, want_w);
   // As tall as it needs, never taller than the chart: a panel sized to the
   // canvas is mostly empty, and one sized to a placeholder scrolls everything
   // real off the bottom.
