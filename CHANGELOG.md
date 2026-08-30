@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **server:** let the plugin answer mayara-server's telemetry consent (#44) ([PR #44](https://github.com/opencpn-radar-pi/mayara_pi/pull/44))
+- **server:** point at mayara-server's own GUI when no radar is found (#57) ([PR #57](https://github.com/opencpn-radar-pi/mayara_pi/pull/57))
 
 ### Fixed
 
