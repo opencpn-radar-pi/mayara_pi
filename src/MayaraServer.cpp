@@ -580,7 +580,7 @@ void MayaraServerPanel::Sync() {
       break;
     case MayaraServer::CheckState::kIdle:
     case MayaraServer::CheckState::kChecking:
-      if (!have) status = _("Looking for a mayara-server download…");
+      if (!have) status = _("Looking for a mayara-server download...");
       break;
     case MayaraServer::CheckState::kFailed:
       // Offline is normal on a boat, and a server on the LAN is still found

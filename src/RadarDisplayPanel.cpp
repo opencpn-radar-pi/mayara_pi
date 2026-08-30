@@ -245,7 +245,7 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
     // Loud, centred, two-line warning at menu-item point size.
     const wxString l1 = _("Radar API version mismatch");
     const wxString l2 = wxString::Format(
-        _("server %s, plugin %s — update the plugin"),
+        _("server %s, plugin %s - update the plugin"),
         wxString::FromUTF8(m_client->ServerApiVersion().c_str()),
         wxString::FromUTF8(MayaraClient::kRadarApiVersion));
     dc.SetFont(GetFont());  // same point size as the menu items
@@ -260,7 +260,7 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
     // Connection status only until a radar is up (no "streaming N radar(s)").
     const wxString status =
         m_client ? wxString::FromUTF8(m_client->StatusLine().c_str())
-                 : wxString("no client");
+                 : wxString(L"no client");
     dc.SetTextForeground(m_theme.text);
     dc.DrawText(status, 8, sz.y - 20);
   }
@@ -543,16 +543,16 @@ wxString FormatRange(double m, bool metric) {
     if (m >= 1000.0) {
       const double km = m / 1000.0;
       if (std::fabs(km - std::lround(km)) < 0.05)
-        return wxString::Format("%ld km", std::lround(km));
-      return wxString::Format("%.1f km", km);
+        return wxString::Format(L"%ld km", std::lround(km));
+      return wxString::Format(L"%.1f km", km);
     }
-    return wxString::Format("%.0f m", m);
+    return wxString::Format(L"%.0f m", m);
   }
   const double nm = m / 1852.0;
   if (nm >= 0.95) {
     if (std::fabs(nm - std::lround(nm)) < 0.03)
-      return wxString::Format("%ld NM", std::lround(nm));
-    return wxString::Format("%.1f NM", nm);
+      return wxString::Format(L"%ld NM", std::lround(nm));
+    return wxString::Format(L"%.1f NM", nm);
   }
   for (long d : {16L, 8L, 4L, 2L}) {
     const double num = nm * d;
@@ -560,11 +560,11 @@ wxString FormatRange(double m, bool metric) {
     if (n >= 1 && std::fabs(num - n) < 0.03) {
       const long g = std::gcd(n, d);
       const long nn = n / g, dd = d / g;
-      if (dd == 1) return wxString::Format("%ld NM", nn);
-      return wxString::Format("%ld/%ld NM", nn, dd);
+      if (dd == 1) return wxString::Format(L"%ld NM", nn);
+      return wxString::Format(L"%ld/%ld NM", nn, dd);
     }
   }
-  return wxString::Format("%.0f m", m);
+  return wxString::Format(L"%.0f m", m);
 }
 
 // A step is "nice" if its leading digits read cleanly (1, 1.5, 2, 2.5, 3, ...).
@@ -845,7 +845,7 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, const PpiGeometry& g) {
         if (name.IsEmpty() && t->MMSI) name = wxString::Format("%d", t->MMSI);
         wxString line2;
         if (moving)
-          line2 = wxString::Format("%03.0f° %.1fkn",
+          line2 = wxString::Format(L"%03.0f° %.1fkn",
                                    (t->COG >= 0 && t->COG < 360) ? t->COG : 0.0,
                                    t->SOG);
         dc.SetTextForeground(fill);
@@ -935,7 +935,7 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, const PpiGeometry& g) {
           double cog = t.course_deg;
           while (cog < 0) cog += 360;
           while (cog >= 360) cog -= 360;
-          dc.DrawText(wxString::Format("%03.0f° %.1fkn", cog, t.speed_kn),
+          dc.DrawText(wxString::Format(L"%03.0f° %.1fkn", cog, t.speed_kn),
                       p.x + 10, ty);
           ty += lh;
         }
@@ -969,8 +969,8 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, const PpiGeometry& g) {
     dc.SetFont(GetFont());
     const wxString z =
         std::fabs(disp_zoom - 1.0) > 0.02
-            ? wxString::Format("%.1f× ⌖", disp_zoom)
-            : wxString("⌖");
+            ? wxString::Format(L"%.1f× ⌖", disp_zoom)
+            : wxString(L"⌖");
     wxCoord tw, th;
     dc.GetTextExtent(z, &tw, &th);
     const wxSize sz = GetClientSize();
@@ -1202,7 +1202,7 @@ void RadarDisplayPanel::DrawVrmEbl(wxDC& dc, const PpiGeometry& g, double geo) {
     while (shown >= 360.0) shown -= 360.0;
     const wxString lines[3] = {
         wxString::Format(_("VRM/EBL %d"), i + 1),
-        wxString::Format(g.has_heading ? "%.1f° T" : "%.1f° R", shown),
+        wxString::Format(g.has_heading ? L"%.1f° T" : L"%.1f° R", shown),
         FormatRange(m.distance_m, g.metric)};
     wxCoord tw = 0, th = 0, w1, h1;
     for (const wxString& l : lines) {
@@ -1248,13 +1248,13 @@ void RadarDisplayPanel::DrawCursor(wxDC& dc, const PpiGeometry& g) {
   wxFont f = GetFont();
   f.SetPointSize(std::max(7, f.GetPointSize() - 1));
   dc.SetFont(f);
-  wxString txt = wxString::Format("%03.0f°T  %s", brg,
+  wxString txt = wxString::Format(L"%03.0f°T  %s", brg,
                                   FormatRange(dist, g.metric));
   if (g.has_heading) {
     double rel = brg - g.heading;
     while (rel < 0) rel += 360;
     while (rel >= 360) rel -= 360;
-    txt = wxString::Format("%03.0f°T %03.0f°R  %s", brg, rel,
+    txt = wxString::Format(L"%03.0f°T %03.0f°R  %s", brg, rel,
                            FormatRange(dist, g.metric));
   }
   wxCoord tw, th;

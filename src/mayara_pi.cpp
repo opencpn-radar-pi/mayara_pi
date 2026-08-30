@@ -703,7 +703,7 @@ void mayara_pi::SyncAccessConfig() {
 void mayara_pi::ShowAccessDialog() {
   if (m_access_dialog) return;
   auto* dlg = new wxDialog(m_parent_window, wxID_ANY,
-                           _("Mayara — permission needed"), wxDefaultPosition,
+                           _("Mayara - permission needed"), wxDefaultPosition,
                            wxDefaultSize, wxDEFAULT_DIALOG_STYLE);
   m_access_dialog = dlg;
   auto* top = new wxBoxSizer(wxVERTICAL);
@@ -712,7 +712,7 @@ void mayara_pi::ShowAccessDialog() {
       _("Your Signal K server allows this plugin to read radar data, but not "
         "to control the radar, so buttons like Transmit do nothing.\n\n"
         "Ask the server for permission below, then approve the request in the "
-        "Signal K web interface under Security → Access Requests. The "
+        "Signal K web interface under Security -> Access Requests. The "
         "permission is remembered, so this is only needed once."));
   intro->Wrap(420);
   top->Add(intro, 0, wxALL, 12);
@@ -756,12 +756,12 @@ void mayara_pi::UpdateAccessDialog() {
   bool can_ask = true;
   switch (state) {
     case MayaraClient::AuthState::kRequesting:
-      line = _("Asking the server…");
+      line = _("Asking the server...");
       can_ask = false;
       break;
     case MayaraClient::AuthState::kPending:
-      line = _("Waiting — approve \"Mayara radar plugin for OpenCPN\" in "
-               "Signal K under Security → Access Requests.");
+      line = _("Waiting - approve \"Mayara radar plugin for OpenCPN\" in "
+               "Signal K under Security -> Access Requests.");
       can_ask = false;
       break;
     case MayaraClient::AuthState::kApproved:
@@ -1486,7 +1486,7 @@ void mayara_pi::ShowSearchDialog() {
   auto* top = new wxBoxSizer(wxVERTICAL);
   auto* intro = new wxStaticText(
       dlg, wxID_ANY,
-      _("Looking for a Signal K server with mayara-server on the network…\n\n"
+      _("Looking for a Signal K server with mayara-server on the network...\n\n"
         "If it isn't found automatically, enter the address of your Signal K "
         "server or a Mayara server below."));
   intro->Wrap(400);
@@ -1507,7 +1507,7 @@ void mayara_pi::ShowSearchDialog() {
                               wxRA_SPECIFY_COLS);
   top->Add(type, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
 
-  auto* status = new wxStaticText(dlg, wxID_ANY, _("Still searching…"));
+  auto* status = new wxStaticText(dlg, wxID_ANY, _("Still searching..."));
   top->Add(status, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12);
 
   // The local-server offer, with the "prefer Signal K" advice above the button
@@ -1539,7 +1539,7 @@ void mayara_pi::ShowSearchDialog() {
     const int port = type->GetSelection() == 1 ? 6502 : 3000;
     const wxString url = wxString::Format("http://%s:%d", h, port);
     if (m_client) m_client->SetServerUrl(std::string(url.mb_str()));
-    status->SetLabel(wxString::Format(_("Connecting to %s…"), url));
+    status->SetLabel(wxString::Format(_("Connecting to %s..."), url));
   });
   auto close = [this](wxEvent&) {
     m_search_dismissed = true;
@@ -1631,7 +1631,7 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   auto* shint = new wxStaticText(
       spage, wxID_ANY,
       _("Blank = find it automatically (mDNS, or the Signal K server OpenCPN "
-        "is set up for). Otherwise a host or host:port — :3000 for Signal K, "
+        "is set up for). Otherwise a host or host:port - :3000 for Signal K, "
         ":6502 for mayara."));
   shint->Wrap(330);
   nbox->Add(shint, 0);
@@ -1886,7 +1886,7 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   gbox->Add(hchoice, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
 
   auto* frow = new wxBoxSizer(wxHORIZONTAL);
-  frow->Add(new wxStaticText(gpage, wxID_ANY, _("Fixed heading (°T):")), 0,
+  frow->Add(new wxStaticText(gpage, wxID_ANY, _("Fixed heading (deg T):")), 0,
             wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
   auto* fhead = new wxTextCtrl(gpage, wxID_ANY,
                                wxString::Format("%.1f", m_diag.fixed_heading),
@@ -1958,10 +1958,10 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
     live->SetLabel(
         wxString::Format(
             _("Heading: %s\nPosition: %s"),
-            have_h ? wxString::Format(_("%.1f°T from %s"), h, hs)
-                   : wxString(_("none — the overlay cannot be drawn")),
+            have_h ? wxString::Format(_("%.1f deg T from %s"), h, hs)
+                   : wxString(_("none - the overlay cannot be drawn")),
             have_p ? wxString::Format("%.5f, %.5f (%s)", la, lo, ps)
-                   : wxString(_("none — the overlay cannot be drawn"))));
+                   : wxString(_("none - the overlay cannot be drawn"))));
   };
   update_live();
   // On the stack, after dlg: it is destroyed first, so it stops before the

@@ -1,0 +1,749 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the mayara_pi package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: mayara_pi 0.1.3.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-08-30 12:57+0900\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: src/ControlsPanel.cpp:179
+msgid "Waiting for radar..."
+msgstr ""
+
+#: src/ControlsPanel.cpp:280
+msgid "Controls"
+msgstr ""
+
+#: src/ControlsPanel.cpp:286
+msgid "Settings"
+msgstr ""
+
+#: src/ControlsPanel.cpp:292
+msgid "Hide controls"
+msgstr ""
+
+#: src/ControlsPanel.cpp:405
+msgid "Radar"
+msgstr ""
+
+#: src/ControlsPanel.cpp:442
+msgid "View"
+msgstr ""
+
+#: src/ControlsPanel.cpp:444
+msgid "EBL/VRM"
+msgstr ""
+
+#: src/ControlsPanel.cpp:549
+msgid "Views"
+msgstr ""
+
+#: src/ControlsPanel.cpp:559
+msgid "Overlay"
+msgstr ""
+
+#: src/ControlsPanel.cpp:561
+msgid "PPI"
+msgstr ""
+
+#: src/ControlsPanel.cpp:562
+msgid "Docked"
+msgstr ""
+
+#: src/ControlsPanel.cpp:585
+msgid "Orientation"
+msgstr ""
+
+#: src/ControlsPanel.cpp:586
+#, c-format
+msgid "Orientation (%s)"
+msgstr ""
+
+#: src/ControlsPanel.cpp:587 src/RadarDisplayPanel.cpp:460
+msgid "Course up"
+msgstr ""
+
+#: src/ControlsPanel.cpp:587 src/RadarDisplayPanel.cpp:461
+msgid "Head up"
+msgstr ""
+
+#: src/ControlsPanel.cpp:587 src/RadarDisplayPanel.cpp:459
+msgid "North up"
+msgstr ""
+
+#: src/ControlsPanel.cpp:592
+msgid "Echo threshold"
+msgstr ""
+
+#: src/ControlsPanel.cpp:593
+#, c-format
+msgid "Echo threshold (%s)"
+msgstr ""
+
+#: src/ControlsPanel.cpp:594
+msgid "All"
+msgstr ""
+
+#: src/ControlsPanel.cpp:594
+msgid "Medium"
+msgstr ""
+
+#: src/ControlsPanel.cpp:594
+msgid "Strong"
+msgstr ""
+
+#: src/ControlsPanel.cpp:600
+msgid "Refresh rate"
+msgstr ""
+
+#: src/ControlsPanel.cpp:614
+msgid "Menu auto-hide"
+msgstr ""
+
+#: src/ControlsPanel.cpp:614
+msgid "Never"
+msgstr ""
+
+#: src/ControlsPanel.cpp:624
+msgid "Overlay opacity"
+msgstr ""
+
+#: src/ControlsPanel.cpp:634
+msgid "Guard zones on chart"
+msgstr ""
+
+#: src/ControlsPanel.cpp:646
+msgid "Chart scale sets range"
+msgstr ""
+
+#: src/ControlsPanel.cpp:657
+msgid "Nest second radar at 1/4"
+msgstr ""
+
+#: src/ControlsPanel.cpp:668
+msgid "Reverse zoom wheel"
+msgstr ""
+
+#: src/ControlsPanel.cpp:679
+msgid "Auto layout windows"
+msgstr ""
+
+#: src/ControlsPanel.cpp:801
+msgid "Auto"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1010
+msgid "Range"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1066 src/RadarDisplayPanel.cpp:1204
+#, c-format
+msgid "VRM/EBL %d"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1076
+msgid "Clear"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1091
+msgid "not set"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1106
+msgid "Server:"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1112
+msgid "not connected"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1171
+msgid "Start deg"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1172
+msgid "End deg"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1175 src/ControlsPanel.cpp:1271
+msgid "Enabled"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1180 src/ControlsPanel.cpp:1275
+#: src/ControlsPanel.cpp:1299
+msgid "Edit"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1182 src/ControlsPanel.cpp:1277
+msgid "Save"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1248
+msgid "Angles:"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1249
+msgid "Range:"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1249
+msgid "m"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1299
+msgid "Cancel"
+msgstr ""
+
+#: src/MayaraServer.cpp:98
+msgid "Cannot read the downloaded archive."
+msgstr ""
+
+#: src/MayaraServer.cpp:112
+#, c-format
+msgid "Cannot write %s."
+msgstr ""
+
+#: src/MayaraServer.cpp:133
+msgid "The downloaded archive does not contain mayara-server."
+msgstr ""
+
+#: src/MayaraServer.cpp:319
+msgid "No mayara-server download is available."
+msgstr ""
+
+#: src/MayaraServer.cpp:325
+#, c-format
+msgid "Cannot create %s."
+msgstr ""
+
+#: src/MayaraServer.cpp:335
+msgid "Downloading mayara-server"
+msgstr ""
+
+#: src/MayaraServer.cpp:336
+#, c-format
+msgid "mayara-server %s (%s) from "
+msgstr ""
+
+#: src/MayaraServer.cpp:346
+msgid "The download did not complete."
+msgstr ""
+
+#: src/MayaraServer.cpp:368
+#, c-format
+msgid "Cannot install %s."
+msgstr ""
+
+#: src/MayaraServer.cpp:525 src/mayara_pi.cpp:1581
+msgid "Run mayara-server on this computer"
+msgstr ""
+
+#: src/MayaraServer.cpp:530
+msgid ""
+"If you already run Signal K on a boat server, install the Mayara plugin "
+"there: one server then serves every device on board, and it keeps running "
+"when this computer is off.\n"
+"\n"
+"Otherwise mayara-server can be downloaded and run here, next to OpenCPN."
+msgstr ""
+
+#: src/MayaraServer.cpp:542 src/MayaraServer.cpp:575
+msgid "Download mayara locally"
+msgstr ""
+
+#: src/MayaraServer.cpp:545
+msgid "Run it here"
+msgstr ""
+
+#: src/MayaraServer.cpp:570
+#, c-format
+msgid "mayara-server %s is installed here and running."
+msgstr ""
+
+#: src/MayaraServer.cpp:571
+#, c-format
+msgid "mayara-server %s is installed here but not running."
+msgstr ""
+
+#: src/MayaraServer.cpp:579 src/mayara_pi.cpp:1996
+msgid "There is no mayara-server download for this platform."
+msgstr ""
+
+#: src/MayaraServer.cpp:583
+msgid "Looking for a mayara-server download..."
+msgstr ""
+
+#: src/MayaraServer.cpp:589
+msgid ""
+"github.com cannot be reached, so there is nothing to download right now. A "
+"mayara-server already on the network is still found normally."
+msgstr ""
+
+#: src/MayaraServer.cpp:596
+#, c-format
+msgid "mayara-server %s can be downloaded (%s)."
+msgstr ""
+
+#: src/MayaraServer.cpp:600 src/mayara_pi.cpp:2012
+#, c-format
+msgid "Update to %s"
+msgstr ""
+
+#: src/MayaraServer.cpp:601
+#, c-format
+msgid "  %s is available (%s)."
+msgstr ""
+
+#: src/MayaraServer.cpp:604
+msgid "  It is up to date."
+msgstr ""
+
+#: src/MayaraServer.cpp:623 src/mayara_pi.cpp:147 src/mayara_pi.cpp:1466
+#: src/mayara_pi.cpp:1472 src/mayara_pi.cpp:1820 src/mayara_pi.cpp:2026
+msgid "Mayara"
+msgstr ""
+
+#: src/RadarDisplayPanel.cpp:246
+msgid "Radar API version mismatch"
+msgstr ""
+
+#: src/RadarDisplayPanel.cpp:248
+#, c-format
+msgid "server %s, plugin %s - update the plugin"
+msgstr ""
+
+#: src/RadarDisplayPanel.cpp:380
+msgid "Power"
+msgstr ""
+
+#: src/RadarDisplayPanel.cpp:456
+msgid "no heading"
+msgstr ""
+
+#: src/RadarDisplayPanel.cpp:457
+msgid "no course"
+msgstr ""
+
+#: src/mayara_pi.cpp:148
+msgid "Mayara Radar"
+msgstr ""
+
+#: src/mayara_pi.cpp:148
+msgid "Show or hide the Mayara radar PPI window"
+msgstr ""
+
+#: src/mayara_pi.cpp:157
+msgid "Mayara radar overlay"
+msgstr ""
+
+#: src/mayara_pi.cpp:161
+msgid "Mayara radar menu"
+msgstr ""
+
+#: src/mayara_pi.cpp:166 src/mayara_pi.cpp:2201
+msgid "Show Mayara PPI"
+msgstr ""
+
+#: src/mayara_pi.cpp:706
+msgid "Mayara - permission needed"
+msgstr ""
+
+#: src/mayara_pi.cpp:712
+msgid ""
+"Your Signal K server allows this plugin to read radar data, but not to "
+"control the radar, so buttons like Transmit do nothing.\n"
+"\n"
+"Ask the server for permission below, then approve the request in the Signal K "
+"web interface under Security -> Access Requests. The permission is "
+"remembered, so this is only needed once."
+msgstr ""
+
+#: src/mayara_pi.cpp:724
+msgid "Ask for permission"
+msgstr ""
+
+#: src/mayara_pi.cpp:725
+msgid "Not now"
+msgstr ""
+
+#: src/mayara_pi.cpp:759
+msgid "Asking the server..."
+msgstr ""
+
+#: src/mayara_pi.cpp:763
+msgid ""
+"Waiting - approve \"Mayara radar plugin for OpenCPN\" in Signal K under "
+"Security -> Access Requests."
+msgstr ""
+
+#: src/mayara_pi.cpp:768
+msgid "Approved. Radar control works now."
+msgstr ""
+
+#: src/mayara_pi.cpp:772
+msgid "The request was refused. You can ask again."
+msgstr ""
+
+#: src/mayara_pi.cpp:775
+msgid ""
+"This server does not hand out permissions this way; it has to be granted in "
+"its own configuration."
+msgstr ""
+
+#: src/mayara_pi.cpp:780
+msgid "No permission yet."
+msgstr ""
+
+#: src/mayara_pi.cpp:1083 src/mayara_pi.cpp:1122
+msgid "fixed"
+msgstr ""
+
+#: src/mayara_pi.cpp:1090 src/mayara_pi.cpp:1128
+msgid "OpenCPN"
+msgstr ""
+
+#: src/mayara_pi.cpp:1105 src/mayara_pi.cpp:1143
+msgid "radar"
+msgstr ""
+
+#: src/mayara_pi.cpp:1112
+msgid "COG"
+msgstr ""
+
+#: src/mayara_pi.cpp:1463
+#, c-format
+msgid ""
+"A newer mayara-server is available.\n"
+"\n"
+"Installed: %s\n"
+"Available: %s\n"
+"\n"
+"Download and install it now?"
+msgstr ""
+
+#: src/mayara_pi.cpp:1482
+msgid "Looking for Mayara"
+msgstr ""
+
+#: src/mayara_pi.cpp:1489
+msgid ""
+"Looking for a Signal K server with mayara-server on the network...\n"
+"\n"
+"If it isn't found automatically, enter the address of your Signal K server or "
+"a Mayara server below."
+msgstr ""
+
+#: src/mayara_pi.cpp:1496
+msgid "Host / IP:"
+msgstr ""
+
+#: src/mayara_pi.cpp:1503
+msgid "Signal K server (port 3000)"
+msgstr ""
+
+#: src/mayara_pi.cpp:1504
+msgid "Mayara server (port 6502)"
+msgstr ""
+
+#: src/mayara_pi.cpp:1505
+msgid "Server type"
+msgstr ""
+
+#: src/mayara_pi.cpp:1510
+msgid "Still searching..."
+msgstr ""
+
+#: src/mayara_pi.cpp:1525
+msgid "Connect"
+msgstr ""
+
+#: src/mayara_pi.cpp:1526
+msgid "Keep searching"
+msgstr ""
+
+#: src/mayara_pi.cpp:1536
+msgid "Please enter a host name or IP address."
+msgstr ""
+
+#: src/mayara_pi.cpp:1542
+#, c-format
+msgid "Connecting to %s..."
+msgstr ""
+
+#: src/mayara_pi.cpp:1567
+msgid "Mayara Radar Settings"
+msgstr ""
+
+#: src/mayara_pi.cpp:1585
+msgid "Use a server on the network"
+msgstr ""
+
+#: src/mayara_pi.cpp:1592
+msgid "Download mayara-server"
+msgstr ""
+
+#: src/mayara_pi.cpp:1594
+msgid "Allow WiFi interfaces"
+msgstr ""
+
+#: src/mayara_pi.cpp:1601
+msgid "Report anonymous usage stats to the mayara developers"
+msgstr ""
+
+#: src/mayara_pi.cpp:1605
+msgid "Radar:"
+msgstr ""
+
+#: src/mayara_pi.cpp:1611
+msgid "Any brand"
+msgstr ""
+
+#: src/mayara_pi.cpp:1624
+msgid "Address:"
+msgstr ""
+
+#: src/mayara_pi.cpp:1633
+msgid ""
+"Blank = find it automatically (mDNS, or the Signal K server OpenCPN is set up "
+"for). Otherwise a host or host:port - :3000 for Signal K, :6502 for mayara."
+msgstr ""
+
+#: src/mayara_pi.cpp:1640
+msgid "Server"
+msgstr ""
+
+#: src/mayara_pi.cpp:1648
+#, c-format
+msgid "%d radar(s) discovered."
+msgstr ""
+
+#: src/mayara_pi.cpp:1650
+msgid "No radars discovered yet."
+msgstr ""
+
+#: src/mayara_pi.cpp:1653
+msgid "Number of PPI windows:"
+msgstr ""
+
+#: src/mayara_pi.cpp:1662
+msgid ""
+"Radars are spread evenly across the windows. One window shows all radars; "
+"more windows split them (e.g. 8 radars across 2 windows = 4 per window)."
+msgstr ""
+
+#: src/mayara_pi.cpp:1669
+msgid "Feed OpenCPN"
+msgstr ""
+
+#: src/mayara_pi.cpp:1672
+msgid "Radar heading as NMEA HDT"
+msgstr ""
+
+#: src/mayara_pi.cpp:1674
+msgid "Radar targets as NMEA TTM"
+msgstr ""
+
+#: src/mayara_pi.cpp:1681
+msgid ""
+"Sent into OpenCPN's own data stream once a second, so the radar can drive the "
+"chart's heading and its targets appear in OpenCPN's target list alongside "
+"AIS. Leave both off if another source already provides them."
+msgstr ""
+
+#: src/mayara_pi.cpp:1688
+msgid "Display"
+msgstr ""
+
+#: src/mayara_pi.cpp:1700
+msgid "Profile:"
+msgstr ""
+
+#: src/mayara_pi.cpp:1704
+msgid "Rename"
+msgstr ""
+
+#: src/mayara_pi.cpp:1706
+msgid "Delete"
+msgstr ""
+
+#: src/mayara_pi.cpp:1747
+msgid ""
+"\"Standard Mayara\" is the legend the server computes; the four hues show "
+"echo strength as brightness of one colour. Doppler stays magenta and green "
+"throughout, so a moving target can never be read as an echo. Changing a "
+"colour on a built-in copies it to a profile of your own first."
+msgstr ""
+
+#: src/mayara_pi.cpp:1755
+msgid "Colours"
+msgstr ""
+
+#: src/mayara_pi.cpp:1808
+msgid "Name for this colour profile:"
+msgstr ""
+
+#: src/mayara_pi.cpp:1808
+msgid "Rename profile"
+msgstr ""
+
+#: src/mayara_pi.cpp:1819
+msgid "There is already a profile with that name."
+msgstr ""
+
+#: src/mayara_pi.cpp:1876
+msgid "Heading source"
+msgstr ""
+
+#: src/mayara_pi.cpp:1879
+msgid "Automatic: OpenCPN, else the radar"
+msgstr ""
+
+#: src/mayara_pi.cpp:1880
+msgid "OpenCPN only"
+msgstr ""
+
+#: src/mayara_pi.cpp:1881
+msgid "Radar only"
+msgstr ""
+
+#: src/mayara_pi.cpp:1882
+msgid "Fixed heading"
+msgstr ""
+
+#: src/mayara_pi.cpp:1889
+msgid "Fixed heading (deg T):"
+msgstr ""
+
+#: src/mayara_pi.cpp:1898
+msgid "Use COG as heading when nothing reports one"
+msgstr ""
+
+#: src/mayara_pi.cpp:1903
+msgid "Heading timeout (s, 0 = never):"
+msgstr ""
+
+#: src/mayara_pi.cpp:1911
+msgid "Fixed own-ship position"
+msgstr ""
+
+#: src/mayara_pi.cpp:1915
+msgid "Lat:"
+msgstr ""
+
+#: src/mayara_pi.cpp:1921
+msgid "Lon:"
+msgstr ""
+
+#: src/mayara_pi.cpp:1930
+msgid "Log to the OpenCPN log:"
+msgstr ""
+
+#: src/mayara_pi.cpp:1933
+msgid "Off"
+msgstr ""
+
+#: src/mayara_pi.cpp:1934
+msgid "Problems"
+msgstr ""
+
+#: src/mayara_pi.cpp:1935
+msgid "Verbose"
+msgstr ""
+
+#: src/mayara_pi.cpp:1944
+msgid ""
+"A fixed heading or position lets the radar be used on a bench with no compass "
+"and no GPS. On a boat, leave them off: they do not follow you, and the "
+"picture will be confidently wrong."
+msgstr ""
+
+#: src/mayara_pi.cpp:1950
+msgid "Diagnostics"
+msgstr ""
+
+#: src/mayara_pi.cpp:1960
+#, c-format
+msgid ""
+"Heading: %s\n"
+"Position: %s"
+msgstr ""
+
+#: src/mayara_pi.cpp:1961
+#, c-format
+msgid "%.1f deg T from %s"
+msgstr ""
+
+#: src/mayara_pi.cpp:1962 src/mayara_pi.cpp:1964
+msgid "none - the overlay cannot be drawn"
+msgstr ""
+
+#: src/mayara_pi.cpp:1998
+msgid "mayara-server is not installed here yet."
+msgstr ""
+
+#: src/mayara_pi.cpp:2000
+#, c-format
+msgid "mayara-server %s, running."
+msgstr ""
+
+#: src/mayara_pi.cpp:2001
+#, c-format
+msgid "mayara-server %s, installed."
+msgstr ""
+
+#: src/mayara_pi.cpp:2139
+msgid "Marine radar overlay and PPI, served by mayara-server"
+msgstr ""
+
+#: src/mayara_pi.cpp:2144
+msgid ""
+"mayara_pi displays marine radar as a chart overlay and in a PPI window. "
+"Unlike radar_pi it does not talk to radar hardware directly; it consumes the "
+"mayara-server REST and WebSocket API."
+msgstr ""
+
+#: src/mayara_pi.cpp:2195
+#, c-format
+msgid "Mayara radar overlay (chart %d): %s"
+msgstr ""
+
+#: src/mayara_pi.cpp:2197
+#, c-format
+msgid "Mayara radar overlay: %s"
+msgstr ""
+
+#: src/mayara_pi.cpp:2200
+msgid "Hide Mayara PPI"
+msgstr ""
+
+#: src/mayara_pi.cpp:2207
+msgid "none"
+msgstr ""
+
+#: src/mayara_pi.cpp:2208
+msgid "all radars"
+msgstr ""
+
+#: src/mayara_pi.cpp:2213
+#, c-format
+msgid "radar %d"
+msgstr ""
+
+#: src/mayara_pi.cpp:2226
+msgid "None"
+msgstr ""
+
+#: src/mayara_pi.cpp:2230
+msgid "All radars"
+msgstr ""
