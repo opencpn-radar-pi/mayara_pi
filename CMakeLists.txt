@@ -219,7 +219,7 @@ if(NOT OCPN_FLATPAK_CONFIG)
     # arrows, the gear and cross glyphs) is mangled at compile time.
     target_compile_options(${PACKAGE_NAME} PRIVATE /utf-8)
 
-    # OpenCPN's Windows installer ships a VS2017-era C++ runtime
+    # OpenCPN 5.14.0's Windows installer ships a VS2017-era C++ runtime
     # (msvcp140.dll 14.12.25810.0) next to opencpn.exe, and Windows
     # resolves DLLs from the executable's directory first -- so that
     # is the runtime every plugin gets, whatever it was built
