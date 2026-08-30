@@ -38,6 +38,21 @@ struct ControlDef {
   double autoAdjustMin = 0, autoAdjustMax = 0;
   std::map<int, std::string> descriptions;  // enum value -> label
   std::vector<int> validValues;             // enum: settable values
+
+  bool operator==(const ControlDef& o) const {
+    return id == o.id && numeric_id == o.numeric_id && name == o.name &&
+           description == o.description && category == o.category &&
+           dataType == o.dataType && units == o.units &&
+           isReadOnly == o.isReadOnly && hasEnabled == o.hasEnabled &&
+           hasAuto == o.hasAuto && hasAutoAdjustable == o.hasAutoAdjustable &&
+           has_min == o.has_min && has_max == o.has_max &&
+           has_step == o.has_step && minValue == o.minValue &&
+           maxValue == o.maxValue && stepValue == o.stepValue &&
+           maxDistance == o.maxDistance && autoAdjustMin == o.autoAdjustMin &&
+           autoAdjustMax == o.autoAdjustMax &&
+           descriptions == o.descriptions && validValues == o.validValues;
+  }
+  bool operator!=(const ControlDef& o) const { return !(*this == o); }
 };
 
 struct ControlValue {

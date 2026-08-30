@@ -17,8 +17,10 @@ void RadarControls::UpdateDef(const ControlDef& def) {
   std::lock_guard<std::mutex> lock(m_);
   for (auto& d : defs_)
     if (d.id == def.id) {
-      d = def;
-      ++schema_generation_;
+      if (d != def) {
+        d = def;
+        ++schema_generation_;
+      }
       return;
     }
   defs_.push_back(def);

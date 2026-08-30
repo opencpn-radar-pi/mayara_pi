@@ -37,7 +37,10 @@ std::string Num(double v) { return JsonNum(v); }
 // unreachable. Above kStepperFrom the slider gets - / + buttons for the last
 // few units; above kEntryFrom it is replaced by a field you can type into.
 const double kStepperFrom = 20.0;
-const double kEntryFrom = 100.0;
+// 101, not 100: NumberSteps counts values, not intervals, so the very common
+// 0..100 range with step 1 comes to 101. At 100 that tipped every such control
+// into the type-in field instead of the slider it should be.
+const double kEntryFrom = 101.0;
 
 double NumberSteps(const ControlDef& d) {
   const double mn = d.has_min ? d.minValue : 0.0;
@@ -88,7 +91,11 @@ long RoundL(double v) { return std::lround(v); }
 // text on labels. (Native controls on macOS may ignore colour changes.)
 void ThemeWindow(wxWindow* w, const MayaraTheme& t) {
   w->SetBackgroundColour(t.panel_bg);
-  if (wxDynamicCast(w, wxStaticText)) w->SetForegroundColour(t.text);
+  // Anything that draws its own text needs the foreground set too, not just
+  // labels: a native wxTextCtrl keeps the system text colour (black), which on
+  // this panel's near-black background is invisible until you select it.
+  if (wxDynamicCast(w, wxStaticText) || wxDynamicCast(w, wxTextCtrl))
+    w->SetForegroundColour(t.text);
   for (wxWindow* c : w->GetChildren()) ThemeWindow(c, t);
 }
 
