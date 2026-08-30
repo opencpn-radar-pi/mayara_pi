@@ -12,6 +12,10 @@
 
 #include <wx/display.h>
 
+#ifdef __WXMSW__
+#include <windows.h>
+#endif
+
 #include "ControlsPanel.h"
 #include "MayaraClient.h"
 #include "RadarDisplayPanel.h"
@@ -61,9 +65,31 @@ MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client,
   // One control panel, bound to the focused radar (the first by default). It
   // floats over the pictures (not in the sizer) so it can pop up next to
   // whichever picture's hamburger was clicked.
-  m_controls = new ControlsPanel(this, client, radar_indices.front());
+  // Child of m_grid, not of this: on MSW a window is only clipped against
+  // overlapping SIBLINGS. As a sibling of m_grid the controls sit in a
+  // different branch from the RadarDisplayPanels, so their repaint erased it
+  // whatever the z-order. As a sibling of the pictures, Raise() + the
+  // WS_CLIPSIBLINGS set below keeps them clipped out of the radar repaint.
+  m_controls = new ControlsPanel(m_grid, client, radar_indices.front());
   m_controls->SetRadarList(radar_indices);
   m_controls->Hide();  // opened via a picture's hamburger button
+
+#ifdef __WXMSW__
+  // wxMSW never sets WS_CLIPSIBLINGS -- see wxWidgets src/msw/window.cpp: it
+  // "officially doesn't support overlapping windows". This panel is designed to
+  // float over the pictures, so without that style Windows lets each radar
+  // repaint paint straight over it: the panel draws once, is erased, and only
+  // the widgets that refresh themselves ever reappear (they flash). Add it by
+  // hand, to the pictures (the windows doing the painting) and to the panel.
+  auto clip_siblings = [](wxWindow* w) {
+    if (!w || !w->GetHandle()) return;
+    HWND h = static_cast<HWND>(w->GetHandle());
+    ::SetWindowLong(h, GWL_STYLE,
+                    ::GetWindowLong(h, GWL_STYLE) | WS_CLIPSIBLINGS);
+  };
+  for (RadarDisplayPanel* p : m_radars) clip_siblings(p);
+  clip_siblings(m_controls);
+#endif
 
   auto* sizer = new wxBoxSizer(wxHORIZONTAL);
   sizer->Add(m_grid, 1, wxEXPAND);
@@ -177,9 +203,9 @@ void MayaraPpiWindow::SetOverlayControl(std::function<bool()> get,
   if (!m_controls) return;
   m_controls->SetViewControls(
       std::move(get), std::move(set),
-      [this]() { return m_grid && m_grid->IsShown(); },
+      [this]() { return m_pictures_shown; },
       [this](bool show) {
-        if (m_grid) m_grid->Show(show);
+        ShowPictures(show);
         if (show) {
           Layout();
           if (m_frame) {
@@ -189,8 +215,7 @@ void MayaraPpiWindow::SetOverlayControl(std::function<bool()> get,
         } else if (m_controls) {
           // Show only the menu: dock the floating controls to fill a narrow
           // window (floating only; a docked pane keeps its size).
-          const int ctrl_w =
-              std::max(320, m_controls->GetEffectiveMinSize().x);
+          const int ctrl_w = ControlsWidth();
           if (m_frame) m_frame->SetClientSize(ctrl_w, m_frame->GetClientSize().y);
           m_controls->SetSize(0, 0, ctrl_w, GetClientSize().y);
           m_controls->Show(true);
@@ -232,10 +257,23 @@ RadarDisplayPanel* MayaraPpiWindow::FocusedPanel() {
   return m_radars.empty() ? nullptr : m_radars[0];
 }
 
+// Width the controls need: the content, plus room for the native vertical
+// scrollbar. GetEffectiveMinSize() describes the content only and the bar sits
+// outside the client area, so without the allowance the controls are laid out
+// wider than their client and their right edge ends up under the bar.
+int MayaraPpiWindow::ControlsWidth() const {
+  if (!m_controls) return 0;
+  int w = std::max(320, m_controls->GetEffectiveMinSize().x);
+#ifdef __WXMSW__
+  w += wxSystemSettings::GetMetric(wxSYS_VSCROLL_X, m_controls);
+#endif
+  return w;
+}
+
 void MayaraPpiWindow::PositionControls(RadarDisplayPanel* focused,
                                        bool allow_grow) {
   if (!m_controls || !focused) return;
-  const int ctrl_w = std::max(320, m_controls->GetEffectiveMinSize().x);
+  const int ctrl_w = ControlsWidth();
   const int kMinPicture = 240;  // keep at least this much picture beside it
   // Right edge of the focused picture, in this panel's client coordinates.
   wxPoint tr = focused->GetScreenPosition();
@@ -286,7 +324,8 @@ int MayaraPpiWindow::DesiredCols() const {
 
 void MayaraPpiWindow::BuildGrid() {
   m_solo = false;
-  for (RadarDisplayPanel* p : m_radars) p->Show(true);
+  m_solo_panel = nullptr;
+  for (RadarDisplayPanel* p : m_radars) p->Show(m_pictures_shown);
   const int n = static_cast<int>(m_radars.size());
   m_grid_cols = DesiredCols();
   const int rows = (n + m_grid_cols - 1) / m_grid_cols;
@@ -298,17 +337,35 @@ void MayaraPpiWindow::BuildGrid() {
 
 void MayaraPpiWindow::SoloPicture(RadarDisplayPanel* only) {
   m_solo = true;
+  m_solo_panel = only;
   m_grid_cols = -1;
-  for (RadarDisplayPanel* p : m_radars) p->Show(p == only);
+  for (RadarDisplayPanel* p : m_radars) p->Show(m_pictures_shown && p == only);
   auto* s = new wxBoxSizer(wxHORIZONTAL);
   s->Add(only, 1, wxEXPAND);
   m_grid->SetSizer(s);  // deletes the previous sizer
   m_grid->Layout();
 }
 
+// Hide the pictures rather than m_grid: m_controls is a child of m_grid (so it
+// is clipped out of the pictures' repaint -- see the constructor), and hiding
+// the container would take the panel with it, leaving nothing on screen to
+// switch the pictures back on with.
+void MayaraPpiWindow::ShowPictures(bool show) {
+  m_pictures_shown = show;
+  for (RadarDisplayPanel* p : m_radars)
+    p->Show(show && (!m_solo || p == m_solo_panel));
+  if (m_grid) m_grid->Layout();
+}
+
 void MayaraPpiWindow::PositionControlsTopRight() {
   if (!m_controls) return;
-  const int w = 300, h = 120, barW = 52;  // clear of the icon bar
+  const int h = 120, barW = 52;  // clear of the icon bar
+  int w = 300;
+#ifdef __WXMSW__
+  // As in ControlsWidth(): the native bar is outside the client area, so a
+  // fixed total width leaves the content short and clips its right edge.
+  w += wxSystemSettings::GetMetric(wxSYS_VSCROLL_X, m_controls);
+#endif
   const wxSize cs = GetClientSize();
   const int x = std::max(6, cs.x - barW - w);
   m_controls->SetSize(x, 6, w, std::min(h, cs.y - 12));

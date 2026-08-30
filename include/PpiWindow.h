@@ -109,6 +109,8 @@ class MayaraPpiWindow : public wxPanel {
   // left/up if that would push it off the display. No-op when docked.
   void GrowForControls(int extra);
   RadarDisplayPanel* FocusedPanel();  // panel driving the shared controls
+  // Width the controls need, including the native vertical scrollbar.
+  int ControlsWidth() const;
   // Float the controls immediately to the right of `focused`, growing the
   // window only if needed (and allowed) to make room.
   void PositionControls(RadarDisplayPanel* focused, bool allow_grow = true);
@@ -117,6 +119,11 @@ class MayaraPpiWindow : public wxPanel {
   int DesiredCols() const;             // columns from the window's aspect
   void BuildGrid();                    // show all pictures in a grid
   void SoloPicture(RadarDisplayPanel* only);  // show just one picture
+  // Show or hide the radar pictures for the View section PPI toggle. They are
+  // hidden one by one rather than by hiding m_grid: m_controls is a child of
+  // m_grid, so hiding the container would take the panel with it and leave no
+  // way to switch the pictures back on.
+  void ShowPictures(bool show);
   wxWindow* HostWindow();  // the floating frame, or this when docked
 
   MayaraClient* m_client = nullptr;  // not owned
@@ -138,6 +145,8 @@ class MayaraPpiWindow : public wxPanel {
   int m_idle_secs = 0;       // seconds the pointer has been off the controls
   int m_grid_cols = 0;      // current grid column count (-1 while soloed)
   bool m_solo = false;      // a single picture is shown for its open menu
+  RadarDisplayPanel* m_solo_panel = nullptr;  // which one, while m_solo
+  bool m_pictures_shown = true;  // View section PPI toggle
   bool m_grew = false;      // the menu widened the window
   wxRect m_pre_grow;        // window geometry before it was widened
   bool m_fs = false;        // frame is in radar full-screen
