@@ -64,13 +64,13 @@ std::string BodyAuto(bool a) {
 // for display.
 wxString FormatVal(double value, const std::string& units) {
   if (units == "rad")
-    return wxString::Format("%.0f°", value * 180.0 / M_PI);
+    return wxString::Format(L"%.0f°", value * 180.0 / M_PI);
   if (units == "m") {
     if (value >= 1852.0)
       return wxString::Format("%.2f NM", value / 1852.0);
-    return wxString::Format("%.0f m", value);
+    return wxString::Format(L"%.0f m", value);
   }
-  if (units == "s") return wxString::Format("%.0f s", value);
+  if (units == "s") return wxString::Format(L"%.0f s", value);
   return wxString::FromUTF8(Num(value).c_str());
 }
 
@@ -181,7 +181,7 @@ ControlsPanel::ControlsPanel(wxWindow* parent, MayaraClient* client,
   SetBackgroundStyle(wxBG_STYLE_PAINT);
   auto* sizer = new wxBoxSizer(wxVERTICAL);
   sizer->Add(MakeCloseRow(), 0, wxEXPAND);
-  sizer->Add(new wxStaticText(this, wxID_ANY, _("Waiting for radar…")), 0,
+  sizer->Add(new wxStaticText(this, wxID_ANY, _("Waiting for radar...")), 0,
              wxALL, 8);
   SetSizer(WithScrollGutter(sizer));
 
@@ -1100,7 +1100,7 @@ void ControlsPanel::FillVrmEblSection(wxSizer* content) {
       off->Enable(true);
       double deg = m.bearing_rad * 180.0 / M_PI;
       while (deg < 0) deg += 360.0;
-      val->SetLabel(wxString::Format("%.1f°  %s", deg,
+      val->SetLabel(wxString::Format(L"%.1f°  %s", deg,
                                      FormatVal(m.distance_m, "m")));
     });
   }
@@ -1162,7 +1162,7 @@ void ControlsPanel::AddSector(wxSizer* outer, const ControlDef& def) {
     row->Add(val, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 4);
     box->Add(row, 0, wxEXPAND | wxLEFT, 8);
     auto self = [sl, val]() {
-      val->SetLabel(wxString::Format("%ld°", RoundL(SliderToDeg(sl->GetValue()))));
+      val->SetLabel(wxString::Format(L"%ld°", RoundL(SliderToDeg(sl->GetValue()))));
     };
     sl->Bind(wxEVT_SCROLL_THUMBTRACK,
              [dirty, self](wxScrollEvent&) { *dirty = true; self(); });
@@ -1173,8 +1173,8 @@ void ControlsPanel::AddSector(wxSizer* outer, const ControlDef& def) {
 
   ThemedSlider *sStart, *sEnd;
   wxStaticText *vStart, *vEnd;
-  std::tie(sStart, vStart) = make_angle(_("Start°"));
-  std::tie(sEnd, vEnd) = make_angle(_("End°"));
+  std::tie(sStart, vStart) = make_angle(_("Start deg"));
+  std::tie(sEnd, vEnd) = make_angle(_("End deg"));
 
   auto* brow = new wxBoxSizer(wxHORIZONTAL);
   auto* en = new ThemedButton(this, _("Enabled"), m_theme, /*toggle=*/true);
@@ -1206,9 +1206,9 @@ void ControlsPanel::AddSector(wxSizer* outer, const ControlDef& def) {
         ControlValue v = controls()->Value(id);
         const double sd = RadToDeg(v.value), ed = RadToDeg(v.endValue);
         sStart->SetValue(DegToSlider(sd));
-        vStart->SetLabel(wxString::Format("%ld°", RoundL(sd)));
+        vStart->SetLabel(wxString::Format(L"%ld°", RoundL(sd)));
         sEnd->SetValue(DegToSlider(ed));
-        vEnd->SetLabel(wxString::Format("%ld°", RoundL(ed)));
+        vEnd->SetLabel(wxString::Format(L"%ld°", RoundL(ed)));
         if (v.has_enabled) en->SetValue(v.enabled);
       });
 }
@@ -1430,7 +1430,7 @@ void ControlsPanel::AddZone(wxSizer* outer, const ControlDef& def) {
     // Never overwrite the field being typed in; every other one follows.
     for (int i = 0; i < 4; ++i)
       if (i != *focused)
-        fields[i]->ChangeValue(wxString::Format("%ld", RoundL(vals[i])));
+        fields[i]->ChangeValue(wxString::Format(L"%ld", RoundL(vals[i])));
   });
 }
 

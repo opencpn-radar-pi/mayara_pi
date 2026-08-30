@@ -214,6 +214,10 @@ if(NOT OCPN_FLATPAK_CONFIG)
   if(MSVC)
     target_compile_definitions(${PACKAGE_NAME} PRIVATE
       _USE_MATH_DEFINES NOMINMAX WIN32_LEAN_AND_MEAN)
+    # The sources are UTF-8. Without /utf-8 MSVC reads them as the system ANSI
+    # codepage, so every non-ASCII literal (degree signs, ellipses, em dashes,
+    # arrows, the gear and cross glyphs) is mangled at compile time.
+    target_compile_options(${PACKAGE_NAME} PRIVATE /utf-8)
   endif()
 endif()
 
