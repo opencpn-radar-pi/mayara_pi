@@ -31,7 +31,7 @@ ThemedButton::ThemedButton(wxWindow* parent, const wxString& label,
   SetBackgroundStyle(wxBG_STYLE_PAINT);
   wxCoord tw, th;
   GetTextExtent(label, &tw, &th);  // uses the window font; no DC needed
-  SetMinSize(wxSize(tw + FromDIP(22), th + FromDIP(12)));
+  SetMinSize(wxSize(tw + FromDIP(14), th + FromDIP(12)));
   Bind(wxEVT_PAINT, &ThemedButton::OnPaint, this);
   Bind(wxEVT_LEFT_DOWN, &ThemedButton::OnClick, this);
 }

@@ -167,7 +167,7 @@ ControlsPanel::ControlsPanel(wxWindow* parent, MayaraClient* client,
       m_client(client),
       m_index(radar_index),
       m_timer(this, kControlsTimerId) {
-  SetMinSize(wxSize(FromDIP(300), -1));
+  SetMinSize(wxSize(FromDIP(250), -1));
   SetScrollRate(0, 12);
 #ifdef __WXMSW__
   // Keep the native vertical scrollbar permanently. A bar that appears only
