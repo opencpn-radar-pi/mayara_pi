@@ -47,9 +47,12 @@ wxString RangeLabel(uint32_t m) {
 // Defined further down; also used by the range/ring labels.
 wxString FormatRange(double m, bool metric);
 
-void LozengeBg(wxDC& dc, const wxRect& r, int radius, const MayaraTheme& t) {
+void LozengeBg(wxDC& dc, const wxWindow* win, const wxRect& r, int radius,
+               const MayaraTheme& t) {
   dc.SetBrush(wxBrush(t.lozenge_bg));
-  dc.SetPen(wxPen(t.lozenge_border));
+  // A default one-pixel pen is a hairline on a scaled display, which left the
+  // outlines far fainter than the type they enclose.
+  dc.SetPen(wxPen(t.lozenge_border, win->FromDIP(1)));
   dc.DrawRoundedRectangle(r.x, r.y, r.width, r.height, radius);
 }
 
@@ -77,14 +80,17 @@ double GaugeFrac(RadarControls* c, const std::string& id, bool& is_auto) {
 }
 
 // A small hand-drawn semicircle gauge with a value arc and a letter beneath.
-void DrawGauge(wxDC& dc, wxPoint c, const wxString& letter, double frac,
-               bool is_auto, const wxColour& ink, const wxColour& accent) {
-  const int R = 11, SEG = 16, yoff = 2;
+void DrawGauge(wxDC& dc, const wxWindow* win, wxPoint c,
+               const wxString& letter, double frac, bool is_auto,
+               const wxColour& ink, const wxColour& accent) {
+  // Device-independent: see the note in DrawIconBar.
+  const int R = win->FromDIP(11), SEG = 16, yoff = win->FromDIP(2);
+  const int pen = win->FromDIP(2);
   auto pt = [&](double a) {
     return wxPoint(c.x + static_cast<int>(std::lround(R * std::cos(a))),
                    c.y - static_cast<int>(std::lround(R * std::sin(a))) + yoff);
   };
-  dc.SetPen(wxPen(wxColour(90, 90, 96), 2));  // background arc 180 -> 0
+  dc.SetPen(wxPen(wxColour(90, 90, 96), pen));  // background arc 180 -> 0
   wxPoint prev = pt(M_PI);
   for (int i = 1; i <= SEG; ++i) {
     wxPoint q = pt(M_PI - M_PI * i / SEG);
@@ -92,7 +98,7 @@ void DrawGauge(wxDC& dc, wxPoint c, const wxString& letter, double frac,
     prev = q;
   }
   if (frac >= 0) {
-    dc.SetPen(wxPen(is_auto ? wxColour(0, 200, 255) : accent, 2));
+    dc.SetPen(wxPen(is_auto ? wxColour(0, 200, 255) : accent, pen));
     const int segN = static_cast<int>(std::lround(SEG * frac));
     prev = pt(M_PI);
     for (int i = 1; i <= segN; ++i) {
@@ -107,7 +113,9 @@ void DrawGauge(wxDC& dc, wxPoint c, const wxString& letter, double frac,
   dc.SetTextForeground(ink);
   wxCoord tw, th;
   dc.GetTextExtent(letter, &tw, &th);
-  dc.DrawText(letter, c.x - tw / 2, c.y + yoff + 3);
+  // Tight under the arc: the glyph sits well below the top of its text box,
+  // so a nominal gap here reads as a much wider one.
+  dc.DrawText(letter, c.x - tw / 2, c.y + yoff + win->FromDIP(1));
 }
 
 // The two VRM/EBL markers, as in the mayara GUI.
@@ -288,16 +296,21 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
 
 void RadarDisplayPanel::DrawIconBar(wxDC& dc, const wxSize& sz) {
   RadarControls* controls = m_client ? m_client->ControlsAt(m_index) : nullptr;
-  const int cell = 40, bw = 40;
+  // Every measurement here is in device-independent pixels. On a 200% display
+  // the raw values render at half their intended size, while text -- sized in
+  // points, a physical unit -- comes out full size, so the type outgrows the
+  // boxes drawn for it. macOS never showed this because its backing scale is
+  // applied for us.
+  const int cell = FromDIP(40), bw = FromDIP(40);
   // Against the right edge of the *visible* picture, not the panel: with the
   // controls open the full-width position puts the bar underneath them.
   const int avail_w = std::max(16, sz.x - m_obscured_right);
-  const int bx = avail_w - bw - 6, by = 6, barH = 6 * cell;
+  const int bx = avail_w - bw - FromDIP(6), by = FromDIP(6), barH = 6 * cell;
 
   // Very dark grey rounded background.
   dc.SetBrush(wxBrush(wxColour(22, 22, 24)));
   dc.SetPen(*wxTRANSPARENT_PEN);
-  dc.DrawRoundedRectangle(bx, by, bw, barH, 8);
+  dc.DrawRoundedRectangle(bx, by, bw, barH, FromDIP(8));
 
   const wxColour ink(220, 220, 225), dim(115, 115, 122);
   auto cellRect = [&](int i) { return wxRect(bx, by + i * cell, bw, cell); };
@@ -310,7 +323,8 @@ void RadarDisplayPanel::DrawIconBar(wxDC& dc, const wxSize& sz) {
     dc.SetTextForeground(col);
     wxCoord tw, th;
     dc.GetTextExtent(text, &tw, &th);
-    dc.DrawText(text, bx + (bw - tw) / 2, by + i * cell + cell - th - 2);
+    dc.DrawText(text, bx + (bw - tw) / 2,
+                by + i * cell + cell - th - FromDIP(2));
   };
   auto ctr = [&](int i) {
     return wxPoint(bx + bw / 2, by + i * cell + cell / 2);
@@ -319,19 +333,21 @@ void RadarDisplayPanel::DrawIconBar(wxDC& dc, const wxSize& sz) {
   // 0: Menu (hamburger).
   {
     wxPoint c = ctr(0);
-    dc.SetPen(wxPen(ink, 2));
+    dc.SetPen(wxPen(ink, FromDIP(2)));
+    const int hw = FromDIP(9), hgap = FromDIP(5);
     for (int k = -1; k <= 1; ++k)
-      dc.DrawLine(c.x - 9, c.y + k * 5, c.x + 9, c.y + k * 5);
+      dc.DrawLine(c.x - hw, c.y + k * hgap, c.x + hw, c.y + k * hgap);
     m_menu_rect = cellRect(0);
   }
   // 1: AIS on/off (filled triangle when on).
   {
     wxPoint c = ctr(1);
     const wxColour col = m_layers.ais ? wxColour(0, 220, 120) : dim;
-    dc.SetPen(wxPen(col, 2));
+    dc.SetPen(wxPen(col, FromDIP(2)));
     dc.SetBrush(m_layers.ais ? wxBrush(col) : *wxTRANSPARENT_BRUSH);
-    wxPoint tri[3] = {wxPoint(c.x, c.y - 9), wxPoint(c.x - 7, c.y + 8),
-                      wxPoint(c.x + 7, c.y + 8)};
+    const int tup = FromDIP(9), tside = FromDIP(7), tdn = FromDIP(8);
+    wxPoint tri[3] = {wxPoint(c.x, c.y - tup), wxPoint(c.x - tside, c.y + tdn),
+                      wxPoint(c.x + tside, c.y + tdn)};
     dc.DrawPolygon(3, tri);
     m_icon_ais = cellRect(1);
     caption(1, "AIS", m_layers.ais ? col : dim);
@@ -339,13 +355,13 @@ void RadarDisplayPanel::DrawIconBar(wxDC& dc, const wxSize& sz) {
   // 2,3,4: Gain / Sea / Rain gauges.
   {
     bool a = false;
-    DrawGauge(dc, ctr(2), "G", GaugeFrac(controls, "gain", a), a, ink,
+    DrawGauge(dc, this, ctr(2), "G", GaugeFrac(controls, "gain", a), a, ink,
               m_theme.accent);
     m_icon_gain = cellRect(2);
-    DrawGauge(dc, ctr(3), "S", GaugeFrac(controls, "sea", a), a, ink,
+    DrawGauge(dc, this, ctr(3), "S", GaugeFrac(controls, "sea", a), a, ink,
               m_theme.accent);
     m_icon_sea = cellRect(3);
-    DrawGauge(dc, ctr(4), "R", GaugeFrac(controls, "rain", a), a, ink,
+    DrawGauge(dc, this, ctr(4), "R", GaugeFrac(controls, "rain", a), a, ink,
               m_theme.accent);
     m_icon_rain = cellRect(4);
   }
@@ -356,9 +372,9 @@ void RadarDisplayPanel::DrawIconBar(wxDC& dc, const wxSize& sz) {
     const bool armed = m_ebl_arm > 0;
     const wxColour col = armed ? kVrmEblColours[m_ebl_arm - 1] : dim;
     dc.SetBrush(*wxTRANSPARENT_BRUSH);
-    dc.SetPen(wxPen(col, 2));
-    dc.DrawCircle(c.x, c.y, 9);
-    dc.DrawLine(c.x, c.y, c.x + 8, c.y - 5);
+    dc.SetPen(wxPen(col, FromDIP(2)));
+    dc.DrawCircle(c.x, c.y, FromDIP(9));
+    dc.DrawLine(c.x, c.y, c.x + FromDIP(8), c.y - FromDIP(5));
     if (armed) {
       wxFont f = dc.GetFont();
       f.SetPointSize(8);
@@ -370,7 +386,7 @@ void RadarDisplayPanel::DrawIconBar(wxDC& dc, const wxSize& sz) {
       dc.GetTextExtent(n, &tw, &th);
       // Left of centre: the radial line leaves the middle towards the upper
       // right, and the digit was sitting under it.
-      dc.DrawText(n, c.x - tw / 2 - 4, c.y - th / 2 + 1);
+      dc.DrawText(n, c.x - tw / 2 - FromDIP(4), c.y - th / 2 + FromDIP(1));
     }
     m_icon_ebl = cellRect(5);
     caption(5, "EBL/VRM", col);
@@ -424,7 +440,7 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
     const int h = std::max<int>(textH, icon) + 12;
     const int w = padx + icon + gap + textW + padx;
     const int x = 10, y = 10;
-    LozengeBg(dc, wxRect(x, y, w, h), std::min(h / 2, 12), m_theme);
+    LozengeBg(dc, this, wxRect(x, y, w, h), std::min(h / 2, 12), m_theme);
 
     // Power glyph: ring + top stem, vertically centred.
     const int ix = x + padx + icon / 2, iy = y + h / 2, r = icon / 2 - 1;
@@ -488,7 +504,7 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
     const int w = tw + 22, h = th + 12;
     const int x = 10, y = m_power_rect.IsEmpty() ? 10
                                                  : m_power_rect.GetBottom() + 8;
-    LozengeBg(dc, wxRect(x, y, w, h), std::min(h / 2, 12), m_theme);
+    LozengeBg(dc, this, wxRect(x, y, w, h), std::min(h / 2, 12), m_theme);
 
     // A small arrow for what is at the top of the picture: north gets a
     // needle, course and heading get a bow.
@@ -524,7 +540,7 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
     const int plus_h = 26, minus_h = 26, val_h = th + 12;
     const int h = plus_h + val_h + minus_h;
     const int x = 10, y = (sz.y - h) / 2;
-    LozengeBg(dc, wxRect(x, y, w, h), 12, m_theme);
+    LozengeBg(dc, this, wxRect(x, y, w, h), 12, m_theme);
 
     const wxColour fg = m_theme.text;
     const int cx = x + w / 2;
@@ -998,7 +1014,7 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, const PpiGeometry& g) {
     // Window-fixed, not picture-fixed: a pan must not carry it off-screen.
     const wxRect chip(avail_w / 2 - tw / 2 - 8, sz.y - th - 14, tw + 16,
                       th + 8);
-    LozengeBg(dc, chip, (th + 8) / 2, m_theme);
+    LozengeBg(dc, this, chip, (th + 8) / 2, m_theme);
     dc.SetTextForeground(m_theme.text);
     dc.DrawText(z, chip.x + 8, chip.y + 4);
     m_recenter_rect = chip;
@@ -1282,7 +1298,7 @@ void RadarDisplayPanel::DrawCursor(wxDC& dc, const PpiGeometry& g) {
   // Bottom-left, window-fixed: a readout that follows the pointer covers the
   // echoes being measured.
   const wxRect chip(8, GetClientSize().y - th - 12, tw + 12, th + 6);
-  LozengeBg(dc, chip, (th + 6) / 2, m_theme);
+  LozengeBg(dc, this, chip, (th + 6) / 2, m_theme);
   dc.SetTextForeground(m_theme.text);
   dc.DrawText(txt, chip.x + 6, chip.y + 3);
 }
