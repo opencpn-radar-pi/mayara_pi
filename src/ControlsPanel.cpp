@@ -94,8 +94,13 @@ void ThemeWindow(wxWindow* w, const MayaraTheme& t) {
   // Anything that draws its own text needs the foreground set too, not just
   // labels: a native wxTextCtrl keeps the system text colour (black), which on
   // this panel's near-black background is invisible until you select it.
-  if (wxDynamicCast(w, wxStaticText) || wxDynamicCast(w, wxTextCtrl))
+  // Editable ones only: the zone fields are deliberately dimmed while they
+  // are read-only (see AddZone apply_mode), and this runs after that, so
+  // colouring every field alike would erase the distinction.
+  wxTextCtrl* text = wxDynamicCast(w, wxTextCtrl);
+  if (wxDynamicCast(w, wxStaticText) || (text && text->IsEditable())) {
     w->SetForegroundColour(t.text);
+  }
   for (wxWindow* c : w->GetChildren()) ThemeWindow(c, t);
 }
 

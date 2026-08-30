@@ -17,6 +17,8 @@ void RadarControls::UpdateDef(const ControlDef& def) {
   std::lock_guard<std::mutex> lock(m_);
   for (auto& d : defs_)
     if (d.id == def.id) {
+      // Only a real change may bump the generation: the panel rebuilds itself
+      // whenever it sees a new one, and the server repeats metadata.
       if (d != def) {
         d = def;
         ++schema_generation_;
