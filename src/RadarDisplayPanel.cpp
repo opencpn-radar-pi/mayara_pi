@@ -245,6 +245,7 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
     // Loud, centred, two-line warning at menu-item point size.
     const wxString l1 = _("Radar API version mismatch");
     const wxString l2 = wxString::Format(
+        // ASCII hyphen, not an em dash: msgids are kept ASCII-only.
         _("server %s, plugin %s - update the plugin"),
         wxString::FromUTF8(m_client->ServerApiVersion().c_str()),
         wxString::FromUTF8(MayaraClient::kRadarApiVersion));

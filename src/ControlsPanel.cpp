@@ -181,6 +181,8 @@ ControlsPanel::ControlsPanel(wxWindow* parent, MayaraClient* client,
   SetBackgroundStyle(wxBG_STYLE_PAINT);
   auto* sizer = new wxBoxSizer(wxVERTICAL);
   sizer->Add(MakeCloseRow(), 0, wxEXPAND);
+  // Three ASCII periods, not an ellipsis: translated msgids are kept ASCII
+  // so a compiler reading the source in the system codepage cannot mangle them.
   sizer->Add(new wxStaticText(this, wxID_ANY, _("Waiting for radar...")), 0,
              wxALL, 8);
   SetSizer(WithScrollGutter(sizer));
@@ -1173,6 +1175,7 @@ void ControlsPanel::AddSector(wxSizer* outer, const ControlDef& def) {
 
   ThemedSlider *sStart, *sEnd;
   wxStaticText *vStart, *vEnd;
+  // "deg" rather than a degree sign, for the same reason as the ellipsis above.
   std::tie(sStart, vStart) = make_angle(_("Start deg"));
   std::tie(sEnd, vEnd) = make_angle(_("End deg"));
 
