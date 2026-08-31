@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **i18n:** build the sources as UTF-8 and keep non-ASCII out of msgids (#55) ([PR #55](https://github.com/opencpn-radar-pi/mayara_pi/pull/55))
 - **windows:** antialias and DPI-scale the hand-drawn chrome (#56) ([PR #56](https://github.com/opencpn-radar-pi/mayara_pi/pull/56))
 - **windows:** survive the VS2017-era C++ runtime OpenCPN ships (#60) ([PR #60](https://github.com/opencpn-radar-pi/mayara_pi/pull/60))
+- **overlay:** PPI show/hide, range-auto oscillation, per-radar Range Auto (#62) ([PR #62](https://github.com/opencpn-radar-pi/mayara_pi/pull/62))
 
 ## [0.1.1] - 2026-08-29
 
