@@ -580,12 +580,16 @@ void mayara_pi::SetRangeAutoFor(const std::string& radar_id, bool on) {
   SyncChartRange();
 }
 
+// The outer/front radar on some canvas -- the only one SyncChartRange can
+// currently drive (a nested second radar is steered off the outer one's
+// range instead; see SyncAutoRange). Narrower than "appears anywhere in an
+// overlay" on purpose: showing Auto on a radar this canvas would never
+// actually apply it to would be a button that silently does nothing.
 bool mayara_pi::RadarInOverlay(int radar_index) const {
   const int n = GetCanvasCount();
   for (int c = 0; c < (n > 0 ? n : 1); ++c) {
     const std::vector<int> radars = OverlayRadars(c);
-    if (std::find(radars.begin(), radars.end(), radar_index) != radars.end())
-      return true;
+    if (!radars.empty() && radars.front() == radar_index) return true;
   }
   return false;
 }
@@ -884,6 +888,10 @@ void mayara_pi::SetOverlayAll(bool on) {
   m_overlay_sel.clear();
   if (!on)
     for (int c = 0; c < (n > 0 ? n : 1); ++c) m_overlay_sel[c] = kOverlayNone;
+  // Every canvas's outer radar may just have changed (or gone away). A stale
+  // cached "want" that happens to match the new radar's would wrongly look
+  // like Range Auto already did its job on it.
+  m_chart_range_last_want.clear();
   SaveConfig();
 }
 

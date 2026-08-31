@@ -1041,8 +1041,13 @@ void ControlsPanel::AddRange(wxSizer* outer, const ControlDef& def,
   const std::string id = def.id;
   choice->Bind(wxEVT_CHOICE, [this, id, choice, values](wxCommandEvent&) {
     int sel = choice->GetSelection();
-    if (sel >= 0 && sel < static_cast<int>(values.size()))
-      Set(id, BodyValue(values[sel]));
+    if (sel < 0 || sel >= static_cast<int>(values.size())) return;
+    Set(id, BodyValue(values[sel]));
+    // A manual pick is the operator overriding Range Auto -- leaving it on
+    // would just let the next chart zoom silently undo the choice they just
+    // made.
+    if (m_get_range_auto && m_get_range_auto() && m_set_range_auto)
+      m_set_range_auto(false);
   });
   m_updaters.push_back([this, id, choice, values]() {
     ControlValue val = controls()->Value(id);
