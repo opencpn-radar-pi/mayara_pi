@@ -120,11 +120,12 @@ const int kMayaraPort = 6502;
 // is there, and treating the two alike made the plugin settle on a server that
 // could never produce a radar. Every shape we accept carries either the 3.4.0
 // envelope or at least one radar; a bare {} carries neither and is rejected.
+// A lone "version" is not enough either -- every mayara that reports one puts
+// it beside a radars object, so on its own it is somebody else's field.
 bool LooksLikeRadarApi(const json& j) {
   if (j.is_array()) return true;
   if (!j.is_object()) return false;
   if (j.contains("radars") && j["radars"].is_object()) return true;
-  if (j.contains("version") && j["version"].is_string()) return true;
   // Older shape: radars keyed at the top level, anything but "version".
   for (auto it = j.begin(); it != j.end(); ++it)
     if (it.key() != "version" && it.value().is_object()) return true;

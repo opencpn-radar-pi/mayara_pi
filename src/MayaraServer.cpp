@@ -67,6 +67,20 @@ const char* kBinaryName = "mayara-server";
 // so it goes here instead, beside the binary, and Settings says where.
 const char* kLogName = "mayara-server.log";
 
+#ifndef _WIN32
+// A path as one literal argument to /bin/sh. Single quotes protect everything
+// except a single quote itself, which has to leave the quoting, escape itself
+// and go back in -- a home directory like /Users/O'Connor otherwise composes a
+// command the shell cannot run, and it fails in the one way the fallback below
+// cannot see: the shell starts, so the pid is good, and only the server is
+// missing.
+wxString ShellQuote(const wxString& path) {
+  wxString escaped = path;
+  escaped.Replace("'", "'\\''");
+  return "'" + escaped + "'";
+}
+#endif
+
 // The release-asset suffix for this platform, or empty when mayara-server ships
 // no binary we could run. On Windows we ask the OS rather than looking at our
 // own bitness: OpenCPN itself may be a 32-bit build on a 64-bit machine.
@@ -444,18 +458,24 @@ bool MayaraServer::Start() {
   // we are unloaded (see above). On POSIX `exec` replaces the shell, so m_pid
   // stays the server's own; cmd.exe has no such trick and waits for it, which
   // Running() (it exits when the server does) and Stop() (wxKILL_CHILDREN)
-  // both cope with. The quoting is the shell's, inside the one argument
-  // wxExecute hands it: single quotes on POSIX, since a double quote there
-  // would end that argument early; cmd.exe instead takes the whole line in an
-  // outer pair of its own and strips it.
+  // both cope with.
   const wxString log = LogPath();
+  long pid;
 #ifdef _WIN32
+  // cmd.exe takes the whole line in an outer pair of quotes of its own and
+  // strips it, so the inner quoting around the paths survives.
   const wxString launch = "cmd.exe /c \"" + cmd + " > \"" + log + "\" 2>&1\"";
+  pid = wxExecute(launch, wxEXEC_ASYNC | wxEXEC_HIDE_CONSOLE, nullptr, &env);
 #else
-  const wxString launch = "/bin/sh -c \"exec '" + BinaryPath() + "'" + args +
-                          " > '" + log + "' 2>&1\"";
+  // Handed to sh as an argument of its own rather than as one command string:
+  // wxExecute would otherwise split that string itself, and its Unix splitter
+  // eats backslashes -- undoing ShellQuote's escaping before sh ever saw it.
+  const wxString script = "exec " + ShellQuote(BinaryPath()) + args + " > " +
+                          ShellQuote(log) + " 2>&1";
+  const wxScopedCharBuffer script_utf8 = script.utf8_str();
+  const char* argv[] = {"/bin/sh", "-c", script_utf8.data(), nullptr};
+  pid = wxExecute(argv, wxEXEC_ASYNC, nullptr, &env);
 #endif
-  long pid = wxExecute(launch, wxEXEC_ASYNC | wxEXEC_HIDE_CONSOLE, nullptr, &env);
   // No shell, or it would not run: a server without a log beats no server.
   if (pid <= 0)
     pid = wxExecute(cmd, wxEXEC_ASYNC | wxEXEC_HIDE_CONSOLE, nullptr, &env);
