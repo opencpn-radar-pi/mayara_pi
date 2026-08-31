@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.4] - 2026-08-31
 
 ### Added
 
@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **release:** make --release's commit non-empty (#36) ([PR #36](https://github.com/opencpn-radar-pi/mayara_pi/pull/36))
 
-[Unreleased]: https://github.com/opencpn-radar-pi/mayara_pi/compare/v0.1.1...HEAD
+[0.1.4]: https://github.com/opencpn-radar-pi/mayara_pi/compare/v0.1.1...v0.1.4
 [0.1.1]: https://github.com/opencpn-radar-pi/mayara_pi/releases/tag/v0.1.1
 
 
