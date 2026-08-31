@@ -464,6 +464,34 @@ void MayaraPpiWindow::SetThresholdHandlers(
         });
 }
 
+void MayaraPpiWindow::SetRangeAutoHandlers(
+    std::function<bool(int)> get_relevant,
+    std::function<bool(const std::string&)> get,
+    std::function<void(const std::string&, bool)> set) {
+  m_range_auto_relevant = std::move(get_relevant);
+  m_range_auto_get = std::move(get);
+  m_range_auto_set = std::move(set);
+  // No per-picture lozenge for this one -- just the focused radar's Auto
+  // button, next to Range in the controls.
+  if (m_controls)
+    m_controls->SetRangeAutoControl(
+        [this]() {
+          RadarDisplayPanel* p = FocusedPanel();
+          return p && m_range_auto_relevant &&
+                 m_range_auto_relevant(p->RadarIndex());
+        },
+        [this]() {
+          RadarDisplayPanel* p = FocusedPanel();
+          if (!p || !m_client || !m_range_auto_get) return false;
+          return m_range_auto_get(m_client->RadarId(p->RadarIndex()));
+        },
+        [this](bool on) {
+          RadarDisplayPanel* p = FocusedPanel();
+          if (!p || !m_client || !m_range_auto_set) return;
+          m_range_auto_set(m_client->RadarId(p->RadarIndex()), on);
+        });
+}
+
 void MayaraPpiWindow::SetPrefsHandlers(std::function<PpiPrefs()> get,
                                        std::function<void(const PpiPrefs&)> set) {
   m_prefs_get = std::move(get);

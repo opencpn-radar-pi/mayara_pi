@@ -68,6 +68,14 @@ class ControlsPanel : public wxScrolledWindow {
   // "Dock in OpenCPN" toggle for the View section.
   void SetDockControl(std::function<bool()> get, std::function<void(bool)> set);
 
+  // "Auto" button next to Range: whether the chart's zoom drives this
+  // radar's range. get_relevant says whether this radar is on any canvas's
+  // overlay right now -- the button is hidden entirely when it is not,
+  // since toggling it would have nothing to act on.
+  void SetRangeAutoControl(std::function<bool()> get_relevant,
+                           std::function<bool()> get,
+                           std::function<void(bool)> set);
+
   // The picture's two VRM/EBL markers. Local to the plugin, so they are read
   // and written straight on the focused picture rather than through a control.
   void SetVrmEblHandlers(std::function<VrmEbl(int)> get,
@@ -167,6 +175,9 @@ class ControlsPanel : public wxScrolledWindow {
   std::function<void(int)> m_set_threshold;
   std::function<bool()> m_get_dock;
   std::function<void(bool)> m_set_dock;
+  std::function<bool()> m_range_auto_relevant;
+  std::function<bool()> m_get_range_auto;
+  std::function<void(bool)> m_set_range_auto;
   bool m_rebuilding = false;
   bool m_dragging_bar = false;  // the drawn scrollbar's thumb  // true while widgets are being destroyed
   std::function<VrmEbl(int)> m_vrm_get;

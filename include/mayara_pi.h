@@ -120,6 +120,14 @@ class mayara_pi : public opencpn_plugin_121 {
   void SetOrientationFor(const std::string& radar_id, int mode);
   int ThresholdFor(const std::string& radar_id) const;     // per-radar echo cut
   void SetThresholdFor(const std::string& radar_id, int level);
+  // Range Auto: per-radar, so the detail radar overlaid on the chart can
+  // follow its scale while another radar kept at a fixed long range (weather
+  // watching, say) is left alone.
+  bool RangeAutoFor(const std::string& radar_id) const;
+  void SetRangeAutoFor(const std::string& radar_id, bool on);
+  // Whether this radar is currently shown by any canvas's overlay -- Range
+  // Auto only means something for a radar actually on the chart.
+  bool RadarInOverlay(int radar_index) const;
 
   wxWindow* m_parent_window = nullptr;
   wxBitmap m_panel_bitmap;   // shown in the plugin manager
@@ -208,6 +216,11 @@ class mayara_pi : public opencpn_plugin_121 {
   bool m_feed_targets = false;
   std::map<std::string, int> m_ttm_number;  // target key -> TTM target number  // the chart's zoom drives the overlaid radar
   std::map<int, double> m_canvas_radius_m;  // per canvas, what the chart shows
+  // Range Auto: per canvas, the range value it last asked for, so a canvas
+  // only touches its radar's range again when its own desired value changes
+  // -- not every heartbeat, and not fighting another canvas that shares the
+  // same radar.
+  std::map<int, int> m_chart_range_last_want;
   struct OverlayItem {
     int idx;
     uint32_t range;
@@ -246,7 +259,6 @@ class mayara_pi : public opencpn_plugin_121 {
   void RefreshContextMenu(int canvas);
   wxString OverlayLabel(int canvas) const;
   void ShowOverlayMenu(int canvas);  // our own popup, not a host submenu
-  bool PpiFrontmost() const;   // shown and in front, not buried under the chart
   void RaisePpiWindows();
   PpiPrefs m_prefs;  // global display prefs, shared by every radar window
 
@@ -259,6 +271,8 @@ class mayara_pi : public opencpn_plugin_121 {
   // Per-radar display echo threshold (0 all, 1 hide weak, 2 only strong),
   // keyed by radar id. Persisted.
   std::map<std::string, int> m_threshold;
+  // Range Auto, keyed by radar id. Persisted.
+  std::map<std::string, bool> m_range_auto;
   std::vector<wxRect> m_geom_cache;  // last live snapshot of window geometry
   std::vector<wxString> m_persp_cache;  // last live snapshot of AUI pane info
   bool m_docked = false;             // radar windows docked into OpenCPN (AUI)

@@ -648,19 +648,10 @@ void ControlsPanel::FillViewSection(wxSizer* content) {
     m_updaters.push_back(
         [this, oz]() { oz->SetValue(m_get_prefs().overlay_zones); });
 
-    // Both off by default: they write a range to a radar, and nothing should do
-    // that to your hardware unless you asked for it.
-    auto* cr = new ThemedButton(this, _("Chart scale sets range"), m_theme,
-                                true);
-    content->Add(cr, 0, wxEXPAND | wxALL, 4);
-    cr->Bind(wxEVT_TOGGLEBUTTON, [this, cr](wxCommandEvent&) {
-      PpiPrefs p = m_get_prefs();
-      p.chart_range = cr->GetValue();
-      m_set_prefs(p);
-    });
-    m_updaters.push_back(
-        [this, cr]() { cr->SetValue(m_get_prefs().chart_range); });
-
+    // Off by default: it writes a range to a radar, and nothing should do
+    // that to your hardware unless you asked for it. Range Auto itself lives
+    // next to the Range control -- per radar, not a single setting for all
+    // of them.
     auto* ar = new ThemedButton(this, _("Nest second radar at 1/4"), m_theme,
                                 true);
     content->Add(ar, 0, wxEXPAND | wxALL, 4);
@@ -743,6 +734,15 @@ void ControlsPanel::SetDockControl(std::function<bool()> get,
                                    std::function<void(bool)> set) {
   m_get_dock = std::move(get);
   m_set_dock = std::move(set);
+  if (m_built) Rebuild();
+}
+
+void ControlsPanel::SetRangeAutoControl(std::function<bool()> get_relevant,
+                                        std::function<bool()> get,
+                                        std::function<void(bool)> set) {
+  m_range_auto_relevant = std::move(get_relevant);
+  m_get_range_auto = std::move(get);
+  m_set_range_auto = std::move(set);
   if (m_built) Rebuild();
 }
 
@@ -1015,6 +1015,7 @@ void ControlsPanel::AddEnum(wxSizer* outer, const ControlDef& def,
 void ControlsPanel::AddRange(wxSizer* outer, const ControlDef& def,
                              const std::vector<int>& supported) {
   outer->Add(new wxStaticText(this, wxID_ANY, _("Range")), 0, wxLEFT | wxTOP, 4);
+  auto* row = new wxBoxSizer(wxHORIZONTAL);
   auto* choice = new ThemedChoice(this, m_theme);
 
   // Use the range control's own validValues (the settable ranges, with nice
@@ -1027,7 +1028,15 @@ void ControlsPanel::AddRange(wxSizer* outer, const ControlDef& def,
                        ? wxString::FromUTF8(dit->second.c_str())
                        : FormatVal(v, "m"));
   }
-  outer->Add(choice, 0, wxEXPAND | wxALL, 4);
+  row->Add(choice, 1, wxALIGN_CENTER_VERTICAL);
+
+  // Range Auto: the chart's zoom drives this radar's range. Only meaningful
+  // -- and only shown at all -- while this radar is actually on a chart via
+  // the overlay; toggling it for a radar nobody is looking at on a canvas
+  // would have nothing to act on.
+  auto* autobtn = new ThemedButton(this, _("Auto"), m_theme, /*toggle=*/true);
+  row->Add(autobtn, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 4);
+  outer->Add(row, 0, wxEXPAND | wxALL, 4);
 
   const std::string id = def.id;
   choice->Bind(wxEVT_CHOICE, [this, id, choice, values](wxCommandEvent&) {
@@ -1048,6 +1057,24 @@ void ControlsPanel::AddRange(wxSizer* outer, const ControlDef& def,
       }
     }
     if (choice->GetSelection() != best) choice->SetSelection(best);
+  });
+
+  autobtn->Bind(wxEVT_TOGGLEBUTTON, [this](wxCommandEvent&) {
+    if (m_set_range_auto)
+      m_set_range_auto(!(m_get_range_auto && m_get_range_auto()));
+  });
+  // Shown state changes rarely (only when the overlay picker's selection
+  // changes), so only re-layout when it actually flips rather than every tick.
+  auto shown = std::make_shared<bool>(true);  // wxWindow default; forces a sync
+  m_updaters.push_back([this, autobtn, shown]() {
+    const bool relevant =
+        m_range_auto_relevant && m_range_auto_relevant();
+    if (relevant != *shown) {
+      *shown = relevant;
+      autobtn->Show(relevant);
+      Layout();
+    }
+    if (relevant && m_get_range_auto) autobtn->SetValue(m_get_range_auto());
   });
 }
 

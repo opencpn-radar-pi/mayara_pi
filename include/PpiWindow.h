@@ -90,6 +90,14 @@ class MayaraPpiWindow : public wxPanel {
       std::function<int(const std::string&)> get_level,
       std::function<void(const std::string&, int)> set_level);
 
+  // Range Auto: `get_relevant(index)` says whether that radar is on any
+  // canvas's overlay right now; `get`/`set(radarId, on)` are the persisted
+  // per-radar setting. Wired to the focused radar's Auto button, next to
+  // Range in the controls.
+  void SetRangeAutoHandlers(std::function<bool(int)> get_relevant,
+                            std::function<bool(const std::string&)> get,
+                            std::function<void(const std::string&, bool)> set);
+
   // Global display preferences (refresh rate, wheel direction, menu
   // auto-hide). Pushed to every picture and to the auto-hide timer.
   void SetPrefsHandlers(std::function<PpiPrefs()> get,
@@ -138,6 +146,9 @@ class MayaraPpiWindow : public wxPanel {
   std::function<void(const std::string&, int)> m_orient_set;
   std::function<int(const std::string&)> m_thresh_get;
   std::function<void(const std::string&, int)> m_thresh_set;
+  std::function<bool(int)> m_range_auto_relevant;
+  std::function<bool(const std::string&)> m_range_auto_get;
+  std::function<void(const std::string&, bool)> m_range_auto_set;
   std::function<PpiPrefs()> m_prefs_get;
   std::function<void(const PpiPrefs&)> m_prefs_set;
   ZoneEdit m_zone_edit;      // live, uncommitted guard-zone edit

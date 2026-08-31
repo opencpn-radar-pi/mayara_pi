@@ -65,7 +65,6 @@ struct PpiPrefs {
   int overlay_alpha = 100;  // chart-overlay opacity, 25/50/75/100 %
   bool overlay_zones = true;  // draw guard zones on the chart too
   bool nest_range = false;    // nest the short radar at a quarter of the long
-  bool chart_range = false;   // the chart's scale sets the overlaid radar's range
 };
 
 // Everything the picture and the layers over it are placed by. Computed once
