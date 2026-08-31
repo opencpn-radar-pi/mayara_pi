@@ -66,11 +66,24 @@ targets=(
   for t in "${targets[@]}"; do
     name="mayara_pi-${pkg_version}-${t}-metadata"
     url="https://dl.cloudsmith.io/public/${repo}/raw/names/${name}/versions/${version}/mayara_pi-${pkg_version}-${t}.xml"
-    if body=$(curl -sf "$url"); then
-      echo "$body" | sed '/<?xml/d'
-    else
-      echo "  <!-- $t: not published for ${version}, skipped -->"
-    fi
+    tmp="$(mktemp)"
+    # -f alone can't tell a real 404 (target didn't build this run) apart
+    # from a 5xx/DNS/timeout/not-yet-synced-upload -- read the status code
+    # instead, retry transient failures, and only skip on a confirmed 404.
+    http_code=$(curl -sS -o "$tmp" -w '%{http_code}' \
+      --retry 5 --retry-all-errors --retry-delay 3 \
+      --connect-timeout 10 --max-time 60 \
+      "$url" || echo 000)
+    case "$http_code" in
+      200) sed '/<?xml/d' "$tmp" ;;
+      404) echo "  <!-- $t: not published for ${version}, skipped -->" ;;
+      *)
+        echo "generate-catalog.sh: $t: HTTP $http_code fetching $url" >&2
+        rm -f "$tmp"
+        exit 1
+        ;;
+    esac
+    rm -f "$tmp"
   done
 
   echo '</plugins>'

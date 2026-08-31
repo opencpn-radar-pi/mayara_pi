@@ -269,13 +269,20 @@ jobs:
   # already tolerates, skipping just that target) does not skip this too.
   publish-catalog:
     needs: [macos-universal, windows-msvc, linux, flatpak]
-    if: always() && env.CLOUDSMITH_API_KEY != '' && github.event_name != 'pull_request'
+    # env is not readable from a job-level if (only github/needs/vars/inputs
+    # are) -- the CLOUDSMITH_API_KEY check lives on the "Generate catalog"
+    # step instead.
+    if: always() && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
       - name: Determine channel, version and repo
         id: chan
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          RUN_NUMBER: ${{ github.run_number }}
         run: |
           set -e
           major=$(grep '^set(VERSION_MAJOR ' CMakeLists.txt | sed 's/.*"\(.*\)".*/\1/')
@@ -284,12 +291,24 @@ jobs:
           tweak=$(grep '^set(VERSION_TWEAK ' CMakeLists.txt | sed 's/.*"\(.*\)".*/\1/')
           pkg_version="${major}.${minor}.${patch}.${tweak}"
 
-          if [ "${{ github.ref_type }}" = "tag" ]; then
-            tag="${{ github.ref_name }}"
-            # A tag on main is prod; a tag pushed from a release branch before
-            # it merges is beta -- mirrors cloudsmith-upload.sh.in exactly.
-            decoration=$(git show -s --format=%d "$tag")
-            if echo "$decoration" | grep -qE '/(main|master)\b'; then
+          if [ "$REF_TYPE" = "tag" ]; then
+            tag="$REF_NAME"
+            # A tag reachable from main/master is prod; a tag pushed from a
+            # release branch before it merges is beta -- mirrors
+            # cloudsmith-upload.sh.in exactly. Branch containment (not just
+            # direct decoration) so this stays correct even after main/master
+            # advances past the tagged commit.
+            git fetch --quiet --depth=1 origin main:refs/remotes/origin/main 2>/dev/null || true
+            git fetch --quiet --depth=1 origin master:refs/remotes/origin/master 2>/dev/null || true
+            is_prod=false
+            for b in origin/main origin/master; do
+              if git rev-parse --verify --quiet "$b" > /dev/null \
+                 && git merge-base --is-ancestor "$tag" "$b" 2>/dev/null; then
+                is_prod=true
+                break
+              fi
+            done
+            if [ "$is_prod" = true ]; then
               channel=prod
               repo=opencpn-radar-pi/mayara-prod
             else
@@ -301,7 +320,7 @@ jobs:
             channel=alpha
             repo=opencpn-radar-pi/mayara-alpha
             short_sha=$(git rev-parse --short=7 HEAD)
-            version="${pkg_version}+${{ github.run_number }}.${short_sha}"
+            version="${pkg_version}+${RUN_NUMBER}.${short_sha}"
           fi
 
           echo "channel=$channel" >> "$GITHUB_OUTPUT"
@@ -309,25 +328,28 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "pkg_version=$pkg_version" >> "$GITHUB_OUTPUT"
       - name: Generate catalog
+        if: env.CLOUDSMITH_API_KEY != ''
+        env:
+          CHANNEL: ${{ steps.chan.outputs.channel }}
+          REPO: ${{ steps.chan.outputs.repo }}
+          VERSION: ${{ steps.chan.outputs.version }}
+          PKG_VERSION: ${{ steps.chan.outputs.pkg_version }}
         run: |
           set -e
-          bash scripts/generate-catalog.sh \
-            "${{ steps.chan.outputs.channel }}" \
-            "${{ steps.chan.outputs.repo }}" \
-            "${{ steps.chan.outputs.version }}" \
-            "${{ steps.chan.outputs.pkg_version }}" \
-            "${{ steps.chan.outputs.channel }}.xml"
+          bash scripts/generate-catalog.sh "$CHANNEL" "$REPO" "$VERSION" "$PKG_VERSION" "$CHANNEL.xml"
       - name: Push to opencpn-radar-pi/plugins (catalog branch)
+        if: env.CLOUDSMITH_API_KEY != ''
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+          CHANNEL: ${{ steps.chan.outputs.channel }}
+          VERSION: ${{ steps.chan.outputs.version }}
         run: |
           set -e
           if [ -z "$GH_TOKEN" ]; then
             echo "RELEASE_PAT is not set; skipping catalog publish." >&2
             exit 0
           fi
-          channel="${{ steps.chan.outputs.channel }}"
-          src="$PWD/$channel.xml"
+          src="$PWD/$CHANNEL.xml"
           rm -rf /tmp/plugins-catalog && mkdir /tmp/plugins-catalog
           cd /tmp/plugins-catalog
           git init --quiet
@@ -340,12 +362,12 @@ jobs:
           else
             git checkout --quiet -b catalog
           fi
-          cp "$src" "./$channel.xml"
-          git add "$channel.xml"
+          cp "$src" "./$CHANNEL.xml"
+          git add "$CHANNEL.xml"
           if git diff --cached --quiet; then
             echo "Catalog unchanged."
           else
-            git commit --quiet -m "Update $channel catalog to ${{ steps.chan.outputs.version }}"
+            git commit --quiet -m "Update $CHANNEL catalog to $VERSION"
             git push --quiet origin catalog
           fi
 
