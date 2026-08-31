@@ -62,6 +62,11 @@ const char* kBinaryName = "mayara-server.exe";
 const char* kBinaryName = "mayara-server";
 #endif
 
+// mayara-server logs to stdout/stderr. A child of a plugin has nowhere to put
+// that -- there is no console, and on Windows the one we would get is hidden --
+// so it goes here instead, beside the binary, and Settings says where.
+const char* kLogName = "mayara-server.log";
+
 // The release-asset suffix for this platform, or empty when mayara-server ships
 // no binary we could run. On Windows we ask the OS rather than looking at our
 // own bitness: OpenCPN itself may be a 32-bit build on a 64-bit machine.
@@ -311,6 +316,10 @@ wxString MayaraServer::BinaryPath() const {
 
 bool MayaraServer::Installed() const { return wxFileExists(BinaryPath()); }
 
+wxString MayaraServer::LogPath() const {
+  return wxFileName(InstallDir(), kLogName).GetFullPath();
+}
+
 bool MayaraServer::DownloadAndInstall(wxWindow* parent, wxString* error) {
   wxString ignored;
   if (!error) error = &ignored;
@@ -391,25 +400,28 @@ bool MayaraServer::Start() {
   // No wxProcess callback object on purpose: that would be a vtable in this
   // plugin's shared library which OpenCPN's event loop could call into after we
   // are unloaded. Liveness is polled with wxProcess::Exists() instead.
-  wxString cmd = "\"" + BinaryPath() + "\"";
+  // Arguments only; the binary is put in front of them per platform below,
+  // quoted the way that platform's shell wants it.
+  wxString args;
   // --parent: run as our helper. mayara-server then binds localhost only and
   // stays off mDNS (this copy is ours, not the network's -- we reach it through
   // LocalUrl()), and it exits once we are gone. Stop() cannot do that job alone:
   // if OpenCPN crashes or is force-quit our destructor never runs, and the
   // orphan keeps holding port 6502 against the next session.
-  cmd += wxString::Format(" --parent %lu", wxGetProcessId());
+  args += wxString::Format(" --parent %lu", wxGetProcessId());
   // mayara-server skips WiFi interfaces unless asked: right on a wired boat
   // server, wrong on the laptop this whole option exists for -- hence the
   // checkbox rather than a fixed choice either way.
-  if (m_opts.allow_wifi) cmd += " --allow-wifi";
+  if (m_opts.allow_wifi) args += " --allow-wifi";
   // The emulator is offered as a brand, but it is not one to the server:
   // --brand only narrows the search for real hardware, while the fake radar is
   // created solely for --emulator.
   if (m_opts.brand == kEmulatorBrand) {
-    cmd += " --emulator";
+    args += " --emulator";
   } else if (!m_opts.brand.empty()) {
-    cmd += " --brand " + wxString::FromUTF8(m_opts.brand.c_str());
+    args += " --brand " + wxString::FromUTF8(m_opts.brand.c_str());
   }
+  const wxString cmd = "\"" + BinaryPath() + "\"" + args;
   // MAYARA_DEPLOYMENT tells mayara-server's telemetry how it reached the
   // boat, so "nobody runs Garmin radars" can be told apart from "nobody runs
   // Garmin radars *through the OpenCPN plugin*". MAYARA_TELEMETRY answers its
@@ -420,7 +432,33 @@ bool MayaraServer::Start() {
   wxGetEnvMap(&env.env);
   env.env["MAYARA_DEPLOYMENT"] = "mayara_pi";
   env.env["MAYARA_TELEMETRY"] = m_opts.telemetry ? "true" : "false";
-  const long pid = wxExecute(cmd, wxEXEC_ASYNC | wxEXEC_HIDE_CONSOLE, nullptr, &env);
+
+  // Everything mayara-server has to say about itself -- which interfaces it
+  // searched, why it will not start, what it found -- goes to stdout, and a
+  // child of a plugin has no console for that. Send it to LogPath() instead;
+  // Settings shows the path and opens it. Truncated at every start, so the
+  // file is this run rather than an ever-growing pile.
+  //
+  // A shell does the redirecting: the alternative is wxProcess, whose vtable
+  // lives in this library and which OpenCPN's event loop could call into after
+  // we are unloaded (see above). On POSIX `exec` replaces the shell, so m_pid
+  // stays the server's own; cmd.exe has no such trick and waits for it, which
+  // Running() (it exits when the server does) and Stop() (wxKILL_CHILDREN)
+  // both cope with. The quoting is the shell's, inside the one argument
+  // wxExecute hands it: single quotes on POSIX, since a double quote there
+  // would end that argument early; cmd.exe instead takes the whole line in an
+  // outer pair of its own and strips it.
+  const wxString log = LogPath();
+#ifdef _WIN32
+  const wxString launch = "cmd.exe /c \"" + cmd + " > \"" + log + "\" 2>&1\"";
+#else
+  const wxString launch = "/bin/sh -c \"exec '" + BinaryPath() + "'" + args +
+                          " > '" + log + "' 2>&1\"";
+#endif
+  long pid = wxExecute(launch, wxEXEC_ASYNC | wxEXEC_HIDE_CONSOLE, nullptr, &env);
+  // No shell, or it would not run: a server without a log beats no server.
+  if (pid <= 0)
+    pid = wxExecute(cmd, wxEXEC_ASYNC | wxEXEC_HIDE_CONSOLE, nullptr, &env);
   if (pid <= 0) return false;
   m_pid = pid;
   Notify();

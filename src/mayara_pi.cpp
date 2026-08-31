@@ -1749,6 +1749,14 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   }
   brow->Add(brand, 0, wxALIGN_CENTER_VERTICAL);
   lbox->Add(brow, 0);
+  // The server's own log. Everything it knows about why it will not start, or
+  // what it did and did not find on the network, is in there and nowhere else
+  // -- so say where it is (the path is worth reading even with no way to open
+  // it from here) and offer to open it.
+  auto* logpath = new wxStaticText(spage, wxID_ANY, wxEmptyString);
+  lbox->Add(logpath, 0, wxTOP, 8);
+  auto* logbtn = new wxButton(spage, wxID_ANY, _("Open server log"));
+  lbox->Add(logbtn, 0, wxTOP, 4);
   sbox->Add(lbox, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 24);
 
   sbox->Add(r_net, 0, wxALL, 8);
@@ -2159,6 +2167,21 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
     cb_wifi->Enable(local && installed);
     cb_telemetry->Enable(local && installed);
     brand->Enable(local && installed);
+    // Name the file whether or not it is there yet -- knowing where to look is
+    // half the point -- but only offer to open one that exists.
+    const wxString logfile = have_server ? m_server->LogPath() : wxString();
+    const bool have_log = !logfile.IsEmpty() && wxFileExists(logfile);
+    logpath->SetLabel(
+        !installed ? wxString()
+                   : wxString::Format(have_log
+                                          ? _("Server log: %s")
+                                          : _("Server log: %s (not written "
+                                              "yet)"),
+                                      logfile));
+    logpath->Wrap(330);
+    logpath->Enable(local);
+    logbtn->Show(installed);
+    logbtn->Enable(local && have_log);
     server->Enable(!local);
     shint->Enable(!local);
     dlg.Layout();
@@ -2171,6 +2194,17 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
     if (!m_server->DownloadAndInstall(&dlg, &error) && !error.IsEmpty())
       wxMessageBox(error, _("Mayara"), wxOK | wxICON_WARNING, &dlg);
     sync();
+  });
+  // Whatever this desktop opens a .log with -- Notepad, TextEdit, an editor
+  // the user has associated with it. Nothing to fall back to if there is no
+  // association, so say where the file is rather than fail silently.
+  logbtn->Bind(wxEVT_BUTTON, [this, &dlg](wxCommandEvent&) {
+    const wxString logfile = m_server ? m_server->LogPath() : wxString();
+    if (logfile.IsEmpty() || wxLaunchDefaultApplication(logfile)) return;
+    wxMessageBox(
+        wxString::Format(_("Cannot open the server log. It is here:\n\n%s"),
+                         logfile),
+        _("Mayara"), wxOK | wxICON_INFORMATION, &dlg);
   });
   sync();
 
