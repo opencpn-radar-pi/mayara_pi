@@ -728,6 +728,19 @@ void MayaraClient::Run() {
         m_connected_url = m_base_url;
         return;
       }
+      // It has stopped answering -- a local server that died, a Signal K that
+      // went down. Forget that we were ever talking to it: leaving the address
+      // set kept the UI in "found the server, it just has no radar" forever,
+      // silently, against a server that is no longer there -- no search dialog,
+      // and a Settings link to a page that cannot open. What is persisted for
+      // the next session is unaffected; this is only what we claim right now.
+      {
+        std::lock_guard<std::mutex> lock(m_status_mutex);
+        if (m_connected_url == m_base_url) {
+          m_connected_url.clear();
+          m_help_url.clear();
+        }
+      }
     }
     for (int i = 0; i < 30 && !m_stop; ++i)
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
