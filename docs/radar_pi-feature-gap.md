@@ -58,9 +58,19 @@ fixed server-side once the two endpoints were compared.
   as an annulus from the next-shorter radar's range out to its own, so the
   shorter radar owns the inner circle outright rather than blending with the
   longer one there.
-- **Chart scale sets range** — done, off by default, and not something radar_pi
-  offers per canvas: the chart's own zoom drives the overlaid radar to the
-  shortest range that still covers the canvas.
+- **Range Auto** — done, per radar rather than per canvas or a single global
+  toggle: a plain "Auto" button next to Range in the controls, shown only
+  while that radar is actually on some canvas's overlay, drives it to the
+  shortest range that still covers the canvas. This is what radar_pi's own
+  range control gets for free from its `RCS_AUTO_1` auto state (auto-range
+  applies for any radar on the highest canvas where it is the only overlaid
+  one) — mayara-server's `range` control has no such state to key off, so
+  the "per radar, not global" property is reintroduced directly in the
+  plugin instead, tracking each canvas's own last-asked-for value so two
+  canvases sharing a radar settle rather than fight. Off by default, like
+  anything that writes to the hardware unasked. Picking a range manually
+  turns a radar's Auto back off, so it does not silently undo the choice on
+  the next zoom.
 - **Transmit on selection** — picking a radar to overlay takes it out of
   standby, since a standby radar draws nothing.
 - **Overlay opacity** — done, 25/50/75/100% in the View section.
