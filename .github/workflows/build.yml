@@ -257,6 +257,98 @@ jobs:
           path: build/*.tar.gz
           if-no-files-found: warn
 
+  # ------------------------------------------------------ Catalog publish --
+  # Regenerates our own OpenCPN plugin catalog (one of alpha/beta/prod,
+  # whichever this push routed to) from the per-target metadata the jobs
+  # above already uploaded to Cloudsmith as "-metadata" raw packages, and
+  # pushes it to opencpn-radar-pi/plugins so OpenCPN's own "Update Plugin
+  # Catalog" -- pointed at CatalogChannel=custom, CatalogCustomURL=<ours> --
+  # sees a new build the moment this job finishes, not whenever the separate,
+  # hand-submitted metadata PR against OpenCPN/plugins happens to get
+  # reviewed. always() so one failed platform (which generate-catalog.sh
+  # already tolerates, skipping just that target) does not skip this too.
+  publish-catalog:
+    needs: [macos-universal, windows-msvc, linux, flatpak]
+    if: always() && env.CLOUDSMITH_API_KEY != '' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with: { fetch-depth: 0 }
+      - name: Determine channel, version and repo
+        id: chan
+        run: |
+          set -e
+          major=$(grep '^set(VERSION_MAJOR ' CMakeLists.txt | sed 's/.*"\(.*\)".*/\1/')
+          minor=$(grep '^set(VERSION_MINOR ' CMakeLists.txt | sed 's/.*"\(.*\)".*/\1/')
+          patch=$(grep '^set(VERSION_PATCH ' CMakeLists.txt | sed 's/.*"\(.*\)".*/\1/')
+          tweak=$(grep '^set(VERSION_TWEAK ' CMakeLists.txt | sed 's/.*"\(.*\)".*/\1/')
+          pkg_version="${major}.${minor}.${patch}.${tweak}"
+
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            tag="${{ github.ref_name }}"
+            # A tag on main is prod; a tag pushed from a release branch before
+            # it merges is beta -- mirrors cloudsmith-upload.sh.in exactly.
+            decoration=$(git show -s --format=%d "$tag")
+            if echo "$decoration" | grep -qE '/(main|master)\b'; then
+              channel=prod
+              repo=opencpn-radar-pi/mayara-prod
+            else
+              channel=beta
+              repo=opencpn-radar-pi/mayara-beta
+            fi
+            version="$tag"
+          else
+            channel=alpha
+            repo=opencpn-radar-pi/mayara-alpha
+            short_sha=$(git rev-parse --short=7 HEAD)
+            version="${pkg_version}+${{ github.run_number }}.${short_sha}"
+          fi
+
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "repo=$repo" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "pkg_version=$pkg_version" >> "$GITHUB_OUTPUT"
+      - name: Generate catalog
+        run: |
+          set -e
+          bash scripts/generate-catalog.sh \
+            "${{ steps.chan.outputs.channel }}" \
+            "${{ steps.chan.outputs.repo }}" \
+            "${{ steps.chan.outputs.version }}" \
+            "${{ steps.chan.outputs.pkg_version }}" \
+            "${{ steps.chan.outputs.channel }}.xml"
+      - name: Push to opencpn-radar-pi/plugins (catalog branch)
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+        run: |
+          set -e
+          if [ -z "$GH_TOKEN" ]; then
+            echo "RELEASE_PAT is not set; skipping catalog publish." >&2
+            exit 0
+          fi
+          channel="${{ steps.chan.outputs.channel }}"
+          src="$PWD/$channel.xml"
+          rm -rf /tmp/plugins-catalog && mkdir /tmp/plugins-catalog
+          cd /tmp/plugins-catalog
+          git init --quiet
+          git config user.name "mayara_pi CI"
+          git config user.email "actions@github.com"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/opencpn-radar-pi/plugins.git"
+          if git ls-remote --exit-code --heads origin catalog > /dev/null 2>&1; then
+            git fetch --quiet --depth 1 origin catalog
+            git checkout --quiet -b catalog origin/catalog
+          else
+            git checkout --quiet -b catalog
+          fi
+          cp "$src" "./$channel.xml"
+          git add "$channel.xml"
+          if git diff --cached --quiet; then
+            echo "Catalog unchanged."
+          else
+            git commit --quiet -m "Update $channel catalog to ${{ steps.chan.outputs.version }}"
+            git push --quiet origin catalog
+          fi
+
   # --------------------------------------------------------------- Android --
   # Disabled: the FE2 android scripts provision the SDK/NDK the CircleCI way
   # and have not been ported, so these only ever fail. The jobs are kept (rather
