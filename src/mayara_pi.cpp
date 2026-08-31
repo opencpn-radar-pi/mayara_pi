@@ -449,12 +449,10 @@ void mayara_pi::LoadConfig() {
   cfg->Read("SendTargetsToOpenCPN", &ftarg, false);
   m_feed_heading = fhead;
   m_feed_targets = ftarg;
-  bool nrange = false, crange = false;
+  bool nrange = false;
   cfg->Read("AutoRange", &nrange, false);
   cfg->Read("NestSecondRadar", &nrange, nrange);
-  cfg->Read("ChartScaleSetsRange", &crange, false);
   m_prefs.nest_range = nrange;
-  m_prefs.chart_range = crange;
   m_prefs.overlay_alpha =
       static_cast<int>(alpha < 25 ? 25 : (alpha > 100 ? 100 : alpha));
   m_prefs.overlay_zones = ozones;
@@ -488,6 +486,20 @@ void mayara_pi::LoadConfig() {
       long m = 0;
       if (pair.Mid(eq + 1).ToLong(&m) && m >= 0 && m <= 2)
         m_threshold[std::string(pair.Left(eq).mb_str())] = static_cast<int>(m);
+    }
+  }
+  // Per-radar Range Auto: "id=0/1;id=0/1;..."
+  m_range_auto.clear();
+  wxString rauto;
+  if (cfg->Read("RangeAuto", &rauto) && !rauto.IsEmpty()) {
+    wxStringTokenizer tok(rauto, ";");
+    while (tok.HasMoreTokens()) {
+      const wxString pair = tok.GetNextToken();
+      const int eq = pair.Find('=');
+      if (eq == wxNOT_FOUND) continue;
+      long m = 0;
+      if (pair.Mid(eq + 1).ToLong(&m))
+        m_range_auto[std::string(pair.Left(eq).mb_str())] = m != 0;
     }
   }
   bool shown = false;
@@ -551,6 +563,35 @@ int mayara_pi::ThresholdFor(const std::string& radar_id) const {
 void mayara_pi::SetThresholdFor(const std::string& radar_id, int level) {
   m_threshold[radar_id] = level;
   SaveConfig();
+}
+
+bool mayara_pi::RangeAutoFor(const std::string& radar_id) const {
+  auto it = m_range_auto.find(radar_id);
+  return it != m_range_auto.end() && it->second;
+}
+
+void mayara_pi::SetRangeAutoFor(const std::string& radar_id, bool on) {
+  m_range_auto[radar_id] = on;
+  SaveConfig();
+  // A radar just switched into Range Auto has never had SyncChartRange act
+  // on it; without this it would wait for the chart to move before applying
+  // -- forcing a fresh pass makes the switch itself set it once.
+  m_chart_range_last_want.clear();
+  SyncChartRange();
+}
+
+// The outer/front radar on some canvas -- the only one SyncChartRange can
+// currently drive (a nested second radar is steered off the outer one's
+// range instead; see SyncAutoRange). Narrower than "appears anywhere in an
+// overlay" on purpose: showing Auto on a radar this canvas would never
+// actually apply it to would be a button that silently does nothing.
+bool mayara_pi::RadarInOverlay(int radar_index) const {
+  const int n = GetCanvasCount();
+  for (int c = 0; c < (n > 0 ? n : 1); ++c) {
+    const std::vector<int> radars = OverlayRadars(c);
+    if (!radars.empty() && radars.front() == radar_index) return true;
+  }
+  return false;
 }
 
 // Snapshot geometry + visibility while the windows are definitely alive. wx may
@@ -655,7 +696,6 @@ void mayara_pi::SaveConfig() {
   cfg->Write("SendHeadingToOpenCPN", m_feed_heading);
   cfg->Write("SendTargetsToOpenCPN", m_feed_targets);
   cfg->Write("NestSecondRadar", m_prefs.nest_range);
-  cfg->Write("ChartScaleSetsRange", m_prefs.chart_range);
   wxString orient;
   for (const auto& kv : m_orient)
     orient += wxString::Format("%s=%d;", kv.first.c_str(), kv.second);
@@ -664,6 +704,10 @@ void mayara_pi::SaveConfig() {
   for (const auto& kv : m_threshold)
     thresh += wxString::Format("%s=%d;", kv.first.c_str(), kv.second);
   cfg->Write("Thresholds", thresh);
+  wxString rauto;
+  for (const auto& kv : m_range_auto)
+    rauto += wxString::Format("%s=%d;", kv.first.c_str(), kv.second ? 1 : 0);
+  cfg->Write("RangeAuto", rauto);
   cfg->Write("Docked", m_docked);
   cfg->Write("ServerUrl", wxString::FromUTF8(m_saved_server_url.c_str()));
   cfg->Write("ExplicitServerUrl",
@@ -844,6 +888,10 @@ void mayara_pi::SetOverlayAll(bool on) {
   m_overlay_sel.clear();
   if (!on)
     for (int c = 0; c < (n > 0 ? n : 1); ++c) m_overlay_sel[c] = kOverlayNone;
+  // Every canvas's outer radar may just have changed (or gone away). A stale
+  // cached "want" that happens to match the new radar's would wrongly look
+  // like Range Auto already did its job on it.
+  m_chart_range_last_want.clear();
   SaveConfig();
 }
 
@@ -1181,25 +1229,28 @@ void mayara_pi::LogSettings() const {
   Log(2, wxString::Format(
              "settings: heading source %s (fixed %.1f, timeout %ds, COG "
              "fallback %s), fixed position %s, palette \"%s\", overlay "
-             "alpha %d%%, chart-scale range %s, nest second radar %s, feed "
-             "HDT %s, feed TTM %s",
+             "alpha %d%%, nest second radar %s, feed HDT %s, feed TTM %s",
              kSources[m_diag.heading_source], m_diag.fixed_heading,
              m_diag.heading_timeout_s, m_diag.cog_as_heading ? "on" : "off",
              m_diag.fixed_position ? "on" : "off",
              wxString::FromUTF8(m_palette_active.c_str()),
-             m_prefs.overlay_alpha, m_prefs.chart_range ? "on" : "off",
+             m_prefs.overlay_alpha,
              m_prefs.nest_range ? "on" : "off", m_feed_heading ? "on" : "off",
              m_feed_targets ? "on" : "off"));
 }
 
 
 void mayara_pi::SyncChartRange() {
-  if (!m_prefs.chart_range || !m_client) return;
+  if (!m_client) return;
   for (const auto& kv : m_canvas_radius_m) {
     const std::vector<int> radars = OverlayRadars(kv.first);
     if (radars.empty() || kv.second <= 0) continue;
     // Only the outer radar: a nested second one is steered by that one.
     const int idx = radars.front();
+    // Per-radar: a detail radar overlaid on the chart can follow it while
+    // another radar (kept at a fixed long range for weather, say) is left
+    // alone even though it never appears on any canvas.
+    if (!RangeAutoFor(m_client->RadarId(idx))) continue;
     RadarControls* c = m_client->ControlsAt(idx);
     if (!c) continue;
     std::vector<int> vals;
@@ -1214,8 +1265,17 @@ void mayara_pi::SyncChartRange() {
       if (v >= kv.second && (want == 0 || v < want)) want = v;
     if (want == 0)  // chart wider than the radar reaches: use its longest
       for (int v : vals) want = std::max(want, v);
-    const ControlValue cur = c->Value("range");
-    if (cur.has_value && std::fabs(cur.value - want) < 1.0) continue;
+
+    // Act only when this canvas's own desired value has changed, not on
+    // every heartbeat tick. Comparing against the control's live value (as
+    // this used to) raced two canvases sharing a radar: SetControlAt is
+    // async, so neither canvas's check would see the other's just-sent value
+    // yet, and both kept re-sending their own answer every tick -- the range
+    // never settled. Tracking our own last ask, per canvas, breaks that: the
+    // last canvas to actually change scale wins, and nothing repeats after.
+    auto it = m_chart_range_last_want.find(kv.first);
+    if (it != m_chart_range_last_want.end() && it->second == want) continue;
+    m_chart_range_last_want[kv.first] = want;
     m_client->SetControlAt(idx, "range",
                            "{\"value\":" + std::to_string(want) + "}");
   }
@@ -1272,6 +1332,14 @@ void mayara_pi::ShowRadarMenu(int canvas) {
       [this, p]() { return ThresholdFor(m_client->RadarId(p->RadarIndex())); },
       [this, p](int l) {
         SetThresholdFor(m_client->RadarId(p->RadarIndex()), l);
+      });
+  p->SetRangeAutoControl(
+      [this, p]() { return RadarInOverlay(p->RadarIndex()); },
+      [this, p]() {
+        return m_client && RangeAutoFor(m_client->RadarId(p->RadarIndex()));
+      },
+      [this, p](bool on) {
+        if (m_client) SetRangeAutoFor(m_client->RadarId(p->RadarIndex()), on);
       });
   p->SetDockControl([this]() { return m_docked; },
                     [this](bool on) {
@@ -1374,18 +1442,6 @@ void mayara_pi::DestroyChartMenu() {
   m_chart_menu = nullptr;
   m_chart_menu_canvas = -1;
   p->Destroy();
-}
-
-// Shown *and* in front. A window buried behind the chart is not showing as far
-// as anyone looking at the screen is concerned, so the menu offers to show it.
-bool mayara_pi::PpiFrontmost() const {
-  for (MayaraPpiWindow* win : m_windows) {
-    if (!win) continue;
-    if (!const_cast<MayaraPpiWindow*>(win)->IsWindowShown()) continue;
-    wxFrame* f = win->HostFrame();
-    if (!f || f->IsActive()) return true;  // docked panes are always in front
-  }
-  return false;
 }
 
 void mayara_pi::RaisePpiWindows() {
@@ -2236,9 +2292,13 @@ void mayara_pi::OnContextMenuItemCallback(int id) {
   } else if (id == m_mi_menu) {
     ShowRadarMenu(canvas);
   } else if (id == m_mi_ppi) {
-    // "Show" also means "bring to the front": a window hidden behind the chart
-    // is not showing as far as anyone looking at the screen is concerned.
-    if (PpiFrontmost())
+    // Right-clicking the canvas to get here always makes the OpenCPN main
+    // frame the active window first, so a floating PPI window could never be
+    // "active" at this point -- basing the decision on window focus (as this
+    // used to) meant it could never detect "already showing" and always fell
+    // through to raise a window that needed no raising. Shown is shown,
+    // focused or not; RaisePpiWindows still raises it when it was hidden.
+    if (AnyWindowShown())
       TogglePpiWindow();
     else
       RaisePpiWindows();
@@ -2270,8 +2330,8 @@ void mayara_pi::RefreshContextMenu(int canvas) {
             : wxString::Format(_("Mayara radar overlay: %s"), what));
   }
   if (m_mi_ppi_item)
-    m_mi_ppi_item->SetItemLabel(PpiFrontmost() ? _("Hide Mayara PPI")
-                                               : _("Show Mayara PPI"));
+    m_mi_ppi_item->SetItemLabel(AnyWindowShown() ? _("Hide Mayara PPI")
+                                                 : _("Show Mayara PPI"));
 }
 
 // What this canvas is currently set to, for the menu entry.
@@ -2322,6 +2382,10 @@ void mayara_pi::ShowOverlayMenu(int canvas) {
       if (got == m_mi_ov_radar[i]) now = i;
   }
   m_overlay_sel[canvas] = now;
+  // The radar just put on this canvas has never had Range Auto act on it --
+  // forget what the previous one last asked for, or a coincidentally equal
+  // value would wrongly look like "already done".
+  m_chart_range_last_want.erase(canvas);
   SaveConfig();
   // Asking to see a radar on the chart means asking it to run: a radar in
   // standby would draw nothing. One-shot, on the selection itself -- putting
@@ -2496,6 +2560,10 @@ void mayara_pi::RebuildWindows() {
     win->SetThresholdHandlers(
         [this](const std::string& id) { return ThresholdFor(id); },
         [this](const std::string& id, int l) { SetThresholdFor(id, l); });
+    win->SetRangeAutoHandlers(
+        [this](int idx) { return RadarInOverlay(idx); },
+        [this](const std::string& id) { return RangeAutoFor(id); },
+        [this](const std::string& id, bool on) { SetRangeAutoFor(id, on); });
     win->SetPrefsHandlers([this]() { return m_prefs; },
                           [this](const PpiPrefs& p) {
                             m_prefs = p;
