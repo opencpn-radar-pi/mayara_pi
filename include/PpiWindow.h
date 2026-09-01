@@ -79,6 +79,11 @@ class MayaraPpiWindow : public wxPanel {
   // Provide own-ship nav state to the radar pictures (COG/heading/AIS layers).
   void SetNavProvider(std::function<NavState()> provider);
 
+  // The guard-zone alarm sound lozenge on every picture: a plugin-wide
+  // setting, so one getter/toggle pair is wired to every radar in the window.
+  void SetAlarmSoundControl(std::function<bool()> get,
+                            std::function<void()> toggle);
+
   // Per-radar orientation: `get_mode(radarId)` / `set_mode(radarId, mode)`
   // initialise each picture and wire the View toggle to the focused radar.
   void SetOrientationHandlers(

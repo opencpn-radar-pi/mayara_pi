@@ -396,7 +396,7 @@ void RadarDisplayPanel::DrawIconBar(wxDC& dc, const wxSize& sz) {
 
 void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
   m_menu_rect = m_icon_ais = m_icon_gain = m_icon_sea = m_icon_rain =
-      m_icon_ebl = m_orient_rect = wxRect();
+      m_icon_ebl = m_orient_rect = m_alarm_rect = wxRect();
   m_power_rect = wxRect();
   m_range_minus_rect = wxRect();
   m_range_plus_rect = wxRect();
@@ -514,11 +514,58 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
     m_orient_rect = wxRect(x, y, w, h);
     if (!honoured) {
       // Whatever it says, the picture is head-up until the missing input
-      // arrives.
+      // arrives. Folded into the hit-test rect too, so the alarm-sound
+      // lozenge stacked below still clears it.
       dc.SetFont(f);
       dc.SetTextForeground(m_theme.accent_dim);
       dc.DrawText(missing, x, y + h + 2);
+      m_orient_rect.SetHeight(h + 2 + th);
     }
+  }
+
+  // --- Alarm-sound lozenge, under the orientation one -----------------------
+  // A plugin-wide setting, not a per-radar one -- same idea as the web GUI's
+  // speaker lozenge, hand-drawn as a bell to match how the operator asked
+  // for it. Click to toggle.
+  if (m_alarm_sound_get) {
+    const bool on = m_alarm_sound_get();
+    const wxColour fg = on ? m_theme.text : m_theme.accent_dim;
+    const wxString label = on ? _("Alarm sound") : _("Alarm muted");
+
+    wxFont f = GetFont();
+    dc.SetFont(f);
+    wxCoord tw, th;
+    dc.GetTextExtent(label, &tw, &th);
+    const int padx = 9, gap = 8, icon = th;
+    const int w = padx + icon + gap + tw + padx, h = th + 12;
+    const int x = 10, y = m_orient_rect.IsEmpty() ? (m_power_rect.IsEmpty()
+                                                         ? 10
+                                                         : m_power_rect.GetBottom() + 8)
+                                                  : m_orient_rect.GetBottom() + 8;
+    LozengeBg(dc, this, wxRect(x, y, w, h), std::min(h / 2, 12), m_theme);
+
+    // A small bell: dome, flared sides, a rim, and a clapper. Muted draws a
+    // diagonal strike through it, same convention as any mute icon.
+    const int cx = x + padx + icon / 2, cy = y + h / 2 - 1;
+    const int r = icon / 2 - 1;
+    dc.SetPen(wxPen(fg, 2));
+    dc.SetBrush(*wxTRANSPARENT_BRUSH);
+    dc.DrawEllipticArc(cx - r, cy - r, r * 2, r * 2, 0, 180);
+    dc.DrawLine(cx - r, cy, cx - r - 2, cy + r);
+    dc.DrawLine(cx + r, cy, cx + r + 2, cy + r);
+    dc.DrawLine(cx - r - 2, cy + r, cx + r + 2, cy + r);
+    dc.SetBrush(wxBrush(fg));
+    dc.DrawCircle(cx, cy + r + 3, 2);
+    if (!on) {
+      dc.SetPen(wxPen(fg, 2));
+      dc.DrawLine(cx - r - 3, cy - r - 1, cx + r + 3, cy + r + 5);
+    }
+
+    const int textX = x + padx + icon + gap;
+    dc.SetFont(f);
+    dc.SetTextForeground(fg);
+    dc.DrawText(label, textX, y + (h - th) / 2);
+    m_alarm_rect = wxRect(x, y, w, h);
   }
 
   // --- Range lozenge (left edge, vertically centred) with - / + ---
@@ -1396,6 +1443,8 @@ void RadarDisplayPanel::HandleClick(const wxPoint& p) {
   } else if (m_orient_rect.Contains(p)) {
     SetOrientation((m_orientation + 1) % 3);
     if (m_on_orientation) m_on_orientation(m_orientation);
+  } else if (m_alarm_rect.Contains(p)) {
+    if (m_alarm_sound_toggle) m_alarm_sound_toggle();
   } else if (m_icon_ais.Contains(p)) {
     m_layers.ais = !m_layers.ais;
     Refresh(false);
@@ -1459,10 +1508,11 @@ void RadarDisplayPanel::OnLeftDClick(wxMouseEvent& event) {
   const wxPoint p = event.GetPosition();
   // Double-clicking a control/lozenge is not an acquire gesture.
   if (m_menu_rect.Contains(p) || m_orient_rect.Contains(p) ||
-      m_icon_ais.Contains(p) || m_icon_ebl.Contains(p) ||
-      m_icon_gain.Contains(p) || m_icon_sea.Contains(p) ||
-      m_icon_rain.Contains(p) || m_power_rect.Contains(p) ||
-      m_range_minus_rect.Contains(p) || m_range_plus_rect.Contains(p)) {
+      m_alarm_rect.Contains(p) || m_icon_ais.Contains(p) ||
+      m_icon_ebl.Contains(p) || m_icon_gain.Contains(p) ||
+      m_icon_sea.Contains(p) || m_icon_rain.Contains(p) ||
+      m_power_rect.Contains(p) || m_range_minus_rect.Contains(p) ||
+      m_range_plus_rect.Contains(p)) {
     event.Skip();
     return;
   }

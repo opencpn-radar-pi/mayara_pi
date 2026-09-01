@@ -2595,6 +2595,15 @@ void mayara_pi::RebuildWindows() {
                                 [this]() { RebuildWindows(); });
                         });
     win->SetNavProvider([this]() { return m_nav; });
+    win->SetAlarmSoundControl(
+        [this]() { return m_guard_alarm_sound; },
+        [this]() {
+          m_guard_alarm_sound = !m_guard_alarm_sound;
+          SaveConfig();
+          // Every window shows this lozenge, not just the one clicked.
+          for (MayaraPpiWindow* w : m_windows)
+            if (w) w->Refresh();
+        });
     win->SetHeadingProvider([this](int radar, double& deg) {
       return ResolveHeading(radar, &deg, nullptr);
     });
