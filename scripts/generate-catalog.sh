@@ -76,7 +76,10 @@ targets=(
       "$url" || echo 000)
     case "$http_code" in
       200) sed '/<?xml/d' "$tmp" ;;
-      404) echo "  <!-- $t: not published for ${version}, skipped -->" ;;
+      # $t is one of our own fixed target names above, safe to embed as-is.
+      # $version is not: it can come straight from a git tag, which (unlike
+      # an XML comment) is allowed to contain "--".
+      404) echo "  <!-- $t: not published, skipped -->" ;;
       *)
         echo "generate-catalog.sh: $t: HTTP $http_code fetching $url" >&2
         rm -f "$tmp"

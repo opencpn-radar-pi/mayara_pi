@@ -350,8 +350,11 @@ jobs:
             # cloudsmith-upload.sh.in exactly. Branch containment (not just
             # direct decoration) so this stays correct even after main/master
             # advances past the tagged commit.
-            git fetch --quiet --depth=1 origin main:refs/remotes/origin/main 2>/dev/null || true
-            git fetch --quiet --depth=1 origin master:refs/remotes/origin/master 2>/dev/null || true
+            # Full history, not --depth=1: a shallow fetch would only reach
+            # each branch's current tip, and merge-base --is-ancestor can't
+            # traverse past that to see an older tagged commit.
+            git fetch --quiet origin main:refs/remotes/origin/main 2>/dev/null || true
+            git fetch --quiet origin master:refs/remotes/origin/master 2>/dev/null || true
             is_prod=false
             for b in origin/main origin/master; do
               if git rev-parse --verify --quiet "$b" > /dev/null \
