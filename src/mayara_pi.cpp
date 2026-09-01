@@ -2259,6 +2259,7 @@ int mayara_pi::GetAPIVersionMinor() { return OCPN_API_VERSION_MINOR; }
 int mayara_pi::GetPlugInVersionMajor() { return PLUGIN_VERSION_MAJOR; }
 int mayara_pi::GetPlugInVersionMinor() { return PLUGIN_VERSION_MINOR; }
 int mayara_pi::GetPlugInVersionPatch() { return PLUGIN_VERSION_PATCH; }
+const char* mayara_pi::GetPlugInVersionBuild() { return PLUGIN_VERSION_COMMIT; }
 
 wxBitmap* mayara_pi::GetPlugInBitmap() { return &m_panel_bitmap; }
 
