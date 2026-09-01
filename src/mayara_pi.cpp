@@ -1479,6 +1479,17 @@ void mayara_pi::SyncLocalServerUrl() {
 // for alerts -- rather than a dialog of our own that has to be dismissed.
 void mayara_pi::PollGuardAlarms() {
   if (!m_client) return;
+  if (!m_alarms_seeded) {
+    // Wait for a real connected snapshot: Alarms() is empty before that
+    // anyway, but seeding on an empty pass would still flip the flag before
+    // the server's actual state has had a chance to arrive.
+    if (!m_client->Connected()) return;
+    for (const auto& a : m_client->Alarms())
+      if (a.active)
+        m_alarms_raised[a.radar_id + "/" + std::to_string(a.zone)] = a.message;
+    m_alarms_seeded = true;
+    return;
+  }
   for (const auto& a : m_client->Alarms()) {
     const std::string key = a.radar_id + "/" + std::to_string(a.zone);
     auto it = m_alarms_raised.find(key);

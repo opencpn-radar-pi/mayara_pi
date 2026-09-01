@@ -300,7 +300,15 @@ class mayara_pi : public opencpn_plugin_121 {
   // distinct message (the server sends a fresh one per target), not every
   // heartbeat.
   std::map<std::string, std::string> m_alarms_raised;
-  bool m_guard_alarm_sound = true;  // play data/alarm.wav on a new alarm
+  // True once m_alarms_raised has been seeded from the first connected
+  // snapshot, so an alarm already standing when OpenCPN starts (or
+  // reconnects) is not announced as freshly raised.
+  bool m_alarms_seeded = false;
+  // Enabled by default so the audible chime complements RaiseNotification()
+  // rather than replacing it -- OpenCPN's own notification icon is easy to
+  // miss unattended. The operator can disable just the chime in Display
+  // settings, or with the on-picture bell lozenge.
+  bool m_guard_alarm_sound = true;
   int m_no_radar_ticks = 0;          // heartbeat ticks with no radar
   bool m_search_dismissed = false;   // user closed the search dialog
   bool m_no_radar_notice_open = false;       // the "no radar found" dialog is up

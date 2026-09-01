@@ -407,6 +407,35 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
   RadarControls* controls = m_client->ControlsAt(m_index);
   if (!controls) return;  // no radar connected yet
 
+  // Range lozenge geometry, needed early: it is vertically centred on the
+  // panel and can land anywhere, including inside the Power/Orientation/
+  // Alarm column stacked from the top on a short (multi-radar grid) panel.
+  // Computed again, identically, where it is actually drawn below -- this
+  // is geometry only, cheap, and keeps that block unchanged.
+  wxRect range_reserved;
+  {
+    RadarState* rs = m_client->StateAt(m_index);
+    ControlValue rrv = controls->Value("range");
+    const double rcur =
+        rrv.has_value ? rrv.value : (rs ? rs->RangeMeters() : 0.0);
+    double rreport_m = rcur;
+    bool rmetric = false;
+    EffectiveRange(rreport_m, rmetric);
+    const wxString rrlabel =
+        rcur > 0 ? FormatRange(rcur, rmetric) : wxString();
+    if (!rrlabel.IsEmpty()) {
+      wxFont big = GetFont();
+      big.SetPointSize(big.GetPointSize() + 2);
+      dc.SetFont(big);
+      wxCoord tw, th;
+      dc.GetTextExtent(rrlabel, &tw, &th);
+      dc.SetFont(GetFont());
+      const int w = std::max<int>(tw + 18, 60);
+      const int h = 26 + (th + 12) + 26;
+      range_reserved = wxRect(10, (sz.y - h) / 2, w, h);
+    }
+  }
+
   // --- Power lozenge (top-left): radar name above the transmit state ---
   ControlValue pw = controls->Value("power");
   {
@@ -530,49 +559,58 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
   // only, no label -- there is no room to spare stacked under the other two.
   // Click to toggle.
   if (m_alarm_sound_get) {
-    const bool on = m_alarm_sound_get();
-    // .myr_speaker_lozenge: background rgba(0,0,0,0.7), border #446.
-    const wxColour bg(0, 0, 0, 178), border(0x44, 0x44, 0x66);
-    // .myr_speaker_lozenge_button on/off background, .myr_speaker_icon
-    // stroke/fill on/off -- lifted from web/gui/layout.css as-is.
-    const wxColour btn_bg = on ? wxColour(0x1a, 0x3d, 0x4d) : wxColour(0x2a, 0x2a, 0x2a);
-    const wxColour fg = on ? wxColour(0x4d, 0xc8, 0xff) : wxColour(0x66, 0x66, 0x66);
-
     const int side = FromDIP(36);
     const int x = 10, y = m_orient_rect.IsEmpty() ? (m_power_rect.IsEmpty()
                                                          ? 10
                                                          : m_power_rect.GetBottom() + 8)
                                                   : m_orient_rect.GetBottom() + 8;
     const wxRect rect(x, y, side, side);
-    dc.SetBrush(wxBrush(bg));
-    dc.SetPen(wxPen(border, FromDIP(2)));
-    dc.DrawRoundedRectangle(rect, side / 2);
-    dc.SetBrush(wxBrush(btn_bg));
-    dc.SetPen(*wxTRANSPARENT_PEN);
-    const int inset = FromDIP(2);
-    dc.DrawRoundedRectangle(wxRect(x + inset, y + inset, side - 2 * inset,
-                                   side - 2 * inset),
-                            side / 2 - inset);
+    // On a short multi-radar panel the vertically-centred range lozenge
+    // (same x) can land inside this column. Range wins -- it is always
+    // present and essential; the bell just does not draw or hit-test that
+    // frame (m_alarm_rect stays empty, cleared at the top of this function).
+    if (range_reserved.IsEmpty() || !rect.Intersects(range_reserved)) {
+      const bool on = m_alarm_sound_get();
+      // .myr_speaker_lozenge: background rgba(0,0,0,0.7), border #446.
+      const wxColour bg(0, 0, 0, 178), border(0x44, 0x44, 0x66);
+      // .myr_speaker_lozenge_button on/off background, .myr_speaker_icon
+      // stroke/fill on/off -- lifted from web/gui/layout.css as-is.
+      const wxColour btn_bg =
+          on ? wxColour(0x1a, 0x3d, 0x4d) : wxColour(0x2a, 0x2a, 0x2a);
+      const wxColour fg =
+          on ? wxColour(0x4d, 0xc8, 0xff) : wxColour(0x66, 0x66, 0x66);
 
-    // A small bell: dome, flared sides, a rim, and a clapper. Muted draws a
-    // diagonal strike through it, same convention as the web GUI's mute icon.
-    const int cx = x + side / 2, cy = y + side / 2 - FromDIP(2);
-    const int r = FromDIP(7);
-    dc.SetPen(wxPen(fg, FromDIP(2)));
-    dc.SetBrush(*wxTRANSPARENT_BRUSH);
-    dc.DrawEllipticArc(cx - r, cy - r, r * 2, r * 2, 0, 180);
-    dc.DrawLine(cx - r, cy, cx - r - FromDIP(2), cy + r);
-    dc.DrawLine(cx + r, cy, cx + r + FromDIP(2), cy + r);
-    dc.DrawLine(cx - r - FromDIP(2), cy + r, cx + r + FromDIP(2), cy + r);
-    dc.SetBrush(wxBrush(fg));
-    dc.DrawCircle(cx, cy + r + FromDIP(3), FromDIP(2));
-    if (!on) {
+      dc.SetBrush(wxBrush(bg));
+      dc.SetPen(wxPen(border, FromDIP(2)));
+      dc.DrawRoundedRectangle(rect, side / 2);
+      dc.SetBrush(wxBrush(btn_bg));
+      dc.SetPen(*wxTRANSPARENT_PEN);
+      const int inset = FromDIP(2);
+      dc.DrawRoundedRectangle(wxRect(x + inset, y + inset, side - 2 * inset,
+                                     side - 2 * inset),
+                              side / 2 - inset);
+
+      // A small bell: dome, flared sides, a rim, and a clapper. Muted draws
+      // a diagonal strike through it, same convention as the web GUI's mute
+      // icon.
+      const int cx = x + side / 2, cy = y + side / 2 - FromDIP(2);
+      const int r = FromDIP(7);
       dc.SetPen(wxPen(fg, FromDIP(2)));
-      dc.DrawLine(cx - r - FromDIP(3), cy - r - FromDIP(1), cx + r + FromDIP(3),
-                 cy + r + FromDIP(5));
-    }
+      dc.SetBrush(*wxTRANSPARENT_BRUSH);
+      dc.DrawEllipticArc(cx - r, cy - r, r * 2, r * 2, 0, 180);
+      dc.DrawLine(cx - r, cy, cx - r - FromDIP(2), cy + r);
+      dc.DrawLine(cx + r, cy, cx + r + FromDIP(2), cy + r);
+      dc.DrawLine(cx - r - FromDIP(2), cy + r, cx + r + FromDIP(2), cy + r);
+      dc.SetBrush(wxBrush(fg));
+      dc.DrawCircle(cx, cy + r + FromDIP(3), FromDIP(2));
+      if (!on) {
+        dc.SetPen(wxPen(fg, FromDIP(2)));
+        dc.DrawLine(cx - r - FromDIP(3), cy - r - FromDIP(1),
+                   cx + r + FromDIP(3), cy + r + FromDIP(5));
+      }
 
-    m_alarm_rect = rect;
+      m_alarm_rect = rect;
+    }
   }
 
   // --- Range lozenge (left edge, vertically centred) with - / + ---
