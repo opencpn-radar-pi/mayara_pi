@@ -524,48 +524,55 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
   }
 
   // --- Alarm-sound lozenge, under the orientation one -----------------------
-  // A plugin-wide setting, not a per-radar one -- same idea as the web GUI's
-  // speaker lozenge, hand-drawn as a bell to match how the operator asked
-  // for it. Click to toggle.
+  // A plugin-wide setting, not a per-radar one -- same idea and the same
+  // colours as the web GUI's speaker lozenge (layout.css), hand-drawn as a
+  // bell rather than a speaker to match how the operator asked for it. Icon
+  // only, no label -- there is no room to spare stacked under the other two.
+  // Click to toggle.
   if (m_alarm_sound_get) {
     const bool on = m_alarm_sound_get();
-    const wxColour fg = on ? m_theme.text : m_theme.accent_dim;
-    const wxString label = on ? _("Alarm sound") : _("Alarm muted");
+    // .myr_speaker_lozenge: background rgba(0,0,0,0.7), border #446.
+    const wxColour bg(0, 0, 0, 178), border(0x44, 0x44, 0x66);
+    // .myr_speaker_lozenge_button on/off background, .myr_speaker_icon
+    // stroke/fill on/off -- lifted from web/gui/layout.css as-is.
+    const wxColour btn_bg = on ? wxColour(0x1a, 0x3d, 0x4d) : wxColour(0x2a, 0x2a, 0x2a);
+    const wxColour fg = on ? wxColour(0x4d, 0xc8, 0xff) : wxColour(0x66, 0x66, 0x66);
 
-    wxFont f = GetFont();
-    dc.SetFont(f);
-    wxCoord tw, th;
-    dc.GetTextExtent(label, &tw, &th);
-    const int padx = 9, gap = 8, icon = th;
-    const int w = padx + icon + gap + tw + padx, h = th + 12;
+    const int side = FromDIP(36);
     const int x = 10, y = m_orient_rect.IsEmpty() ? (m_power_rect.IsEmpty()
                                                          ? 10
                                                          : m_power_rect.GetBottom() + 8)
                                                   : m_orient_rect.GetBottom() + 8;
-    LozengeBg(dc, this, wxRect(x, y, w, h), std::min(h / 2, 12), m_theme);
+    const wxRect rect(x, y, side, side);
+    dc.SetBrush(wxBrush(bg));
+    dc.SetPen(wxPen(border, FromDIP(2)));
+    dc.DrawRoundedRectangle(rect, side / 2);
+    dc.SetBrush(wxBrush(btn_bg));
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    const int inset = FromDIP(2);
+    dc.DrawRoundedRectangle(wxRect(x + inset, y + inset, side - 2 * inset,
+                                   side - 2 * inset),
+                            side / 2 - inset);
 
     // A small bell: dome, flared sides, a rim, and a clapper. Muted draws a
-    // diagonal strike through it, same convention as any mute icon.
-    const int cx = x + padx + icon / 2, cy = y + h / 2 - 1;
-    const int r = icon / 2 - 1;
-    dc.SetPen(wxPen(fg, 2));
+    // diagonal strike through it, same convention as the web GUI's mute icon.
+    const int cx = x + side / 2, cy = y + side / 2 - FromDIP(2);
+    const int r = FromDIP(7);
+    dc.SetPen(wxPen(fg, FromDIP(2)));
     dc.SetBrush(*wxTRANSPARENT_BRUSH);
     dc.DrawEllipticArc(cx - r, cy - r, r * 2, r * 2, 0, 180);
-    dc.DrawLine(cx - r, cy, cx - r - 2, cy + r);
-    dc.DrawLine(cx + r, cy, cx + r + 2, cy + r);
-    dc.DrawLine(cx - r - 2, cy + r, cx + r + 2, cy + r);
+    dc.DrawLine(cx - r, cy, cx - r - FromDIP(2), cy + r);
+    dc.DrawLine(cx + r, cy, cx + r + FromDIP(2), cy + r);
+    dc.DrawLine(cx - r - FromDIP(2), cy + r, cx + r + FromDIP(2), cy + r);
     dc.SetBrush(wxBrush(fg));
-    dc.DrawCircle(cx, cy + r + 3, 2);
+    dc.DrawCircle(cx, cy + r + FromDIP(3), FromDIP(2));
     if (!on) {
-      dc.SetPen(wxPen(fg, 2));
-      dc.DrawLine(cx - r - 3, cy - r - 1, cx + r + 3, cy + r + 5);
+      dc.SetPen(wxPen(fg, FromDIP(2)));
+      dc.DrawLine(cx - r - FromDIP(3), cy - r - FromDIP(1), cx + r + FromDIP(3),
+                 cy + r + FromDIP(5));
     }
 
-    const int textX = x + padx + icon + gap;
-    dc.SetFont(f);
-    dc.SetTextForeground(fg);
-    dc.DrawText(label, textX, y + (h - th) / 2);
-    m_alarm_rect = wxRect(x, y, w, h);
+    m_alarm_rect = rect;
   }
 
   // --- Range lozenge (left edge, vertically centred) with - / + ---
