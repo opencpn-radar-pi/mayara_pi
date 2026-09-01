@@ -449,6 +449,7 @@ void mayara_pi::LoadConfig() {
   cfg->Read("SendTargetsToOpenCPN", &ftarg, false);
   m_feed_heading = fhead;
   m_feed_targets = ftarg;
+  cfg->Read("GuardAlarmSound", &m_guard_alarm_sound, true);
   bool nrange = false;
   cfg->Read("AutoRange", &nrange, false);
   cfg->Read("NestSecondRadar", &nrange, nrange);
@@ -695,6 +696,7 @@ void mayara_pi::SaveConfig() {
   cfg->Write("OverlayZones", m_prefs.overlay_zones);
   cfg->Write("SendHeadingToOpenCPN", m_feed_heading);
   cfg->Write("SendTargetsToOpenCPN", m_feed_targets);
+  cfg->Write("GuardAlarmSound", m_guard_alarm_sound);
   cfg->Write("NestSecondRadar", m_prefs.nest_range);
   wxString orient;
   for (const auto& kv : m_orient)
@@ -1477,21 +1479,58 @@ void mayara_pi::SyncLocalServerUrl() {
 // for alerts -- rather than a dialog of our own that has to be dismissed.
 void mayara_pi::PollGuardAlarms() {
   if (!m_client) return;
+  if (!m_alarms_seeded) {
+    // Wait for a real connected snapshot: Alarms() is empty before that
+    // anyway, but seeding on an empty pass would still flip the flag before
+    // the server's actual state has had a chance to arrive.
+    if (!m_client->Connected()) return;
+    for (const auto& a : m_client->Alarms())
+      if (a.active)
+        m_alarms_raised[a.radar_id + "/" + std::to_string(a.zone)] = a.message;
+    m_alarms_seeded = true;
+    return;
+  }
   for (const auto& a : m_client->Alarms()) {
     const std::string key = a.radar_id + "/" + std::to_string(a.zone);
-    const bool raised = m_alarms_raised.count(key) > 0;
-    if (a.active && !raised) {
-      const std::string msg =
-          a.message.empty()
-              ? "Radar guard zone " + std::to_string(a.zone) + ": target"
-              : a.message;
-      RaiseNotification(PI_NotificationSeverity::PI_kWarning, msg);
-      m_alarms_raised.insert(key);
-    } else if (!a.active && raised) {
+    auto it = m_alarms_raised.find(key);
+    if (a.active) {
+      // The server sends a fresh delta per target, not just on the zone's
+      // first bogey, so a second vessel entering an already-alarming zone
+      // is still announced -- its message names the new target. Notify
+      // again whenever that message changes, not only on the inactive ->
+      // active edge, or every target after the first goes unannounced.
+      if (it == m_alarms_raised.end() || it->second != a.message) {
+        const std::string msg =
+            a.message.empty()
+                ? "Radar guard zone " + std::to_string(a.zone) + ": target"
+                : a.message;
+        RaiseNotification(PI_NotificationSeverity::PI_kWarning, msg);
+        PlayGuardAlarmSound();
+        m_alarms_raised[key] = a.message;
+      }
+    } else if (it != m_alarms_raised.end()) {
       // Let it be raised again next time the zone trips.
-      m_alarms_raised.erase(key);
+      m_alarms_raised.erase(it);
     }
   }
+}
+
+// OpenCPN's own notification icon proved too easy to miss in practice: it
+// carries no sound of its own, and nothing else in a chartplotter's usual
+// layout draws the eye to it. Play data/alarm.wav -- radar_pi's own guard-
+// zone alarm, carried over as-is since users already know that voice --
+// once per newly-raised alarm. Installed by the FE2 template's own "data/"
+// convention (PluginInstall.cmake), found the same way at runtime via
+// GetPluginDataDir. Silently does nothing if the file cannot be found (e.g.
+// a dev build run straight from the build directory, never installed).
+void mayara_pi::PlayGuardAlarmSound() {
+  if (!m_guard_alarm_sound) return;
+  const wxString dir = GetPluginDataDir(PLUGIN_PACKAGE_NAME);
+  if (dir.IsEmpty()) return;
+  wxString path = dir + wxFileName::GetPathSeparator() + "data" +
+                 wxFileName::GetPathSeparator() + "alarm.wav";
+  if (!wxFileExists(path)) return;
+  PlugInPlaySoundEx(path);
 }
 
 std::string mayara_pi::OpenCpnSignalKUrl() const {
@@ -1838,6 +1877,21 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
         "provides them."));
   fhint->Wrap(330);
   dbox->Add(fhint, 0, wxALL, 8);
+
+  dbox->Add(new wxStaticLine(dpage), 0, wxEXPAND | wxALL, 8);
+  dbox->Add(new wxStaticText(dpage, wxID_ANY, _("Guard-zone alarm")), 0,
+           wxLEFT | wxRIGHT, 8);
+  auto* cb_alarm_sound =
+      new wxCheckBox(dpage, wxID_ANY, _("Play a sound"));
+  cb_alarm_sound->SetValue(m_guard_alarm_sound);
+  dbox->Add(cb_alarm_sound, 0, wxLEFT | wxRIGHT | wxTOP, 8);
+  auto* ahint = new wxStaticText(
+      dpage, wxID_ANY,
+      _("OpenCPN's own notification icon still marks a guard-zone alarm "
+        "either way; this only controls the audible chime."));
+  ahint->Wrap(330);
+  dbox->Add(ahint, 0, wxALL, 8);
+
   dpage->SetSizer(dbox);
   book->AddPage(dpage, _("Display"));
 
@@ -2250,6 +2304,10 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
     if (!m_feed_targets) m_ttm_number.clear();
     SaveConfig();
   }
+  if (cb_alarm_sound->GetValue() != m_guard_alarm_sound) {
+    m_guard_alarm_sound = cb_alarm_sound->GetValue();
+    SaveConfig();
+  }
 
   const int chosen = spin->GetValue();
   if (chosen != m_windows_count) {
@@ -2599,6 +2657,15 @@ void mayara_pi::RebuildWindows() {
                                 [this]() { RebuildWindows(); });
                         });
     win->SetNavProvider([this]() { return m_nav; });
+    win->SetAlarmSoundControl(
+        [this]() { return m_guard_alarm_sound; },
+        [this]() {
+          m_guard_alarm_sound = !m_guard_alarm_sound;
+          SaveConfig();
+          // Every window shows this lozenge, not just the one clicked.
+          for (MayaraPpiWindow* w : m_windows)
+            if (w) w->Refresh();
+        });
     win->SetHeadingProvider([this](int radar, double& deg) {
       return ResolveHeading(radar, &deg, nullptr);
     });

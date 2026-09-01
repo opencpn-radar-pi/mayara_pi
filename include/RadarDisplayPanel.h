@@ -123,6 +123,13 @@ class RadarDisplayPanel : public wxPanel {
   void SetOrientationChangedCallback(std::function<void(int)> cb) {
     m_on_orientation = std::move(cb);
   }
+  // The guard-zone alarm sound lozenge: a plugin-wide setting, not a
+  // per-radar one, so it is a getter + toggle rather than local state.
+  void SetAlarmSoundControl(std::function<bool()> get,
+                            std::function<void()> toggle) {
+    m_alarm_sound_get = std::move(get);
+    m_alarm_sound_toggle = std::move(toggle);
+  }
   // Open a single control (gauge icons): the callback gets the control id.
   void SetControlCallback(std::function<void(const std::string&)> cb) {
     m_on_control = std::move(cb);
@@ -241,6 +248,8 @@ class RadarDisplayPanel : public wxPanel {
   // Told when the lozenge cycles the orientation, so the setting is persisted
   // for this radar and the controls follow.
   std::function<void(int)> m_on_orientation;
+  std::function<bool()> m_alarm_sound_get;
+  std::function<void()> m_alarm_sound_toggle;
   std::function<void(const std::string&)> m_on_control;
   std::function<void()> m_on_focus;
   std::function<NavState()> m_nav;  // own-ship nav provider (may be null)
@@ -294,6 +303,7 @@ class RadarDisplayPanel : public wxPanel {
   wxRect m_icon_rain;    // icon-bar: Rain gauge
   wxRect m_icon_ebl;
   wxRect m_orient_rect;  // lozenge: which way is up, click to cycle
+  wxRect m_alarm_rect;   // lozenge: guard-zone alarm sound on/off, click to toggle
   wxRect m_power_rect;
   wxRect m_range_minus_rect;
   wxRect m_range_plus_rect;

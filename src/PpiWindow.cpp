@@ -249,6 +249,11 @@ void MayaraPpiWindow::SetNavProvider(std::function<NavState()> provider) {
   for (RadarDisplayPanel* p : m_radars) p->SetNavProvider(provider);
 }
 
+void MayaraPpiWindow::SetAlarmSoundControl(std::function<bool()> get,
+                                          std::function<void()> toggle) {
+  for (RadarDisplayPanel* p : m_radars) p->SetAlarmSoundControl(get, toggle);
+}
+
 RadarDisplayPanel* MayaraPpiWindow::FocusedPanel() {
   const int ri = m_controls ? m_controls->RadarIndex()
                             : (m_radars.empty() ? 0 : m_radars[0]->RadarIndex());

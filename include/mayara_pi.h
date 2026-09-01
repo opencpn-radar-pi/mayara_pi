@@ -112,6 +112,8 @@ class mayara_pi : public opencpn_plugin_121 {
   std::string OpenCpnSignalKUrl() const;
   // Raise a guard-zone alarm with OpenCPN when the server reports a new one.
   void PollGuardAlarms();
+  // One short chime for a newly-raised guard-zone alarm; see PollGuardAlarms.
+  void PlayGuardAlarmSound();
   // Ask, once per release, whether to install a newer local mayara-server.
   void MaybeOfferServerUpdate();
   void LoadConfig();
@@ -296,9 +298,20 @@ class mayara_pi : public opencpn_plugin_121 {
   wxButton* m_access_button = nullptr;
   bool m_access_dismissed = false;
   wxString m_access_last_line;  // avoids re-laying out the dialog every tick
-  // Guard-zone alarms already raised with OpenCPN, keyed "radarid/zone", so a
-  // standing alarm is reported once rather than every heartbeat.
-  std::set<std::string> m_alarms_raised;
+  // Guard-zone alarms already raised with OpenCPN, keyed "radarid/zone",
+  // value the message last shown -- a standing alarm is reported once per
+  // distinct message (the server sends a fresh one per target), not every
+  // heartbeat.
+  std::map<std::string, std::string> m_alarms_raised;
+  // True once m_alarms_raised has been seeded from the first connected
+  // snapshot, so an alarm already standing when OpenCPN starts (or
+  // reconnects) is not announced as freshly raised.
+  bool m_alarms_seeded = false;
+  // Enabled by default so the audible chime complements RaiseNotification()
+  // rather than replacing it -- OpenCPN's own notification icon is easy to
+  // miss unattended. The operator can disable just the chime in Display
+  // settings, or with the on-picture bell lozenge.
+  bool m_guard_alarm_sound = true;
   int m_no_radar_ticks = 0;          // heartbeat ticks with no radar
   bool m_search_dismissed = false;   // user closed the search dialog
   bool m_no_radar_notice_open = false;       // the "no radar found" dialog is up

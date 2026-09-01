@@ -396,7 +396,7 @@ void RadarDisplayPanel::DrawIconBar(wxDC& dc, const wxSize& sz) {
 
 void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
   m_menu_rect = m_icon_ais = m_icon_gain = m_icon_sea = m_icon_rain =
-      m_icon_ebl = m_orient_rect = wxRect();
+      m_icon_ebl = m_orient_rect = m_alarm_rect = wxRect();
   m_power_rect = wxRect();
   m_range_minus_rect = wxRect();
   m_range_plus_rect = wxRect();
@@ -406,6 +406,35 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
   if (!m_client) return;
   RadarControls* controls = m_client->ControlsAt(m_index);
   if (!controls) return;  // no radar connected yet
+
+  // Range lozenge geometry, needed early: it is vertically centred on the
+  // panel and can land anywhere, including inside the Power/Orientation/
+  // Alarm column stacked from the top on a short (multi-radar grid) panel.
+  // Computed again, identically, where it is actually drawn below -- this
+  // is geometry only, cheap, and keeps that block unchanged.
+  wxRect range_reserved;
+  {
+    RadarState* rs = m_client->StateAt(m_index);
+    ControlValue rrv = controls->Value("range");
+    const double rcur =
+        rrv.has_value ? rrv.value : (rs ? rs->RangeMeters() : 0.0);
+    double rreport_m = rcur;
+    bool rmetric = false;
+    EffectiveRange(rreport_m, rmetric);
+    const wxString rrlabel =
+        rcur > 0 ? FormatRange(rcur, rmetric) : wxString();
+    if (!rrlabel.IsEmpty()) {
+      wxFont big = GetFont();
+      big.SetPointSize(big.GetPointSize() + 2);
+      dc.SetFont(big);
+      wxCoord tw, th;
+      dc.GetTextExtent(rrlabel, &tw, &th);
+      dc.SetFont(GetFont());
+      const int w = std::max<int>(tw + 18, 60);
+      const int h = 26 + (th + 12) + 26;
+      range_reserved = wxRect(10, (sz.y - h) / 2, w, h);
+    }
+  }
 
   // --- Power lozenge (top-left): radar name above the transmit state ---
   ControlValue pw = controls->Value("power");
@@ -514,10 +543,73 @@ void RadarDisplayPanel::DrawLozenges(wxDC& dc, const wxSize& sz) {
     m_orient_rect = wxRect(x, y, w, h);
     if (!honoured) {
       // Whatever it says, the picture is head-up until the missing input
-      // arrives.
+      // arrives. Folded into the hit-test rect too, so the alarm-sound
+      // lozenge stacked below still clears it.
       dc.SetFont(f);
       dc.SetTextForeground(m_theme.accent_dim);
       dc.DrawText(missing, x, y + h + 2);
+      m_orient_rect.SetHeight(h + 2 + th);
+    }
+  }
+
+  // --- Alarm-sound lozenge, under the orientation one -----------------------
+  // A plugin-wide setting, not a per-radar one -- same idea and the same
+  // colours as the web GUI's speaker lozenge (layout.css), hand-drawn as a
+  // bell rather than a speaker to match how the operator asked for it. Icon
+  // only, no label -- there is no room to spare stacked under the other two.
+  // Click to toggle.
+  if (m_alarm_sound_get) {
+    const int side = FromDIP(36);
+    const int x = 10, y = m_orient_rect.IsEmpty() ? (m_power_rect.IsEmpty()
+                                                         ? 10
+                                                         : m_power_rect.GetBottom() + 8)
+                                                  : m_orient_rect.GetBottom() + 8;
+    const wxRect rect(x, y, side, side);
+    // On a short multi-radar panel the vertically-centred range lozenge
+    // (same x) can land inside this column. Range wins -- it is always
+    // present and essential; the bell just does not draw or hit-test that
+    // frame (m_alarm_rect stays empty, cleared at the top of this function).
+    if (range_reserved.IsEmpty() || !rect.Intersects(range_reserved)) {
+      const bool on = m_alarm_sound_get();
+      // .myr_speaker_lozenge: background rgba(0,0,0,0.7), border #446.
+      const wxColour bg(0, 0, 0, 178), border(0x44, 0x44, 0x66);
+      // .myr_speaker_lozenge_button on/off background, .myr_speaker_icon
+      // stroke/fill on/off -- lifted from web/gui/layout.css as-is.
+      const wxColour btn_bg =
+          on ? wxColour(0x1a, 0x3d, 0x4d) : wxColour(0x2a, 0x2a, 0x2a);
+      const wxColour fg =
+          on ? wxColour(0x4d, 0xc8, 0xff) : wxColour(0x66, 0x66, 0x66);
+
+      dc.SetBrush(wxBrush(bg));
+      dc.SetPen(wxPen(border, FromDIP(2)));
+      dc.DrawRoundedRectangle(rect, side / 2);
+      dc.SetBrush(wxBrush(btn_bg));
+      dc.SetPen(*wxTRANSPARENT_PEN);
+      const int inset = FromDIP(2);
+      dc.DrawRoundedRectangle(wxRect(x + inset, y + inset, side - 2 * inset,
+                                     side - 2 * inset),
+                              side / 2 - inset);
+
+      // A small bell: dome, flared sides, a rim, and a clapper. Muted draws
+      // a diagonal strike through it, same convention as the web GUI's mute
+      // icon.
+      const int cx = x + side / 2, cy = y + side / 2 - FromDIP(2);
+      const int r = FromDIP(7);
+      dc.SetPen(wxPen(fg, FromDIP(2)));
+      dc.SetBrush(*wxTRANSPARENT_BRUSH);
+      dc.DrawEllipticArc(cx - r, cy - r, r * 2, r * 2, 0, 180);
+      dc.DrawLine(cx - r, cy, cx - r - FromDIP(2), cy + r);
+      dc.DrawLine(cx + r, cy, cx + r + FromDIP(2), cy + r);
+      dc.DrawLine(cx - r - FromDIP(2), cy + r, cx + r + FromDIP(2), cy + r);
+      dc.SetBrush(wxBrush(fg));
+      dc.DrawCircle(cx, cy + r + FromDIP(3), FromDIP(2));
+      if (!on) {
+        dc.SetPen(wxPen(fg, FromDIP(2)));
+        dc.DrawLine(cx - r - FromDIP(3), cy - r - FromDIP(1),
+                   cx + r + FromDIP(3), cy + r + FromDIP(5));
+      }
+
+      m_alarm_rect = rect;
     }
   }
 
@@ -1396,6 +1488,8 @@ void RadarDisplayPanel::HandleClick(const wxPoint& p) {
   } else if (m_orient_rect.Contains(p)) {
     SetOrientation((m_orientation + 1) % 3);
     if (m_on_orientation) m_on_orientation(m_orientation);
+  } else if (m_alarm_rect.Contains(p)) {
+    if (m_alarm_sound_toggle) m_alarm_sound_toggle();
   } else if (m_icon_ais.Contains(p)) {
     m_layers.ais = !m_layers.ais;
     Refresh(false);
@@ -1459,10 +1553,11 @@ void RadarDisplayPanel::OnLeftDClick(wxMouseEvent& event) {
   const wxPoint p = event.GetPosition();
   // Double-clicking a control/lozenge is not an acquire gesture.
   if (m_menu_rect.Contains(p) || m_orient_rect.Contains(p) ||
-      m_icon_ais.Contains(p) || m_icon_ebl.Contains(p) ||
-      m_icon_gain.Contains(p) || m_icon_sea.Contains(p) ||
-      m_icon_rain.Contains(p) || m_power_rect.Contains(p) ||
-      m_range_minus_rect.Contains(p) || m_range_plus_rect.Contains(p)) {
+      m_alarm_rect.Contains(p) || m_icon_ais.Contains(p) ||
+      m_icon_ebl.Contains(p) || m_icon_gain.Contains(p) ||
+      m_icon_sea.Contains(p) || m_icon_rain.Contains(p) ||
+      m_power_rect.Contains(p) || m_range_minus_rect.Contains(p) ||
+      m_range_plus_rect.Contains(p)) {
     event.Skip();
     return;
   }
