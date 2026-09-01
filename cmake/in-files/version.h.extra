@@ -1,0 +1,7 @@
+// Short git commit id this binary was built from, baked in so
+// mayara_pi::GetPlugInVersionBuild() can report it (see CMakeLists.txt for
+// how PLUGIN_GIT_COMMIT is computed). Every alpha/beta build shares the same
+// PLUGIN_VERSION_{MAJOR,MINOR,PATCH} until the next release bumps them in
+// CMakeLists.txt, so without this OpenCPN's plugin manager can't tell two
+// different alpha builds apart.
+#define PLUGIN_VERSION_COMMIT "${PLUGIN_GIT_COMMIT}"

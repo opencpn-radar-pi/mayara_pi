@@ -45,6 +45,7 @@ class mayara_pi : public opencpn_plugin_121 {
   int GetPlugInVersionMajor() override;
   int GetPlugInVersionMinor() override;
   int GetPlugInVersionPatch() override;
+  const char* GetPlugInVersionBuild() override;
   wxBitmap* GetPlugInBitmap() override;
   wxString GetCommonName() override;
   wxString GetShortDescription() override;

@@ -120,6 +120,28 @@ include("PluginSetup")
 set(CMAKE_VERBOSE_MAKEFILE ON)
 option(Plugin_CXX11 "Use c++11" OFF)
 
+# Short commit id, baked into the binary via cmake/in-files/version.h.extra so
+# mayara_pi::GetPlugInVersionBuild() can report it. VERSION_MAJOR/MINOR/PATCH
+# above only change at release time, so without this every alpha/beta build
+# in between reports the exact same version, whatever commit it was built
+# from -- see cmake/in-files/version.h.extra for detail.
+find_package(Git QUIET)
+set(PLUGIN_GIT_COMMIT "unknown")
+if(GIT_FOUND)
+  execute_process(
+    COMMAND ${GIT_EXECUTABLE} rev-parse --short=7 HEAD
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    OUTPUT_VARIABLE PLUGIN_GIT_COMMIT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+    RESULT_VARIABLE _plugin_git_rev_parse_result
+  )
+  if(NOT _plugin_git_rev_parse_result EQUAL 0 OR PLUGIN_GIT_COMMIT STREQUAL "")
+    set(PLUGIN_GIT_COMMIT "unknown")
+  endif()
+endif()
+message(STATUS "${CMLOC}PLUGIN_GIT_COMMIT: ${PLUGIN_GIT_COMMIT}")
+
 include("PluginConfigure")
 
 # ---------------------------------------------------------------------------
