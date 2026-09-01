@@ -71,6 +71,26 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with: { submodules: recursive, fetch-depth: 0 }
+      - name: Ensure wget
+        # win_deps.bat (vendored, do not edit) only calls choco for wget if
+        # `wget --version` fails, in one unretried shot -- and
+        # community.chocolatey.org's feed intermittently 504s. Pre-install it
+        # here with retries so that check already finds a working wget and
+        # never touches the flaky feed. Same pattern would apply to its other
+        # choco-installed tools (cmake, poedit, python, 7zip) if any of those
+        # start flaking too; none has so far.
+        shell: pwsh
+        run: |
+          $ok = $false
+          for ($i = 1; $i -le 5; $i++) {
+            if (Get-Command wget -ErrorAction SilentlyContinue) { $ok = $true; break }
+            choco install -y --no-progress wget
+            if ($LASTEXITCODE -eq 0) { $ok = $true; break }
+            $delay = 10 * $i
+            Write-Host "choco install wget failed (attempt $i/5), retrying in ${delay}s..."
+            Start-Sleep -Seconds $delay
+          }
+          if (-not $ok) { throw "could not install wget after 5 attempts" }
       - name: Build
         shell: cmd
         run: ci\circleci-build-msvc.bat
@@ -127,15 +147,33 @@ jobs:
         if: matrix.container != ''
         shell: sh
         run: |
+          # Bare-container apt-get/dnf occasionally hits transient network or
+          # container-runtime flakiness (a resolv.conf race setting up the
+          # container's DNS, a mirror timeout, ...); retry with backoff
+          # rather than failing the whole job on a blip.
+          retry() {
+            n=0; max=5; delay=10
+            while true; do
+              "$@" && return 0
+              n=$((n + 1))
+              if [ "$n" -ge "$max" ]; then
+                echo "gave up after $n attempts: $*" >&2
+                return 1
+              fi
+              echo "retrying ($n/$max) in ${delay}s: $*" >&2
+              sleep "$delay"
+              delay=$((delay * 2))
+            done
+          }
           if command -v apt-get >/dev/null 2>&1; then
             # Bare container apt prompts interactively; make every apt-get -y.
             printf 'APT::Get::Assume-Yes "true";\n' \
               > /etc/apt/apt.conf.d/90noninteractive
-            apt-get update
-            apt-get install -y --no-install-recommends git sudo ca-certificates \
+            retry apt-get update
+            retry apt-get install -y --no-install-recommends git sudo ca-certificates \
               python3 python3-venv python3-pip
           elif command -v dnf >/dev/null 2>&1; then
-            dnf install -y git sudo dnf-plugins-core python3 python3-pip
+            retry dnf install -y git sudo dnf-plugins-core python3 python3-pip
           fi
           # The workspace is owned by a different UID than root in the
           # container; let git operate on it (the FE2 scripts run submodule
@@ -147,12 +185,26 @@ jobs:
         if: matrix.wx_ppa == 'true'
         shell: sh
         run: |
-          apt-get update
+          retry() {
+            n=0; max=5; delay=10
+            while true; do
+              "$@" && return 0
+              n=$((n + 1))
+              if [ "$n" -ge "$max" ]; then
+                echo "gave up after $n attempts: $*" >&2
+                return 1
+              fi
+              echo "retrying ($n/$max) in ${delay}s: $*" >&2
+              sleep "$delay"
+              delay=$((delay * 2))
+            done
+          }
+          retry apt-get update
           # gnupg is needed for add-apt-repository's key import; the minimal
           # ubuntu:22.04 image ships neither it nor a gpg-agent.
-          apt-get install -y --no-install-recommends software-properties-common gnupg
-          add-apt-repository -y ppa:opencpn/opencpn
-          apt-get update
+          retry apt-get install -y --no-install-recommends software-properties-common gnupg
+          retry add-apt-repository -y ppa:opencpn/opencpn
+          retry apt-get update
       - name: Build
         run: bash ${{ matrix.script }}
       - name: Publish to Cloudsmith
