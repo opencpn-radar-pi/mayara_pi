@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -108,6 +109,54 @@ std::string WsUrl(const std::string& base, const std::string& radar_id) {
          "/spokes";
 }
 
+// mayara-server's own port. The radar API can answer anywhere -- a Signal K
+// server hosting the plugin answers it on the Signal K port -- but mayara's
+// web GUI only ever lives here.
+const int kMayaraPort = 6502;
+
+// Is this an answer from the radar API, or merely a 200 from a server that
+// happens to route that path? A Signal K server without mayara installed is
+// the case that matters: reaching Signal K is no proof that the radar plugin
+// is there, and treating the two alike made the plugin settle on a server that
+// could never produce a radar. Every shape we accept carries either the 3.4.0
+// envelope or at least one radar; a bare {} carries neither and is rejected.
+// A lone "version" is not enough either -- every mayara that reports one puts
+// it beside a radars object, so on its own it is somebody else's field.
+bool LooksLikeRadarApi(const json& j) {
+  if (j.is_array()) return true;
+  if (!j.is_object()) return false;
+  if (j.contains("radars") && j["radars"].is_object()) return true;
+  // Older shape: radars keyed at the top level, anything but "version".
+  for (auto it = j.begin(); it != j.end(); ++it)
+    if (it.key() != "version" && it.value().is_object()) return true;
+  return false;
+}
+
+// The same host as `base` but on mayara-server's port, or "" when `base` is
+// already there (or is not a URL we can take apart).
+std::string OnMayaraPort(const std::string& base) {
+  const size_t sep = base.find("://");
+  if (sep == std::string::npos) return "";
+  const size_t start = sep + 3;
+  size_t end = base.find('/', start);
+  if (end == std::string::npos) end = base.size();
+  std::string host = base.substr(start, end - start);
+  if (host.empty()) return "";
+  // An IPv6 literal keeps its brackets, and its colons are not the port's.
+  size_t colon = host.rfind(':');
+  const size_t bracket = host.rfind(']');
+  if (colon != std::string::npos && bracket != std::string::npos &&
+      colon < bracket)
+    colon = std::string::npos;
+  int port = base.rfind("https://", 0) == 0 ? 443 : 80;
+  if (colon != std::string::npos) {
+    port = std::atoi(host.c_str() + colon + 1);
+    host.erase(colon);
+  }
+  if (port == kMayaraPort) return "";
+  return base.substr(0, start) + host + ":" + std::to_string(kMayaraPort);
+}
+
 }  // namespace
 
 MayaraClient::MayaraClient(std::string explicit_url, std::string fallback_url)
@@ -133,6 +182,7 @@ void MayaraClient::Rescan() {
   {
     std::lock_guard<std::mutex> lock(m_status_mutex);
     m_connected_url.clear();
+    m_help_url.clear();
     m_server_api_version.clear();
   }
   SetStatus("reconnecting...");
@@ -345,6 +395,46 @@ void MayaraClient::SetHintUrl(std::string url) {
 std::string MayaraClient::ConnectedUrl() {
   std::lock_guard<std::mutex> lock(m_status_mutex);
   return m_connected_url;
+}
+
+std::string MayaraClient::HelpUrl() {
+  std::lock_guard<std::mutex> lock(m_status_mutex);
+  return m_help_url;
+}
+
+// mayara-server's web GUI is where the "why can't it find my radar" guidance
+// lives, so it is the only link worth offering when nothing shows up. Where
+// the radar API answered is not necessarily where that GUI is: as a Signal K
+// plugin mayara answers on the Signal K port, while the GUI is served by
+// mayara-server on 6502 -- which may not be running at all, which is exactly
+// the doubt when no radar appears. So ask that port, and leave HelpUrl() empty
+// when it does not answer, rather than hand out a link that only fails to open.
+void MayaraClient::ResolveHelpUrl(const std::string& base) {
+  // The GUI is on mayara's own port. When the radar API answered there, that
+  // is the GUI too; any other port is someone else's (Signal K's), so look
+  // beside it for a mayara-server of its own.
+  std::string help = base;
+  const std::string gui = OnMayaraPort(base);
+  if (!gui.empty()) {
+    ix::HttpClient http(/*async=*/false);
+    auto args = http.createRequest();
+    args->connectTimeout = 2;
+    args->transferTimeout = 2;
+    auto resp = http.get(gui + "/signalk/v2/api/vessels/self/radars", args);
+    bool up = false;
+    if (resp && resp->statusCode == 200) {
+      try {
+        up = LooksLikeRadarApi(json::parse(resp->body));
+      } catch (const std::exception&) {
+        up = false;
+      }
+    }
+    LogLine(2, up ? "mayara-server GUI at " + gui
+                  : "no mayara-server GUI at " + gui);
+    help = up ? gui : std::string();
+  }
+  std::lock_guard<std::mutex> lock(m_status_mutex);
+  m_help_url = help;
 }
 
 // --- Signal K device access ------------------------------------------------
@@ -613,6 +703,9 @@ void MayaraClient::Run() {
       m_base_url = base;
       StripTrailingSlash(m_base_url);
       Attempt r = DiscoverAndConnect();
+      // Whatever the radar API said, it is this server's GUI we would point a
+      // user at, so work out now (off the UI thread) whether there is one.
+      if (r != Attempt::kFailed) ResolveHelpUrl(m_base_url);
       // A server whose radar API answers but lists nothing is still the right
       // server -- it just has nothing to show yet, which is what a local server
       // with no radar attached looks like. Stay on it and re-poll instead of
@@ -636,6 +729,19 @@ void MayaraClient::Run() {
         m_connected_url = m_base_url;
         return;
       }
+      // It has stopped answering -- a local server that died, a Signal K that
+      // went down. Forget that we were ever talking to it: leaving the address
+      // set kept the UI in "found the server, it just has no radar" forever,
+      // silently, against a server that is no longer there -- no search dialog,
+      // and a Settings link to a page that cannot open. What is persisted for
+      // the next session is unaffected; this is only what we claim right now.
+      {
+        std::lock_guard<std::mutex> lock(m_status_mutex);
+        if (m_connected_url == m_base_url) {
+          m_connected_url.clear();
+          m_help_url.clear();
+        }
+      }
     }
     for (int i = 0; i < 30 && !m_stop; ++i)
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -658,6 +764,13 @@ MayaraClient::Attempt MayaraClient::DiscoverAndConnect() {
     SetStatus("no server at " + m_base_url);
     return Attempt::kFailed;
   }
+  if (resp->statusCode == 404) {
+    // Something is listening, but it does not serve the radar API: a Signal K
+    // server with no mayara plugin installed (or not enabled) looks exactly
+    // like this. Not our server, so keep looking.
+    SetStatus("no radar API at " + m_base_url + " (mayara not installed?)");
+    return Attempt::kFailed;
+  }
   if (resp->statusCode != 200) {
     SetStatus("GET radars -> HTTP " + std::to_string(resp->statusCode));
     return Attempt::kFailed;
@@ -667,6 +780,14 @@ MayaraClient::Attempt MayaraClient::DiscoverAndConnect() {
   std::vector<std::unique_ptr<Radar>> radars;
   try {
     auto j = json::parse(resp->body);
+    // A 200 is not proof either: only an answer shaped like the radar API is.
+    // Otherwise a Signal K server that routes the path but has no mayara
+    // behind it reads as "the right server, just no radar yet", and the plugin
+    // settles on it forever instead of going on looking for a real one.
+    if (!LooksLikeRadarApi(j)) {
+      SetStatus("no radar API at " + m_base_url + " (mayara not installed?)");
+      return Attempt::kFailed;
+    }
     // Note the server's Radar API version up front, so any JSON error below is
     // reported as a version mismatch when it applies.
     if (j.is_object() && j.contains("version") && j["version"].is_string()) {
