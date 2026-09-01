@@ -32,13 +32,35 @@ sections below are the open work.
 
 ## Alarms
 
-**Guard-zone bogey alarm.** The plugin now subscribes to
+**Guard-zone bogey alarm.** The plugin subscribes to
 `notifications.radar.<key>.guardZone.<n>` and raises an OpenCPN notification
-for each new one, which is where the operator already looks for alerts.
+for each new one, which is where the operator already looks for alerts. The
+server fires a fresh delta per target, not just on the zone's first bogey, so
+a second vessel entering an already-alarming zone is announced too — the
+plugin used to dedupe purely on the zone's inactive → active edge and
+swallow every target after the first; it now tracks the message last shown
+per (radar, zone) and notifies again whenever that changes.
 
-Still missing next to radar_pi: a blob-count threshold, a re-warn timeout and a
-configurable WAV. OpenCPN's own notification handles the presentation, so those
-are only worth adding if its behaviour proves too quiet in practice.
+**Audible alarm.** OpenCPN's own notification icon proved too easy to miss in
+practice — it carries no sound of its own, and nothing else in a
+chartplotter's usual layout draws the eye to it, exactly the case this
+document flagged as worth an audible alarm "if its behaviour proves too
+quiet". `data/alarm.wav` is radar_pi's own guard-zone alarm sound, carried
+over as-is (people already know that voice), played once per newly-raised
+alarm alongside the OpenCPN notification. A bell lozenge under
+Power/Orientation on every picture — same idea and the same colours as the
+web GUI's speaker lozenge, hand-drawn as a bell rather than a speaker — mutes
+it with one click; a "Play a sound" checkbox in Display settings does the
+same. Both toggle one plugin-wide setting, not per radar, matching the web
+GUI (which only ever shows one). An alarm already standing when OpenCPN
+starts, or when the client reconnects, is seeded silently rather than
+announced as freshly raised.
+
+Still missing next to radar_pi: a blob-count threshold and a re-warn timeout.
+The threshold turned out to already live server-side — a target only alarms
+once "promoted" (confirmed across several sweeps), not on first acquisition —
+and the re-warn timeout stopped looking necessary once per-target
+notification was fixed, so it stays unbuilt until proven otherwise.
 
 Confirmed against a live HALO A: the server publishes the delta on its own
 stream (`:6502`) and it also reaches the upstream Signal K server (`:3000`).
