@@ -109,6 +109,8 @@ class mayara_pi : public opencpn_plugin_121 {
   std::string OpenCpnSignalKUrl() const;
   // Raise a guard-zone alarm with OpenCPN when the server reports a new one.
   void PollGuardAlarms();
+  // One short chime for a newly-raised guard-zone alarm; see PollGuardAlarms.
+  void PlayGuardAlarmSound();
   // Ask, once per release, whether to install a newer local mayara-server.
   void MaybeOfferServerUpdate();
   void LoadConfig();
@@ -296,6 +298,7 @@ class mayara_pi : public opencpn_plugin_121 {
   // Guard-zone alarms already raised with OpenCPN, keyed "radarid/zone", so a
   // standing alarm is reported once rather than every heartbeat.
   std::set<std::string> m_alarms_raised;
+  bool m_guard_alarm_sound = true;  // play data/alarm.wav on a new alarm
   int m_no_radar_ticks = 0;          // heartbeat ticks with no radar
   bool m_search_dismissed = false;   // user closed the search dialog
   bool m_no_radar_notice_open = false;       // the "no radar found" dialog is up
