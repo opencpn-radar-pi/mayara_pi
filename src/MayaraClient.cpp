@@ -205,6 +205,15 @@ void MayaraClient::Stop() {
     m_radars.clear();
   }
   m_control_ws.reset();
+  // The server never resends a guard zone's current state to a newly
+  // subscribing client -- notifications.* only carries live transitions --
+  // so a stale entry here cannot be reconciled on reconnect, only replayed
+  // by mistake. Drop it, matching a cold start: anything the new connection
+  // hears about is by definition new since it came back.
+  {
+    std::lock_guard<std::mutex> lock(m_alarm_mutex);
+    m_alarms.clear();
+  }
 }
 
 std::string MayaraClient::StatusLine() {
