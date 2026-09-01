@@ -1481,18 +1481,25 @@ void mayara_pi::PollGuardAlarms() {
   if (!m_client) return;
   for (const auto& a : m_client->Alarms()) {
     const std::string key = a.radar_id + "/" + std::to_string(a.zone);
-    const bool raised = m_alarms_raised.count(key) > 0;
-    if (a.active && !raised) {
-      const std::string msg =
-          a.message.empty()
-              ? "Radar guard zone " + std::to_string(a.zone) + ": target"
-              : a.message;
-      RaiseNotification(PI_NotificationSeverity::PI_kWarning, msg);
-      PlayGuardAlarmSound();
-      m_alarms_raised.insert(key);
-    } else if (!a.active && raised) {
+    auto it = m_alarms_raised.find(key);
+    if (a.active) {
+      // The server sends a fresh delta per target, not just on the zone's
+      // first bogey, so a second vessel entering an already-alarming zone
+      // is still announced -- its message names the new target. Notify
+      // again whenever that message changes, not only on the inactive ->
+      // active edge, or every target after the first goes unannounced.
+      if (it == m_alarms_raised.end() || it->second != a.message) {
+        const std::string msg =
+            a.message.empty()
+                ? "Radar guard zone " + std::to_string(a.zone) + ": target"
+                : a.message;
+        RaiseNotification(PI_NotificationSeverity::PI_kWarning, msg);
+        PlayGuardAlarmSound();
+        m_alarms_raised[key] = a.message;
+      }
+    } else if (it != m_alarms_raised.end()) {
       // Let it be raised again next time the zone trips.
-      m_alarms_raised.erase(key);
+      m_alarms_raised.erase(it);
     }
   }
 }

@@ -295,9 +295,11 @@ class mayara_pi : public opencpn_plugin_121 {
   wxButton* m_access_button = nullptr;
   bool m_access_dismissed = false;
   wxString m_access_last_line;  // avoids re-laying out the dialog every tick
-  // Guard-zone alarms already raised with OpenCPN, keyed "radarid/zone", so a
-  // standing alarm is reported once rather than every heartbeat.
-  std::set<std::string> m_alarms_raised;
+  // Guard-zone alarms already raised with OpenCPN, keyed "radarid/zone",
+  // value the message last shown -- a standing alarm is reported once per
+  // distinct message (the server sends a fresh one per target), not every
+  // heartbeat.
+  std::map<std::string, std::string> m_alarms_raised;
   bool m_guard_alarm_sound = true;  // play data/alarm.wav on a new alarm
   int m_no_radar_ticks = 0;          // heartbeat ticks with no radar
   bool m_search_dismissed = false;   // user closed the search dialog
