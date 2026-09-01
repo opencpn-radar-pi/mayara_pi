@@ -96,8 +96,11 @@ class mayara_pi : public opencpn_plugin_121 {
   void SyncRadarFullScreen(bool on);
   void ShowSettings(wxWindow* parent);
   void ShowSearchDialog();  // "looking for a server" + manual entry
-  // "found the server, it just isn't seeing a radar" + a link to its GUI.
-  void ShowNoRadarNotice(const std::string& server_url);
+  // "found the server, it just isn't seeing a radar", with a link to
+  // mayara-server's GUI when there is one to link to (help_url may be empty,
+  // in which case the notice is only the bad news and a Dismiss button).
+  void ShowNoRadarNotice(const std::string& server_url,
+                         const std::string& help_url);
   // "the server won't let us control the radar" + the access-request flow.
   void ShowAccessDialog();
   void UpdateAccessDialog();  // live status while approval is pending

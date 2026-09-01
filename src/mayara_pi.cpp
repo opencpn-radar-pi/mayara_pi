@@ -290,7 +290,7 @@ int mayara_pi::Init() {
         // to show, so the "where's the server" dialog below does not apply.
         if (m_no_radar_ticks >= 10 && !m_no_radar_notice_open &&
             !m_no_radar_notice_dismissed)
-          ShowNoRadarNotice(connected_url);
+          ShowNoRadarNotice(connected_url, m_client->HelpUrl());
       } else {
         // The search dialog is for "we cannot find a server". When we are
         // running one ourselves we know exactly where it is, so silence about
@@ -1674,40 +1674,55 @@ void mayara_pi::ShowSearchDialog() {
 // mayara-server's own GUI already has the brand-specific "why can't it find
 // my radar" guidance (Furuno/Garmin IP ranges, Raymarine needing an MFD for
 // DHCP, ...); this just points at it rather than duplicating any of that here.
-void mayara_pi::ShowNoRadarNotice(const std::string& server_url) {
+//
+// Only when there is a GUI to point at, though. The radar API can answer from
+// a Signal K server on :3000 while mayara-server's GUI (:6502) is not up at
+// all, and the client has already been out to check -- an unreachable link is
+// worse than none, so without one this is just the bad news and a Dismiss.
+void mayara_pi::ShowNoRadarNotice(const std::string& server_url,
+                                  const std::string& help_url) {
   if (m_no_radar_notice_open) return;
   m_no_radar_notice_open = true;
-  const wxString url = wxString::FromUTF8(server_url.c_str());
+  const wxString url = wxString::FromUTF8(help_url.c_str());
   auto* dlg = new wxDialog(m_parent_window, wxID_ANY, _("No Radar Found"),
                            wxDefaultPosition, wxDefaultSize,
                            wxDEFAULT_DIALOG_STYLE);
   auto* top = new wxBoxSizer(wxVERTICAL);
   auto* msg = new wxStaticText(
       dlg, wxID_ANY,
-      _("No radar found by mayara -- I recommend you open the following "
-        "link to investigate why:"));
+      url.IsEmpty()
+          ? wxString::Format(
+                _("No radar found by mayara.\n\nThe server at %s is not "
+                  "reporting a radar."),
+                wxString::FromUTF8(server_url.c_str()))
+          : wxString(_("No radar found by mayara -- I recommend you open the "
+                       "following link to investigate why:")));
   msg->Wrap(400);
   top->Add(msg, 0, wxALL, 12);
-  auto* link = new wxHyperlinkCtrl(dlg, wxID_ANY, url, url);
-  // The stock hyperlink blue is unreadable against OpenCPN's dark dialogs;
-  // same colour visited or not, so it does not fade to something worse
-  // after the first click.
-  link->SetNormalColour(wxColour(120, 180, 255));
-  link->SetVisitedColour(wxColour(120, 180, 255));
-  top->Add(link, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12);
+  if (!url.IsEmpty()) {
+    auto* link = new wxHyperlinkCtrl(dlg, wxID_ANY, url, url);
+    // The stock hyperlink blue is unreadable against OpenCPN's dark dialogs;
+    // same colour visited or not, so it does not fade to something worse
+    // after the first click.
+    link->SetNormalColour(wxColour(120, 180, 255));
+    link->SetVisitedColour(wxColour(120, 180, 255));
+    top->Add(link, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12);
+  }
 
   auto* btns = new wxBoxSizer(wxHORIZONTAL);
-  auto* open = new wxButton(dlg, wxID_ANY, _("Open Link"));
   auto* close_btn = new wxButton(dlg, wxID_OK, _("Dismiss"));
   btns->AddStretchSpacer();
-  btns->Add(open, 0, wxRIGHT, 8);
+  if (!url.IsEmpty()) {
+    auto* open = new wxButton(dlg, wxID_ANY, _("Open Link"));
+    open->Bind(wxEVT_BUTTON,
+               [url](wxCommandEvent&) { wxLaunchDefaultBrowser(url); });
+    btns->Add(open, 0, wxRIGHT, 8);
+  }
   btns->Add(close_btn, 0);
   top->Add(btns, 0, wxEXPAND | wxALL, 12);
   dlg->SetSizerAndFit(top);
   dlg->SetEscapeId(wxID_OK);
 
-  open->Bind(wxEVT_BUTTON,
-            [url](wxCommandEvent&) { wxLaunchDefaultBrowser(url); });
   dlg->ShowModal();
   dlg->Destroy();
   m_no_radar_notice_open = false;
@@ -1720,7 +1735,7 @@ void mayara_pi::ShowPreferencesDialog(wxWindow* parent) { ShowSettings(parent); 
 
 void mayara_pi::ShowSettings(wxWindow* parent) {
   const int radar_count = m_client ? m_client->RadarCount() : 0;
-  const std::string connected_url = m_client ? m_client->ConnectedUrl() : "";
+  const std::string help_url = m_client ? m_client->HelpUrl() : "";
   // With N radars you can spread them across 1..N windows; the per-window count
   // is N / windows (rounded up). Cap the spinner sensibly when nothing is found.
   const int max_windows = radar_count > 0 ? radar_count : 4;
@@ -1778,6 +1793,14 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   }
   brow->Add(brand, 0, wxALIGN_CENTER_VERTICAL);
   lbox->Add(brow, 0);
+  // The server's own log. Everything it knows about why it will not start, or
+  // what it did and did not find on the network, is in there and nowhere else
+  // -- so say where it is (the path is worth reading even with no way to open
+  // it from here) and offer to open it.
+  auto* logpath = new wxStaticText(spage, wxID_ANY, wxEmptyString);
+  lbox->Add(logpath, 0, wxTOP, 8);
+  auto* logbtn = new wxButton(spage, wxID_ANY, _("Open server log"));
+  lbox->Add(logbtn, 0, wxTOP, 4);
   sbox->Add(lbox, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 24);
 
   sbox->Add(r_net, 0, wxALL, 8);
@@ -1811,10 +1834,12 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
                                        radar_count)
                     : wxString(_("No radars discovered yet."))),
             0, wxALL, 8);
-  // Only shown once we actually know which server answered -- not while
-  // still searching for one, and not for a stale/never-reached address.
-  if (!connected_url.empty()) {
-    const wxString url = wxString::FromUTF8(connected_url.c_str());
+  // Only shown once we know where mayara-server's own GUI is and that it
+  // answers -- not while still searching, not for a stale/never-reached
+  // address, and not for a Signal K server that merely hosts the radar API
+  // (its :3000 is not the page this link promises).
+  if (!help_url.empty()) {
+    const wxString url = wxString::FromUTF8(help_url.c_str());
     auto* server_link =
         new wxHyperlinkCtrl(dpage, wxID_ANY, _("Open mayara-server"), url);
     // The stock hyperlink blue is unreadable against OpenCPN's dark dialogs.
@@ -2201,6 +2226,21 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
     cb_wifi->Enable(local && installed);
     cb_telemetry->Enable(local && installed);
     brand->Enable(local && installed);
+    // Name the file whether or not it is there yet -- knowing where to look is
+    // half the point -- but only offer to open one that exists.
+    const wxString logfile = have_server ? m_server->LogPath() : wxString();
+    const bool have_log = !logfile.IsEmpty() && wxFileExists(logfile);
+    logpath->SetLabel(
+        !installed ? wxString()
+                   : wxString::Format(have_log
+                                          ? _("Server log: %s")
+                                          : _("Server log: %s (not written "
+                                              "yet)"),
+                                      logfile));
+    logpath->Wrap(330);
+    logpath->Enable(local);
+    logbtn->Show(installed);
+    logbtn->Enable(local && have_log);
     server->Enable(!local);
     shint->Enable(!local);
     dlg.Layout();
@@ -2213,6 +2253,17 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
     if (!m_server->DownloadAndInstall(&dlg, &error) && !error.IsEmpty())
       wxMessageBox(error, _("Mayara"), wxOK | wxICON_WARNING, &dlg);
     sync();
+  });
+  // Whatever this desktop opens a .log with -- Notepad, TextEdit, an editor
+  // the user has associated with it. Nothing to fall back to if there is no
+  // association, so say where the file is rather than fail silently.
+  logbtn->Bind(wxEVT_BUTTON, [this, &dlg](wxCommandEvent&) {
+    const wxString logfile = m_server ? m_server->LogPath() : wxString();
+    if (logfile.IsEmpty() || wxLaunchDefaultApplication(logfile)) return;
+    wxMessageBox(
+        wxString::Format(_("Cannot open the server log. It is here:\n\n%s"),
+                         logfile),
+        _("Mayara"), wxOK | wxICON_INFORMATION, &dlg);
   });
   sync();
 

@@ -75,6 +75,12 @@ class MayaraServer : public wxEvtHandler {
   wxString InstalledVersion() const { return m_installed_version; }
   wxString InstallDir() const;   // plugin library dir, or the private data dir
   wxString BinaryPath() const;
+  // Where the server we run ourselves writes everything it has to say. It logs
+  // to stdout, and a plugin's child has no console for that, so Start() hands
+  // it this file -- the only place that answers "did it start, and what did it
+  // find?". Settings shows the path and opens it. Truncated at every start,
+  // and only present once a server has run here.
+  wxString LogPath() const;
   // Downloads and unpacks Latest() (modal, with OpenCPN's progress dialog),
   // then starts it. Returns false and fills `error` if anything went wrong.
   bool DownloadAndInstall(wxWindow* parent, wxString* error);

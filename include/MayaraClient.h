@@ -75,7 +75,17 @@ class MayaraClient {
   // works where mDNS does not (routed networks, mDNS blocked by the AP).
   void SetHintUrl(std::string url);
   // The base URL currently streaming (empty until connected), for persisting.
+  // Only ever set once the radar API itself answered there: reaching a Signal K
+  // server proves nothing about whether mayara is installed in it.
   std::string ConnectedUrl();
+  // mayara-server's own web GUI for the server we are talking to, or "" when
+  // there is none to point at. Not the same thing as ConnectedUrl(): with
+  // mayara running as a Signal K plugin the radar API answers on the Signal K
+  // port, while the GUI -- which is where the brand-specific "why can't it find
+  // my radar" guidance lives -- is served by mayara-server itself on 6502. That
+  // port is asked before this promises a link, so we never offer one that
+  // cannot open.
+  std::string HelpUrl();
   bool Connected();  // at least one radar is streaming
 
   // A guard-zone alarm as the server reports it. The server does the
@@ -180,6 +190,8 @@ class MayaraClient {
     kConnected,  // at least one radar is streaming
   };
   Attempt DiscoverAndConnect();
+  // Work out HelpUrl() for `base`, probing :6502 when base is not already it.
+  void ResolveHelpUrl(const std::string& base);
   bool FetchCapabilities(Radar* radar);
   void FetchControlValues(Radar* radar);
   // Surface a JSON error. If the server's API version was seen and differs from
@@ -212,6 +224,7 @@ class MayaraClient {
   std::mutex m_alarm_mutex;
   std::vector<GuardAlarm> m_alarms;  // keyed by radar id + zone
   std::string m_connected_url;       // base URL that connected (guarded)
+  std::string m_help_url;            // mayara-server's GUI, if any (guarded)
   std::string m_remembered;          // last-known-good URL (set before Start)
 
   // Signal K device access. Strings guarded by m_status_mutex.
