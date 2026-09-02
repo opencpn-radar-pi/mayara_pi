@@ -513,16 +513,13 @@ void mayara_pi::LoadConfig() {
   bool docked = false;
   cfg->Read("Docked", &docked, false);
   m_docked = docked;
-  // wxFRAME_FLOAT_ON_PARENT is a global NSWindowLevel on macOS (see
-  // m_ppi_stay_on_top), so it floats over unrelated apps too, not just
-  // OpenCPN -- off there by default. Windows and Linux tie it to the actual
-  // parent window as the style name promises, so on by default there.
-#ifdef __WXOSX__
-  const bool default_stay_on_top = false;
-#else
-  const bool default_stay_on_top = true;
-#endif
-  cfg->Read("PpiStayOnTop", &m_ppi_stay_on_top, default_stay_on_top);
+  // wxFRAME_FLOAT_ON_PARENT is technically a global NSWindowLevel on macOS
+  // too (see m_ppi_stay_on_top), not truly parent-scoped -- but live testing
+  // against a plain wxFrame (this window is one; radar_pi's own "broken on
+  // Mac" experience with this style was all wxDialogs, which wxWidgets'
+  // Cocoa backend gives separate, dialog-specific level handling) found no
+  // trouble, so on by default everywhere.
+  cfg->Read("PpiStayOnTop", &m_ppi_stay_on_top, true);
   wxString url;
   cfg->Read("ServerUrl", &url);
   m_saved_server_url = std::string(url.mb_str());
@@ -1366,16 +1363,6 @@ void mayara_pi::ShowRadarMenu(int canvas) {
                       if (m_parent_window)
                         m_parent_window->CallAfter([this]() { RebuildWindows(); });
                     });
-  p->SetStayOnTopControl(
-      [this]() { return m_ppi_stay_on_top; }, [this](bool on) {
-        if (on == m_ppi_stay_on_top) return;
-        m_ppi_stay_on_top = on;
-        SaveConfig();
-        // A frame's style bits are fixed at creation, so this needs the
-        // same rebuild Docked does.
-        if (m_parent_window)
-          m_parent_window->CallAfter([this]() { RebuildWindows(); });
-      });
   p->SetPrefsControl([this]() { return m_prefs; },
                      [this](const PpiPrefs& q) {
                        m_prefs = q;
@@ -1904,6 +1891,17 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   whint->Wrap(330);
   dbox->Add(whint, 0, wxALL, 8);
 
+  auto* cb_top =
+      new wxCheckBox(dpage, wxID_ANY, _("Keep radar windows on top of the chart"));
+  cb_top->SetValue(m_ppi_stay_on_top);
+  dbox->Add(cb_top, 0, wxLEFT | wxRIGHT | wxTOP, 8);
+  auto* thint = new wxStaticText(
+      dpage, wxID_ANY,
+      _("Floating windows only -- a docked one already sits inside OpenCPN's "
+        "own window, on top of nothing else."));
+  thint->Wrap(330);
+  dbox->Add(thint, 0, wxALL, 8);
+
   dbox->Add(new wxStaticLine(dpage), 0, wxEXPAND | wxALL, 8);
   dbox->Add(new wxStaticText(dpage, wxID_ANY, _("Guard-zone alarm")), 0,
            wxLEFT | wxRIGHT, 8);
@@ -2405,6 +2403,15 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
     if (!m_windows.empty() || m_windows_visible) RebuildWindows();
   }
 
+  if (cb_top->GetValue() != m_ppi_stay_on_top) {
+    m_ppi_stay_on_top = cb_top->GetValue();
+    SaveConfig();
+    // A frame's style bits are fixed at creation, so this needs a rebuild
+    // like windows_count above -- not CallAfter, already outside the
+    // control's own event handler here.
+    if (!m_windows.empty() || m_windows_visible) RebuildWindows();
+  }
+
   if (have_server) {
     MayaraServer::LocalOptions o;
     o.allow_wifi = cb_wifi->GetValue();
@@ -2742,14 +2749,6 @@ void mayara_pi::RebuildWindows() {
                             m_parent_window->CallAfter(
                                 [this]() { RebuildWindows(); });
                         });
-    win->SetStayOnTopControl(
-        [this]() { return m_ppi_stay_on_top; }, [this](bool on) {
-          if (on == m_ppi_stay_on_top) return;
-          m_ppi_stay_on_top = on;
-          SaveConfig();
-          if (m_parent_window)
-            m_parent_window->CallAfter([this]() { RebuildWindows(); });
-        });
     win->SetNavProvider([this]() { return m_nav; });
     win->SetAlarmSoundControl(
         [this]() { return m_guard_alarm_sound; },

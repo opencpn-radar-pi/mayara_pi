@@ -237,12 +237,6 @@ void MayaraPpiWindow::SetDockControl(std::function<bool()> get,
   if (m_controls) m_controls->SetDockControl(std::move(get), std::move(set));
 }
 
-void MayaraPpiWindow::SetStayOnTopControl(std::function<bool()> get,
-                                          std::function<void(bool)> set) {
-  if (m_controls)
-    m_controls->SetStayOnTopControl(std::move(get), std::move(set));
-}
-
 void MayaraPpiWindow::SetPerfLog(std::function<void(const wxString&)> cb) {
   for (RadarDisplayPanel* p : m_radars) p->SetPerfLog(cb);
 }

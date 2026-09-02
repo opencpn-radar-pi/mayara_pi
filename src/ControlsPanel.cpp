@@ -577,7 +577,7 @@ void ControlsPanel::FillViewSection(wxSizer* content) {
   // Where the radar picture appears. Independent toggles rather than one
   // exclusive choice: overlay and PPI can both be up, and "docked" is a
   // property of the PPI window rather than a third place to put the picture.
-  if (m_set_overlay || m_set_ppi || m_set_dock || m_set_top) {
+  if (m_set_overlay || m_set_ppi || m_set_dock) {
     content->Add(new wxStaticText(this, wxID_ANY, _("Views")), 0,
                  wxLEFT | wxTOP, 4);
     auto* row = new wxBoxSizer(wxHORIZONTAL);
@@ -592,12 +592,8 @@ void ControlsPanel::FillViewSection(wxSizer* content) {
                                           : nullptr;
     ThemedButton* ppi = m_set_ppi ? add(_("PPI"), m_set_ppi) : nullptr;
     ThemedButton* dock = m_set_dock ? add(_("Docked"), m_set_dock) : nullptr;
-    // Meaningless once docked -- a docked pane already sits inside OpenCPN's
-    // own window, on top of nothing else. Left visible but disabled rather
-    // than popping in and out of the row when Docked is toggled.
-    ThemedButton* top = m_set_top ? add(_("On top"), m_set_top) : nullptr;
     content->Add(row, 0, wxEXPAND | wxLEFT | wxRIGHT, 2);
-    m_updaters.push_back([this, overlay, ppi, dock, top]() {
+    m_updaters.push_back([this, overlay, ppi, dock]() {
       if (overlay && m_get_overlay) overlay->SetValue(m_get_overlay());
       if (ppi) {
         if (m_get_ppi) ppi->SetValue(m_get_ppi());
@@ -605,10 +601,6 @@ void ControlsPanel::FillViewSection(wxSizer* content) {
         ppi->Enable(m_get_overlay && m_get_overlay());
       }
       if (dock && m_get_dock) dock->SetValue(m_get_dock());
-      if (top && m_get_top) {
-        top->SetValue(m_get_top());
-        top->Enable(!(m_get_dock && m_get_dock()));
-      }
     });
   }
   // Orientation and threshold are per radar, so they name the radar they act
@@ -767,13 +759,6 @@ void ControlsPanel::SetDockControl(std::function<bool()> get,
                                    std::function<void(bool)> set) {
   m_get_dock = std::move(get);
   m_set_dock = std::move(set);
-  if (m_built) Rebuild();
-}
-
-void ControlsPanel::SetStayOnTopControl(std::function<bool()> get,
-                                        std::function<void(bool)> set) {
-  m_get_top = std::move(get);
-  m_set_top = std::move(set);
   if (m_built) Rebuild();
 }
 
