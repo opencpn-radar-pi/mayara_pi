@@ -513,6 +513,13 @@ void mayara_pi::LoadConfig() {
   bool docked = false;
   cfg->Read("Docked", &docked, false);
   m_docked = docked;
+  // wxFRAME_FLOAT_ON_PARENT is technically a global NSWindowLevel on macOS
+  // too (see m_ppi_stay_on_top), not truly parent-scoped -- but live testing
+  // against a plain wxFrame (this window is one; radar_pi's own "broken on
+  // Mac" experience with this style was all wxDialogs, which wxWidgets'
+  // Cocoa backend gives separate, dialog-specific level handling) found no
+  // trouble, so on by default everywhere.
+  cfg->Read("PpiStayOnTop", &m_ppi_stay_on_top, true);
   wxString url;
   cfg->Read("ServerUrl", &url);
   m_saved_server_url = std::string(url.mb_str());
@@ -715,6 +722,7 @@ void mayara_pi::SaveConfig() {
     rauto += wxString::Format("%s=%d;", kv.first.c_str(), kv.second ? 1 : 0);
   cfg->Write("RangeAuto", rauto);
   cfg->Write("Docked", m_docked);
+  cfg->Write("PpiStayOnTop", m_ppi_stay_on_top);
   cfg->Write("ServerUrl", wxString::FromUTF8(m_saved_server_url.c_str()));
   cfg->Write("ExplicitServerUrl",
              wxString::FromUTF8(m_explicit_server_url.c_str()));
@@ -1956,6 +1964,17 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   whint->Wrap(330);
   dbox->Add(whint, 0, wxALL, 8);
 
+  auto* cb_top =
+      new wxCheckBox(dpage, wxID_ANY, _("Keep radar windows on top of the chart"));
+  cb_top->SetValue(m_ppi_stay_on_top);
+  dbox->Add(cb_top, 0, wxLEFT | wxRIGHT | wxTOP, 8);
+  auto* thint = new wxStaticText(
+      dpage, wxID_ANY,
+      _("Floating windows only -- a docked one already sits inside OpenCPN's "
+        "own window, on top of nothing else."));
+  thint->Wrap(330);
+  dbox->Add(thint, 0, wxALL, 8);
+
   dbox->Add(new wxStaticLine(dpage), 0, wxEXPAND | wxALL, 8);
   dbox->Add(new wxStaticText(dpage, wxID_ANY, _("Guard-zone alarm")), 0,
            wxLEFT | wxRIGHT, 8);
@@ -2458,6 +2477,15 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
     if (!m_windows.empty() || m_windows_visible) RebuildWindows();
   }
 
+  if (cb_top->GetValue() != m_ppi_stay_on_top) {
+    m_ppi_stay_on_top = cb_top->GetValue();
+    SaveConfig();
+    // A frame's style bits are fixed at creation, so this needs a rebuild
+    // like windows_count above -- not CallAfter, already outside the
+    // control's own event handler here.
+    if (!m_windows.empty() || m_windows_visible) RebuildWindows();
+  }
+
   if (have_server) {
     MayaraServer::LocalOptions o;
     o.allow_wifi = cb_wifi->GetValue();
@@ -2728,6 +2756,14 @@ void mayara_pi::ApplyThemeToWindows() {
 // (Re)create the radar windows from the current radar count and window count,
 // preserving the user's show/hide intent.
 void mayara_pi::RebuildWindows() {
+  // Snapshot and persist current geometry before tearing down: the new
+  // windows restore position from disk (RestoreWindowGeometry), which
+  // otherwise only gets written at unload, so a move made earlier this
+  // session -- not just in the last heartbeat tick -- would be lost.
+  if (AnyWindowShown() && !m_ocpn_fullscreen) {
+    CaptureWindowState();
+    SaveWindowState();
+  }
   DestroyWindows(/*sync=*/false);
   m_windows_radar_count = m_client ? m_client->RadarCount() : 0;
   std::vector<std::vector<int>> groups = RadarGroups();
@@ -2764,8 +2800,15 @@ void mayara_pi::RebuildWindows() {
       m_aui->AddPane(win, pane);
       ++pane_no;
     } else {
+      // wxFRAME_FLOAT_ON_PARENT, not wxSTAY_ON_TOP: the latter floats above
+      // every application on macOS, not just OpenCPN, which is why this was
+      // off by default for a long time (see m_ppi_stay_on_top). This style
+      // ties it to the specific parent it was created with; a frame's style
+      // cannot be changed later, so toggling it rebuilds the window.
+      const long style = wxDEFAULT_FRAME_STYLE |
+                        (m_ppi_stay_on_top ? wxFRAME_FLOAT_ON_PARENT : 0);
       auto* frame = new wxFrame(m_parent_window, wxID_ANY, wxEmptyString,
-                                wxDefaultPosition, wxSize(880, 560));
+                                wxDefaultPosition, wxSize(880, 560), style);
       win = new MayaraPpiWindow(frame, m_client.get(), grp);
       frame->SetTitle(win->Title());
       frame->SetMinSize(wxSize(480, 320));
