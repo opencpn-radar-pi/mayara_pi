@@ -168,6 +168,10 @@ class mayara_pi : public opencpn_plugin_121 {
   static const int kChartMenuMargin = 10;
   ControlsPanel* m_chart_menu = nullptr;  // controls over the chart, not owned
   int m_chart_menu_canvas = -1;
+  // Once the user drags or resizes the chart menu, FitChartMenu() stops
+  // fighting them over that axis until it is next reopened.
+  bool m_chart_menu_user_moved = false;
+  bool m_chart_menu_user_sized = false;
   ZoneEdit m_chart_zone;  // the chart menu's own live guard-zone edit
   int OverlaySel(int canvas) const;
   bool OverlayOn(int canvas) const { return OverlaySel(canvas) != kOverlayNone; }
