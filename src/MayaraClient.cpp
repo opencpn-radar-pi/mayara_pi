@@ -184,6 +184,7 @@ void MayaraClient::Rescan() {
     m_connected_url.clear();
     m_help_url.clear();
     m_server_api_version.clear();
+    m_server_version.clear();
   }
   SetStatus("reconnecting...");
   Start();
@@ -264,6 +265,11 @@ bool MayaraClient::ApiVersionMismatch() {
   std::lock_guard<std::mutex> lock(m_status_mutex);
   return !m_server_api_version.empty() &&
          m_server_api_version != kRadarApiVersion;
+}
+
+std::string MayaraClient::ServerVersion() {
+  std::lock_guard<std::mutex> lock(m_status_mutex);
+  return m_server_version;
 }
 
 void MayaraClient::JsonError(const std::string& context, const char* what) {
@@ -444,6 +450,30 @@ void MayaraClient::ResolveHelpUrl(const std::string& base) {
   }
   std::lock_guard<std::mutex> lock(m_status_mutex);
   m_help_url = help;
+}
+
+// GET /signalk is every Signal K server's standard self-description --
+// {"server":{"id":...,"version":...}} -- and mayara-server answers it too,
+// with its own software release rather than the Radar API spec version
+// GET /radars carries. Worth knowing distinctly: the two are versioned on
+// separate schedules.
+void MayaraClient::ResolveServerVersion(const std::string& base) {
+  ix::HttpClient http(/*async=*/false);
+  auto args = http.createRequest();
+  args->connectTimeout = 2;
+  args->transferTimeout = 2;
+  auto resp = http.get(base + "/signalk", args);
+  std::string version;
+  if (resp && resp->statusCode == 200) {
+    try {
+      auto j = json::parse(resp->body);
+      if (j.is_object() && j.contains("server") && j["server"].is_object())
+        version = j["server"].value("version", std::string());
+    } catch (const std::exception&) {
+    }
+  }
+  std::lock_guard<std::mutex> lock(m_status_mutex);
+  m_server_version = version;
 }
 
 // --- Signal K device access ------------------------------------------------
@@ -714,7 +744,10 @@ void MayaraClient::Run() {
       Attempt r = DiscoverAndConnect();
       // Whatever the radar API said, it is this server's GUI we would point a
       // user at, so work out now (off the UI thread) whether there is one.
-      if (r != Attempt::kFailed) ResolveHelpUrl(m_base_url);
+      if (r != Attempt::kFailed) {
+        ResolveHelpUrl(m_base_url);
+        ResolveServerVersion(m_base_url);
+      }
       // A server whose radar API answers but lists nothing is still the right
       // server -- it just has nothing to show yet, which is what a local server
       // with no radar attached looks like. Stay on it and re-poll instead of

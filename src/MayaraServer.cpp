@@ -183,6 +183,11 @@ void MayaraServer::LoadConfig() {
   cfg->Read("LocalServerVersion", &m_installed_version);
   cfg->Read("LocalServerAllowWifi", &m_opts.allow_wifi, false);
   cfg->Read("LocalServerTelemetry", &m_opts.telemetry, true);
+  long verbosity = 0;
+  cfg->Read("LocalServerLogVerbosity", &verbosity, 0);
+  m_opts.log_verbosity = static_cast<int>(verbosity < 0   ? 0
+                                          : verbosity > 2 ? 2
+                                                          : verbosity);
   wxString brand;
   cfg->Read("LocalServerBrand", &brand);
   m_opts.brand = std::string(brand.mb_str());
@@ -201,6 +206,7 @@ void MayaraServer::SaveConfig() {
   cfg->Write("LocalServerVersion", m_installed_version);
   cfg->Write("LocalServerAllowWifi", m_opts.allow_wifi);
   cfg->Write("LocalServerTelemetry", m_opts.telemetry);
+  cfg->Write("LocalServerLogVerbosity", static_cast<long>(m_opts.log_verbosity));
   cfg->Write("LocalServerBrand",
              wxString::FromUTF8(m_opts.brand.c_str()));
   cfg->Write("LocalServerLastCheck", static_cast<long>(m_last_check));
@@ -435,6 +441,11 @@ bool MayaraServer::Start() {
   } else if (!m_opts.brand.empty()) {
     args += " --brand " + wxString::FromUTF8(m_opts.brand.c_str());
   }
+  // clap_verbosity_flag's usual -v/-vv, one level per notch above the
+  // server's own default (info). Only useful next to LogPath(), which is
+  // where this goes.
+  if (m_opts.log_verbosity > 0)
+    args += " -" + wxString('v', std::min(m_opts.log_verbosity, 2));
   const wxString cmd = "\"" + BinaryPath() + "\"" + args;
   // MAYARA_DEPLOYMENT tells mayara-server's telemetry how it reached the
   // boat, so "nobody runs Garmin radars" can be told apart from "nobody runs

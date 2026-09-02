@@ -101,6 +101,9 @@ class MayaraServer : public wxEvtHandler {
     // this plugin's checkbox is the only place a user sees that question when
     // running mayara-server through it. Default on.
     bool telemetry = true;
+    // 0 = server default, 1 = -v, 2 = -vv. Only useful next to LogPath():
+    // more detail is only worth having when there is somewhere to read it.
+    int log_verbosity = 0;
   };
   // What can be asked for, in menu order. "playback" is absent: it needs a
   // recording to play, which there is nowhere to choose here.
