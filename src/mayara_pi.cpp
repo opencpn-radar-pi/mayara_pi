@@ -1884,26 +1884,6 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   dbox->Add(whint, 0, wxALL, 8);
 
   dbox->Add(new wxStaticLine(dpage), 0, wxEXPAND | wxALL, 8);
-  dbox->Add(new wxStaticText(dpage, wxID_ANY, _("Feed OpenCPN")), 0,
-            wxLEFT | wxRIGHT, 8);
-  auto* cb_head = new wxCheckBox(dpage, wxID_ANY,
-                                 _("Radar heading as NMEA HDT"));
-  auto* cb_targ = new wxCheckBox(dpage, wxID_ANY,
-                                 _("Radar targets as NMEA TTM"));
-  cb_head->SetValue(m_feed_heading);
-  cb_targ->SetValue(m_feed_targets);
-  dbox->Add(cb_head, 0, wxLEFT | wxRIGHT | wxTOP, 8);
-  dbox->Add(cb_targ, 0, wxLEFT | wxRIGHT | wxTOP, 8);
-  auto* fhint = new wxStaticText(
-      dpage, wxID_ANY,
-      _("Sent into OpenCPN's own data stream once a second, so the radar can "
-        "drive the chart's heading and its targets appear in OpenCPN's target "
-        "list alongside AIS. Leave both off if another source already "
-        "provides them."));
-  fhint->Wrap(330);
-  dbox->Add(fhint, 0, wxALL, 8);
-
-  dbox->Add(new wxStaticLine(dpage), 0, wxEXPAND | wxALL, 8);
   dbox->Add(new wxStaticText(dpage, wxID_ANY, _("Guard-zone alarm")), 0,
            wxLEFT | wxRIGHT, 8);
   auto* cb_alarm_sound =
@@ -1919,6 +1899,28 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
 
   dpage->SetSizer(dbox);
   book->AddPage(dpage, _("Display"));
+
+  // --- Feed OpenCPN page -----------------------------------------------------
+  auto* fdpage = new wxPanel(book);
+  auto* fdbox = new wxBoxSizer(wxVERTICAL);
+  auto* cb_head =
+      new wxCheckBox(fdpage, wxID_ANY, _("Radar heading as NMEA HDT"));
+  auto* cb_targ =
+      new wxCheckBox(fdpage, wxID_ANY, _("Radar targets as NMEA TTM"));
+  cb_head->SetValue(m_feed_heading);
+  cb_targ->SetValue(m_feed_targets);
+  fdbox->Add(cb_head, 0, wxLEFT | wxRIGHT | wxTOP, 8);
+  fdbox->Add(cb_targ, 0, wxLEFT | wxRIGHT | wxTOP, 8);
+  auto* fdhint = new wxStaticText(
+      fdpage, wxID_ANY,
+      _("Sent into OpenCPN's own data stream once a second, so the radar can "
+        "drive the chart's heading and its targets appear in OpenCPN's target "
+        "list alongside AIS. Leave both off if another source already "
+        "provides them."));
+  fdhint->Wrap(330);
+  fdbox->Add(fdhint, 0, wxALL, 8);
+  fdpage->SetSizer(fdbox);
+  book->AddPage(fdpage, _("Feed OpenCPN"));
 
   // --- Colours page --------------------------------------------------------
   // A palette is eight colours over the server's legend, so the page is a
@@ -2112,20 +2114,14 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   hsrc.Add(_("Automatic: OpenCPN, else the radar"));
   hsrc.Add(_("OpenCPN only"));
   hsrc.Add(_("Radar only"));
-  hsrc.Add(_("Fixed heading"));
   auto* hchoice = new wxChoice(gpage, wxID_ANY, wxDefaultPosition,
                                wxDefaultSize, hsrc);
-  hchoice->SetSelection(m_diag.heading_source);
+  const bool fixed_on = m_diag.heading_source == Diagnostics::kFixedHeading;
+  // The dropdown no longer offers "Fixed" as one of its own choices (that is
+  // the box below now); Automatic is just a sane, harmless thing to show
+  // while fixed mode has it disabled.
+  hchoice->SetSelection(fixed_on ? Diagnostics::kAuto : m_diag.heading_source);
   gbox->Add(hchoice, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
-
-  auto* frow = new wxBoxSizer(wxHORIZONTAL);
-  frow->Add(new wxStaticText(gpage, wxID_ANY, _("Fixed heading (deg T):")), 0,
-            wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
-  auto* fhead = new wxTextCtrl(gpage, wxID_ANY,
-                               wxString::Format("%.1f", m_diag.fixed_heading),
-                               wxDefaultPosition, wxSize(80, -1));
-  frow->Add(fhead, 0, wxALIGN_CENTER_VERTICAL);
-  gbox->Add(frow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
 
   auto* cb_cog = new wxCheckBox(
       gpage, wxID_ANY, _("Use COG as heading when nothing reports one"));
@@ -2141,24 +2137,67 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   trow->Add(tspin, 0, wxALIGN_CENTER_VERTICAL);
   gbox->Add(trow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
 
-  auto* cb_fpos = new wxCheckBox(gpage, wxID_ANY, _("Fixed own-ship position"));
-  cb_fpos->SetValue(m_diag.fixed_position);
-  gbox->Add(cb_fpos, 0, wxLEFT | wxRIGHT, 8);
+  // Fixed heading and fixed position are one switch, not two: standing in
+  // for instruments a bench has neither of, one without the other makes no
+  // sense, so a single checkbox drives both -- bordered, and below
+  // everything about how heading is normally resolved, since none of that
+  // applies once this is on.
+  auto* fbox = new wxStaticBoxSizer(wxVERTICAL, gpage);
+  wxWindow* fboxw = fbox->GetStaticBox();
+  auto* cb_fixed =
+      new wxCheckBox(fboxw, wxID_ANY, _("Fixed position and heading"));
+  cb_fixed->SetValue(fixed_on);
+  fbox->Add(cb_fixed, 0, wxALL, 8);
+
+  auto* frow = new wxBoxSizer(wxHORIZONTAL);
+  frow->Add(new wxStaticText(fboxw, wxID_ANY, _("Heading (deg T):")), 0,
+            wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+  auto* fhead = new wxTextCtrl(fboxw, wxID_ANY,
+                               wxString::Format("%.1f", m_diag.fixed_heading),
+                               wxDefaultPosition, wxSize(80, -1));
+  frow->Add(fhead, 0, wxALIGN_CENTER_VERTICAL);
+  fbox->Add(frow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
+
   auto* prow2 = new wxBoxSizer(wxHORIZONTAL);
-  prow2->Add(new wxStaticText(gpage, wxID_ANY, _("Lat:")), 0,
+  prow2->Add(new wxStaticText(fboxw, wxID_ANY, _("Lat:")), 0,
              wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-  auto* flat = new wxTextCtrl(gpage, wxID_ANY,
+  auto* flat = new wxTextCtrl(fboxw, wxID_ANY,
                               wxString::Format("%.6f", m_diag.fixed_lat),
                               wxDefaultPosition, wxSize(110, -1));
   prow2->Add(flat, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12);
-  prow2->Add(new wxStaticText(gpage, wxID_ANY, _("Lon:")), 0,
+  prow2->Add(new wxStaticText(fboxw, wxID_ANY, _("Lon:")), 0,
              wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-  auto* flon = new wxTextCtrl(gpage, wxID_ANY,
+  auto* flon = new wxTextCtrl(fboxw, wxID_ANY,
                               wxString::Format("%.6f", m_diag.fixed_lon),
                               wxDefaultPosition, wxSize(110, -1));
   prow2->Add(flon, 0, wxALIGN_CENTER_VERTICAL);
-  gbox->Add(prow2, 0, wxALL, 8);
+  fbox->Add(prow2, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
 
+  auto* bench_hint = new wxStaticText(
+      fboxw, wxID_ANY,
+      _("A fixed heading and position allows use in situations where the "
+        "radar is shore based. Do not use on board."));
+  bench_hint->Wrap(300);
+  fbox->Add(bench_hint, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
+  gbox->Add(fbox, 0, wxEXPAND | wxALL, 8);
+
+  // The three fields only mean anything while the box is checked; the
+  // controls above only mean anything while it is not.
+  auto sync_fixed = [hchoice, cb_cog, tspin, fhead, flat, flon](bool on) {
+    hchoice->Enable(!on);
+    cb_cog->Enable(!on);
+    tspin->Enable(!on);
+    fhead->Enable(on);
+    flat->Enable(on);
+    flon->Enable(on);
+  };
+  sync_fixed(fixed_on);
+  cb_fixed->Bind(wxEVT_CHECKBOX, [cb_fixed, sync_fixed](wxCommandEvent&) {
+    sync_fixed(cb_fixed->GetValue());
+  });
+
+  // Deliberately its own row, not folded into the box above: this is about
+  // OpenCPN's log, unrelated to whether heading and position are fixed.
   auto* lrow = new wxBoxSizer(wxHORIZONTAL);
   lrow->Add(new wxStaticText(gpage, wxID_ANY, _("Log to the OpenCPN log:")), 0,
             wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
@@ -2172,13 +2211,6 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   lrow->Add(lchoice, 0, wxALIGN_CENTER_VERTICAL);
   gbox->Add(lrow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
 
-  auto* ghint = new wxStaticText(
-      gpage, wxID_ANY,
-      _("A fixed heading or position lets the radar be used on a bench with "
-        "no compass and no GPS. On a boat, leave them off: they do not follow "
-        "you, and the picture will be confidently wrong."));
-  ghint->Wrap(330);
-  gbox->Add(ghint, 0, wxALL, 8);
   gpage->SetSizer(gbox);
   book->AddPage(gpage, _("Diagnostics"));
 
@@ -2292,7 +2324,17 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
 
   {
     Diagnostics d = m_diag;
-    d.heading_source = hchoice->GetSelection();
+    // Fixed heading and fixed position are one switch: kFixedHeading and
+    // fixed_position always agree, so nothing downstream has to consider
+    // the (heading fixed, position live) combination that never appears
+    // in the UI.
+    if (cb_fixed->GetValue()) {
+      d.heading_source = Diagnostics::kFixedHeading;
+      d.fixed_position = true;
+    } else {
+      d.heading_source = hchoice->GetSelection();
+      d.fixed_position = false;
+    }
     // A locale that writes 1,5 must still be able to type it: wx parses with
     // the locale, and this is a user typing, not a wire format.
     double v = 0.0;
@@ -2301,7 +2343,6 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
     if (flon->GetValue().ToDouble(&v)) d.fixed_lon = v;
     d.cog_as_heading = cb_cog->GetValue();
     d.heading_timeout_s = tspin->GetValue();
-    d.fixed_position = cb_fpos->GetValue();
     d.log_level = lchoice->GetSelection();
     const bool louder = d.log_level > m_diag.log_level;
     m_diag = d;
