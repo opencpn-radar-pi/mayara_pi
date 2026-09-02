@@ -18,6 +18,7 @@ struct MayaraTheme {
   wxColour accent{120, 255, 120};       // active / transmit
   wxColour accent_dim{235, 200, 110};   // standby / inactive
   float radar_intensity = 1.0f;         // echo brightness scale (dim at night)
+  int menu_font_pt = 0;  // control panel text size; 0 = system default
 };
 
 #endif  // MAYARA_THEME_H_
