@@ -60,6 +60,31 @@ std::string BodyAuto(bool a) {
   return std::string("{\"auto\":") + (a ? "true" : "false") + "}";
 }
 
+// A lifetime counter like transmit or operating time is meaningless read as
+// a bare seconds count (millions of them, for a radar that has run a while).
+// Break into hours/minutes/seconds, then show from the coarsest nonzero unit
+// through the finest nonzero one -- 3020h 10m, not "3020.17h" or
+// "10872600 s" -- no further than hours (no days, no years). A zero unit
+// strictly between the two still shows (1h 0m 1s, not 1h 1s, which reads as
+// 1 hour 1 minute at a glance).
+wxString FormatDuration(long total_seconds) {
+  if (total_seconds <= 0) return "0s";
+  const long h = total_seconds / 3600;
+  const long m = (total_seconds % 3600) / 60;
+  const long s = total_seconds % 60;
+
+  if (s != 0) {
+    if (h != 0) return wxString::Format("%ldh %ldm %lds", h, m, s);
+    if (m != 0) return wxString::Format("%ldm %lds", m, s);
+    return wxString::Format("%lds", s);
+  }
+  if (m != 0) {
+    if (h != 0) return wxString::Format("%ldh %ldm", h, m);
+    return wxString::Format("%ldm", m);
+  }
+  return wxString::Format("%ldh", h);
+}
+
 // Human-friendly value string. SI on the wire; convert a couple of common units
 // for display.
 wxString FormatVal(double value, const std::string& units) {
@@ -70,7 +95,7 @@ wxString FormatVal(double value, const std::string& units) {
       return wxString::Format("%.2f NM", value / 1852.0);
     return wxString::Format(L"%.0f m", value);
   }
-  if (units == "s") return wxString::Format(L"%.0f s", value);
+  if (units == "s") return FormatDuration(std::lround(value));
   return wxString::FromUTF8(Num(value).c_str());
 }
 
@@ -1163,13 +1188,20 @@ void ControlsPanel::AddReadonly(wxSizer* outer, const ControlDef& def) {
   outer->Add(row, 0, wxEXPAND | wxALL, 4);
 
   const std::string id = def.id;
+  // The server does not tag these as seconds on the wire (no "units" of
+  // their own), but they are exactly the lifetime lengths FormatDuration is
+  // for -- OperatingTime/TransmitTime run into the millions of seconds, and
+  // a bare "10872600" says nothing a human can use. Matched by name rather
+  // than a units string that is not there to match on.
+  const bool is_duration = id.size() > 4 && id.compare(id.size() - 4, 4, "Time") == 0;
   const std::string units = def.units;
-  m_updaters.push_back([this, id, val, units]() {
+  m_updaters.push_back([this, id, val, units, is_duration]() {
     ControlValue v = controls()->Value(id);
     if (!v.str_value.empty())
       val->SetLabel(wxString::FromUTF8(v.str_value.c_str()));
     else if (v.has_value)
-      val->SetLabel(FormatVal(v.value, units));
+      val->SetLabel(is_duration ? FormatDuration(std::lround(v.value))
+                                : FormatVal(v.value, units));
   });
 }
 
