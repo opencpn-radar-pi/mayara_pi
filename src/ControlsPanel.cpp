@@ -256,6 +256,16 @@ wxRect ControlsPanel::ThumbRect() const {
   return wxRect(cs.x - kScrollBarW + 1, ty, kScrollBarW - 2, th);
 }
 
+// Free-float resize grip, bottom-right corner. Empty (nothing to grab, nothing
+// to draw) unless the host wired SetFreeFloatHandlers.
+wxRect ControlsPanel::GripRect() const {
+  if (!m_on_resize) return wxRect();
+  const wxSize cs = GetClientSize();
+  const int g = FromDIP(14);
+  if (cs.x < g || cs.y < g) return wxRect();
+  return wxRect(cs.x - g, cs.y - g, g, g);
+}
+
 void ControlsPanel::OnPaint(wxPaintEvent&) {
   wxPaintDC dc(this);
   const wxSize cs = GetClientSize();
@@ -264,17 +274,86 @@ void ControlsPanel::OnPaint(wxPaintEvent&) {
   dc.DrawRectangle(0, 0, cs.x, cs.y);
 
   const wxRect thumb = ThumbRect();
-  if (thumb.IsEmpty()) return;
-  dc.SetBrush(wxBrush(m_theme.lozenge_bg));
-  dc.DrawRoundedRectangle(cs.x - kScrollBarW + 1, 0, kScrollBarW - 2, cs.y,
-                          (kScrollBarW - 2) / 2.0);
-  dc.SetBrush(wxBrush(m_dragging_bar ? m_theme.text : m_theme.lozenge_border));
-  dc.DrawRoundedRectangle(thumb, (kScrollBarW - 2) / 2.0);
+  if (!thumb.IsEmpty()) {
+    dc.SetBrush(wxBrush(m_theme.lozenge_bg));
+    dc.DrawRoundedRectangle(cs.x - kScrollBarW + 1, 0, kScrollBarW - 2, cs.y,
+                            (kScrollBarW - 2) / 2.0);
+    dc.SetBrush(wxBrush(m_dragging_bar ? m_theme.text : m_theme.lozenge_border));
+    dc.DrawRoundedRectangle(thumb, (kScrollBarW - 2) / 2.0);
+  }
+
+  const wxRect grip = GripRect();
+  if (!grip.IsEmpty()) {
+    // Three short diagonal strokes in the corner -- the usual resize-grip
+    // glyph -- so the panel doesn't just look small, it looks stretchable.
+    dc.SetPen(wxPen(m_resizing ? m_theme.text : m_theme.lozenge_border, 1));
+    for (int i = 1; i <= 3; ++i) {
+      const int off = i * grip.width / 4;
+      dc.DrawLine(grip.GetRight(), grip.GetBottom() - off,
+                  grip.GetRight() - off, grip.GetBottom());
+    }
+  }
 }
 
-// Click or drag anywhere down the gutter. Nothing else lives there, so the
-// panel itself sees these events.
+// Drag on the "Controls" title label: reported as screen-space deltas to
+// whatever the host wired via SetFreeFloatHandlers, which owns clamping the
+// panel into its parent. A no-op (event.Skip()) when nothing is wired.
+void ControlsPanel::OnTitleMouse(wxMouseEvent& event) {
+  wxWindow* src = static_cast<wxWindow*>(event.GetEventObject());
+  if (event.LeftDown() && m_on_drag) {
+    m_dragging_title = true;
+    m_drag_last = src->ClientToScreen(event.GetPosition());
+    src->CaptureMouse();
+    return;
+  }
+  if (!m_dragging_title) {
+    event.Skip();
+    return;
+  }
+  if (event.LeftUp()) {
+    m_dragging_title = false;
+    if (src->HasCapture()) src->ReleaseMouse();
+    return;
+  }
+  if (event.Dragging()) {
+    const wxPoint now = src->ClientToScreen(event.GetPosition());
+    const int dx = now.x - m_drag_last.x, dy = now.y - m_drag_last.y;
+    if ((dx || dy) && m_on_drag) m_on_drag(dx, dy);
+    m_drag_last = now;
+  }
+}
+
+// Click or drag anywhere down the gutter, or on the free-float resize grip.
+// Nothing else lives there, so the panel itself sees these events.
 void ControlsPanel::OnBarMouse(wxMouseEvent& event) {
+  if (m_resizing) {
+    if (event.LeftUp()) {
+      m_resizing = false;
+      if (HasCapture()) ReleaseMouse();
+      Refresh(false);
+      return;
+    }
+    if (event.Dragging()) {
+      const wxPoint now = ClientToScreen(event.GetPosition());
+      const int dx = now.x - m_drag_last.x, dy = now.y - m_drag_last.y;
+      if ((dx || dy) && m_on_resize) m_on_resize(dx, dy);
+      m_drag_last = now;
+    }
+    return;
+  }
+  const wxRect grip = GripRect();
+  if (event.LeftDown() && !grip.IsEmpty() && grip.Contains(event.GetPosition())) {
+    m_resizing = true;
+    m_drag_last = ClientToScreen(event.GetPosition());
+    CaptureMouse();
+    Refresh(false);
+    return;
+  }
+  if ((event.Moving() || event.Dragging()) && !grip.IsEmpty()) {
+    SetCursor(grip.Contains(event.GetPosition()) ? wxCursor(wxCURSOR_SIZENWSE)
+                                                  : wxCursor(*wxSTANDARD_CURSOR));
+  }
+
   const wxSize cs = GetClientSize();
   const int vh = GetVirtualSize().y;
   const bool in_bar = event.GetX() >= cs.x - kScrollBarW;
@@ -314,6 +393,12 @@ wxSizer* ControlsPanel::MakeCloseRow() {
   wxFont f = title->GetFont();
   f.MakeBold();
   title->SetFont(f);
+  m_title = title;
+  // A no-op when SetFreeFloatHandlers was never called (the PPI window's
+  // docked/popup placements manage their own geometry).
+  title->Bind(wxEVT_LEFT_DOWN, &ControlsPanel::OnTitleMouse, this);
+  title->Bind(wxEVT_LEFT_UP, &ControlsPanel::OnTitleMouse, this);
+  title->Bind(wxEVT_MOTION, &ControlsPanel::OnTitleMouse, this);
   row->Add(title, 1, wxALIGN_CENTER_VERTICAL | wxLEFT, 6);
   auto* gear = new ThemedButton(this, wxT("⚙"), m_theme, /*toggle=*/false);
   gear->SetToolTip(_("Settings"));
@@ -740,6 +825,16 @@ void ControlsPanel::SetPrefsControl(std::function<PpiPrefs()> get,
   m_get_prefs = std::move(get);
   m_set_prefs = std::move(set);
   if (m_built) Rebuild();
+}
+
+void ControlsPanel::SetFreeFloatHandlers(std::function<void(int, int)> on_drag,
+                                         std::function<void(int, int)> on_resize) {
+  m_on_drag = std::move(on_drag);
+  m_on_resize = std::move(on_resize);
+  if (m_title)
+    m_title->SetCursor(m_on_drag ? wxCursor(wxCURSOR_SIZING)
+                                 : wxCursor(*wxSTANDARD_CURSOR));
+  Refresh(false);  // the grip's presence/absence depends on m_on_resize
 }
 
 void ControlsPanel::SetOrientationControl(std::function<int()> get,
