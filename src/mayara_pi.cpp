@@ -1300,6 +1300,9 @@ void mayara_pi::ShowRadarMenu(int canvas) {
   auto* p = new ControlsPanel(cw, m_client.get(), m_client->ActiveIndex());
   m_chart_menu = p;
   m_chart_menu_canvas = canvas;
+  // Each fresh open starts from the auto-fit corner/size again.
+  m_chart_menu_user_moved = false;
+  m_chart_menu_user_sized = false;
 
   std::vector<int> all;
   for (int i = 0; i < m_client->RadarCount(); ++i) all.push_back(i);
@@ -1382,6 +1385,37 @@ void mayara_pi::ShowRadarMenu(int canvas) {
         GetOCPNCanvasWindow()->Refresh(false);
       });
 
+  // Draggable by its title bar, resizable via the corner grip -- otherwise
+  // this is a fixed-size, fixed-position child of the chart canvas, not a
+  // real window, so it has no title bar or resize border of its own.
+  p->SetFreeFloatHandlers(
+      [this](int dx, int dy) {
+        if (!m_chart_menu) return;
+        wxWindow* cw = m_chart_menu->GetParent();
+        if (!cw) return;
+        const wxSize cs = cw->GetClientSize();
+        const wxSize sz = m_chart_menu->GetSize();
+        wxPoint pos = m_chart_menu->GetPosition();
+        pos.x = std::clamp(pos.x + dx, 0, std::max(0, cs.x - sz.x));
+        pos.y = std::clamp(pos.y + dy, 0, std::max(0, cs.y - sz.y));
+        m_chart_menu->SetPosition(pos);
+        m_chart_menu_user_moved = true;
+      },
+      [this](int dw, int dh) {
+        if (!m_chart_menu) return;
+        wxWindow* cw = m_chart_menu->GetParent();
+        if (!cw) return;
+        const wxSize cs = cw->GetClientSize();
+        const wxPoint pos = m_chart_menu->GetPosition();
+        wxSize sz = m_chart_menu->GetSize();
+        sz.x = std::clamp(sz.x + dw, 240, std::max(240, cs.x - pos.x));
+        sz.y = std::clamp(sz.y + dh, 200, std::max(200, cs.y - pos.y));
+        m_chart_menu->SetSize(sz);
+        m_chart_menu->Layout();
+        m_chart_menu->FitInside();
+        m_chart_menu_user_sized = true;
+      });
+
   // Top-left, clear of the chart bar along the bottom. Height is capped to the
   // canvas so a long control list scrolls rather than running off the chart --
   // and the scrollbar is kept permanently, both because a panel that can be
@@ -1419,25 +1453,52 @@ void mayara_pi::ShowRadarMenu(int canvas) {
 // it holds a "waiting for radar" placeholder and knows nothing about how wide
 // it wants to be. Size it to the canvas now and keep following it: full height,
 // because a control list is always longer than the room for it, and the wider
-// of its own idea and a readable minimum.
+// of its own idea and a readable minimum. Once the user has dragged or resized
+// it by hand (SetFreeFloatHandlers), that axis is theirs until the menu is
+// next reopened -- this only re-clamps it back onto a canvas that shrank.
 void mayara_pi::FitChartMenu() {
   if (!m_chart_menu) return;
   wxWindow* cw = m_chart_menu->GetParent();
   if (!cw) return;
   const wxSize cs = cw->GetClientSize();
-  const wxSize best = m_chart_menu->GetEffectiveMinSize();  // gutter included
-  int want_w = std::max(320, best.x);
+
+  int w, h;
+  if (m_chart_menu_user_sized) {
+    const wxSize cur = m_chart_menu->GetSize();
+    w = cur.x;
+    h = cur.y;
+  } else {
+    const wxSize best = m_chart_menu->GetEffectiveMinSize();  // gutter included
+    int want_w = std::max(320, best.x);
 #ifdef __WXMSW__
-  // Room for the native vertical scrollbar, which sits outside the client area.
-  want_w += wxSystemSettings::GetMetric(wxSYS_VSCROLL_X, m_chart_menu);
+    // Room for the native vertical scrollbar, outside the client area.
+    want_w += wxSystemSettings::GetMetric(wxSYS_VSCROLL_X, m_chart_menu);
 #endif
-  const int w = std::min(cs.x - 2 * kChartMenuMargin, want_w);
-  // As tall as it needs, never taller than the chart: a panel sized to the
-  // canvas is mostly empty, and one sized to a placeholder scrolls everything
-  // real off the bottom.
-  const int h = std::min(cs.y - 2 * kChartMenuMargin, std::max(240, best.y));
-  if (m_chart_menu->GetSize() == wxSize(w, h)) return;
-  m_chart_menu->SetSize(kChartMenuMargin, kChartMenuMargin, w, h);
+    w = want_w;
+    // As tall as it needs, never taller than the chart: a panel sized to the
+    // canvas is mostly empty, and one sized to a placeholder scrolls
+    // everything real off the bottom.
+    h = std::max(240, best.y);
+  }
+  w = std::min(w, std::max(240, cs.x - 2 * kChartMenuMargin));
+  h = std::min(h, std::max(200, cs.y - 2 * kChartMenuMargin));
+
+  int x, y;
+  if (m_chart_menu_user_moved) {
+    const wxPoint cur = m_chart_menu->GetPosition();
+    x = cur.x;
+    y = cur.y;
+  } else {
+    x = kChartMenuMargin;
+    y = kChartMenuMargin;
+  }
+  x = std::clamp(x, 0, std::max(0, cs.x - w));
+  y = std::clamp(y, 0, std::max(0, cs.y - h));
+
+  if (m_chart_menu->GetSize() == wxSize(w, h) &&
+      m_chart_menu->GetPosition() == wxPoint(x, y))
+    return;
+  m_chart_menu->SetSize(x, y, w, h);
   m_chart_menu->Layout();
   m_chart_menu->FitInside();  // virtual size from the content: the bar's range
 }
