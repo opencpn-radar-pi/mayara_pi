@@ -1817,6 +1817,18 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   // what it did and did not find on the network, is in there and nowhere else
   // -- so say where it is (the path is worth reading even with no way to open
   // it from here) and offer to open it.
+  auto* vrow = new wxBoxSizer(wxHORIZONTAL);
+  vrow->Add(new wxStaticText(spage, wxID_ANY, _("Log verbosity:")), 0,
+            wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+  wxArrayString vlev;
+  vlev.Add(_("Default"));
+  vlev.Add(_("Debug"));
+  vlev.Add(_("Trace"));
+  auto* vchoice = new wxChoice(spage, wxID_ANY, wxDefaultPosition,
+                               wxDefaultSize, vlev);
+  vchoice->SetSelection(m_server->Options().log_verbosity);
+  vrow->Add(vchoice, 0, wxALIGN_CENTER_VERTICAL);
+  lbox->Add(vrow, 0, wxTOP, 6);
   auto* logpath = new wxStaticText(spage, wxID_ANY, wxEmptyString);
   lbox->Add(logpath, 0, wxTOP, 8);
   auto* logbtn = new wxButton(spage, wxID_ANY, _("Open server log"));
@@ -2246,6 +2258,7 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
     const MayaraServer::LocalOptions& o = m_server->Options();
     cb_wifi->SetValue(o.allow_wifi);
     cb_telemetry->SetValue(o.telemetry);
+    vchoice->SetSelection(o.log_verbosity);
     int sel = 0;
     for (size_t i = 0; i < MayaraServer::Brands().size(); ++i)
       if (MayaraServer::Brands()[i] == o.brand) sel = static_cast<int>(i) + 1;
@@ -2388,6 +2401,7 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
     MayaraServer::LocalOptions o;
     o.allow_wifi = cb_wifi->GetValue();
     o.telemetry = cb_telemetry->GetValue();
+    o.log_verbosity = vchoice->GetSelection();
     const int sel = brand->GetSelection();
     if (sel > 0 && sel <= static_cast<int>(MayaraServer::Brands().size()))
       o.brand = MayaraServer::Brands()[sel - 1];
@@ -2437,10 +2451,20 @@ wxString mayara_pi::GetShortDescription() {
 }
 
 wxString mayara_pi::GetLongDescription() {
-  return _(
-      "mayara_pi displays marine radar as a chart overlay and in a PPI "
-      "window. Unlike radar_pi it does not talk to radar hardware directly; "
-      "it consumes the mayara-server REST and WebSocket API.");
+  // OpenCPN calls this live for the Preferences -> Plugins page, so the
+  // server version -- which is not otherwise visible outside a radar
+  // picture's own Info section -- is worth appending here too, where a
+  // report of "which mayara_pi" almost always also needs "which
+  // mayara-server".
+  const std::string sv = m_client ? m_client->ServerVersion() : std::string();
+  return wxString::Format(
+      "%s\n\n%s: %d.%d.%d (%s)\n%s: %s",
+      _("mayara_pi displays marine radar as a chart overlay and in a PPI "
+        "window. Unlike radar_pi it does not talk to radar hardware "
+        "directly; it consumes the mayara-server REST and WebSocket API."),
+      _("Plugin version"), PLUGIN_VERSION_MAJOR, PLUGIN_VERSION_MINOR,
+      PLUGIN_VERSION_PATCH, PLUGIN_VERSION_COMMIT, _("mayara-server version"),
+      sv.empty() ? _("not connected") : wxString::FromUTF8(sv.c_str()));
 }
 
 int mayara_pi::GetToolbarToolCount() { return 1; }
