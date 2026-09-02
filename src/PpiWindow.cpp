@@ -50,7 +50,7 @@ wxEND_EVENT_TABLE()
 MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client,
                                  std::vector<int> radar_indices)
     : wxPanel(parent, wxID_ANY), m_idle_timer(this, kIdleTimerId) {
-  SetMinSize(wxSize(480, 320));
+  SetMinSize(FromDIP(wxSize(480, 320)));
   if (radar_indices.empty()) radar_indices.push_back(0);
   m_client = client;
   m_title = WindowTitle(client, radar_indices);

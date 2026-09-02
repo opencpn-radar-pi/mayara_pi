@@ -23,6 +23,9 @@ class ThemedButton : public wxControl {
   ThemedButton(wxWindow* parent, const wxString& label, const MayaraTheme& theme,
                bool toggle = false);
   void SetTheme(const MayaraTheme& t);
+  // Re-measures: a button whose label changes after construction (Edit
+  // becomes Cancel) otherwise keeps the width the first label asked for.
+  void SetLabel(const wxString& label) override;
   bool GetValue() const { return m_pressed; }       // toggle state
   void SetValue(bool v);
   void SetActiveColour(const wxColour& c) { m_active = c; m_has_active = true; }

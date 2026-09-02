@@ -1127,12 +1127,18 @@ void ControlsPanel::AddButton(wxSizer* outer, const ControlDef& def) {
 void ControlsPanel::FillVrmEblSection(wxSizer* content) {
   for (int i = 0; i < kVrmEblCount; ++i) {
     auto* row = new wxBoxSizer(wxHORIZONTAL);
-    auto* label = new wxStaticText(
-        this, wxID_ANY, wxString::Format(_("VRM/EBL %d"), i + 1),
-        wxDefaultPosition, wxSize(78, -1));
+    // Just the marker number: the section is already called EBL/VRM, and
+    // repeating that on every row cost the width the reading needs. Both
+    // widths stay fixed so the two rows line up and Clear does not jump as
+    // the numbers change -- but both go through FromDIP() now, or at 200% the
+    // label truncates mid-word and the range falls off the end of the value
+    // entirely. macOS never showed this: there FromDIP() is the identity.
+    auto* label =
+        new wxStaticText(this, wxID_ANY, wxString::Format(_("# %d"), i + 1),
+                         wxDefaultPosition, FromDIP(wxSize(28, -1)));
     row->Add(label, 0, wxALIGN_CENTER_VERTICAL);
     auto* val = new wxStaticText(this, wxID_ANY, wxEmptyString,
-                                 wxDefaultPosition, wxSize(112, -1));
+                                 wxDefaultPosition, FromDIP(wxSize(150, -1)));
     row->Add(val, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 4);
     // Nothing here stretches. The panel is a scrolled window whose virtual
     // width can exceed the width you can see, so a proportion-1 item grows past
@@ -1244,13 +1250,13 @@ void ControlsPanel::AddSector(wxSizer* outer, const ControlDef& def) {
   auto make_angle = [&](const wxString& label) {
     auto* row = new wxBoxSizer(wxHORIZONTAL);
     row->Add(new wxStaticText(this, wxID_ANY, label, wxDefaultPosition,
-                              wxSize(52, -1)),
+                              FromDIP(wxSize(52, -1))),
              0, wxALIGN_CENTER_VERTICAL);
     auto* sl = new ThemedSlider(this, m_theme);
-    sl->SetMinSize(wxSize(90, 24));
+    sl->SetMinSize(FromDIP(wxSize(90, 24)));
     row->Add(sl, 1, wxALIGN_CENTER_VERTICAL);
     auto* val = new wxStaticText(this, wxID_ANY, "", wxDefaultPosition,
-                                 wxSize(52, -1),
+                                 FromDIP(wxSize(52, -1)),
                                  wxALIGN_RIGHT | wxST_NO_AUTORESIZE);
     row->Add(val, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 4);
     box->Add(row, 0, wxEXPAND | wxLEFT, 8);
@@ -1327,11 +1333,11 @@ void ControlsPanel::AddZone(wxSizer* outer, const ControlDef& def) {
                        wxTextCtrl** lo, wxTextCtrl** hi) {
     auto* row = new wxBoxSizer(wxHORIZONTAL);
     row->Add(new wxStaticText(this, wxID_ANY, label, wxDefaultPosition,
-                              wxSize(52, -1)),
+                              FromDIP(wxSize(52, -1))),
              0, wxALIGN_CENTER_VERTICAL);
     auto field = [this]() {
       return new wxTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition,
-                            wxSize(54, -1),
+                            FromDIP(wxSize(54, -1)),
                             wxTE_PROCESS_ENTER | wxTE_RIGHT);
     };
     *lo = field();

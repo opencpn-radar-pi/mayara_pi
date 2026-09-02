@@ -27,13 +27,21 @@ ThemedButton::ThemedButton(wxWindow* parent, const wxString& label,
                 wxBORDER_NONE),
       m_theme(theme),
       m_toggle(toggle) {
-  SetLabel(label);
   SetBackgroundStyle(wxBG_STYLE_PAINT);
+  SetLabel(label);  // sets the min size from the text; see below
+  Bind(wxEVT_PAINT, &ThemedButton::OnPaint, this);
+  Bind(wxEVT_LEFT_DOWN, &ThemedButton::OnClick, this);
+}
+
+// The min size follows the label rather than being fixed at construction:
+// "Edit" turns into "Cancel" in a guard zone, and measuring only the first
+// one left the wider label squeezed into the narrower one's width.
+void ThemedButton::SetLabel(const wxString& label) {
+  wxControl::SetLabel(label);
   wxCoord tw, th;
   GetTextExtent(label, &tw, &th);  // uses the window font; no DC needed
   SetMinSize(wxSize(tw + FromDIP(14), th + FromDIP(12)));
-  Bind(wxEVT_PAINT, &ThemedButton::OnPaint, this);
-  Bind(wxEVT_LEFT_DOWN, &ThemedButton::OnClick, this);
+  Refresh();
 }
 
 void ThemedButton::SetTheme(const MayaraTheme& t) {

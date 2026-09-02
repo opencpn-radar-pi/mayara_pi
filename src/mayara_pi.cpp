@@ -781,7 +781,7 @@ void mayara_pi::ShowAccessDialog() {
         "Ask the server for permission below, then approve the request in the "
         "Signal K web interface under Security -> Access Requests. The "
         "permission is remembered, so this is only needed once."));
-  intro->Wrap(420);
+  intro->Wrap(intro->FromDIP(420));
   top->Add(intro, 0, wxALL, 12);
 
   m_access_status = new wxStaticText(dlg, wxID_ANY, wxEmptyString);
@@ -851,7 +851,7 @@ void mayara_pi::UpdateAccessDialog() {
   if (line == m_access_last_line) return;  // called once a second; don't churn
   m_access_last_line = line;
   m_access_status->SetLabel(line);
-  m_access_status->Wrap(420);
+  m_access_status->Wrap(m_access_status->FromDIP(420));
   if (m_access_button) m_access_button->Enable(can_ask);
   m_access_dialog->Layout();
   m_access_dialog->Fit();
@@ -1625,14 +1625,14 @@ void mayara_pi::ShowSearchDialog() {
       _("Looking for a Signal K server with mayara-server on the network...\n\n"
         "If it isn't found automatically, enter the address of your Signal K "
         "server or a Mayara server below."));
-  intro->Wrap(400);
+  intro->Wrap(intro->FromDIP(400));
   top->Add(intro, 0, wxALL, 12);
 
   auto* row = new wxBoxSizer(wxHORIZONTAL);
   row->Add(new wxStaticText(dlg, wxID_ANY, _("Host / IP:")), 0,
            wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
   auto* host = new wxTextCtrl(dlg, wxID_ANY, wxEmptyString, wxDefaultPosition,
-                              wxSize(220, -1));
+                              dlg->FromDIP(wxSize(220, -1)));
   row->Add(host, 1, wxALIGN_CENTER_VERTICAL);
   top->Add(row, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12);
 
@@ -1717,7 +1717,7 @@ void mayara_pi::ShowNoRadarNotice(const std::string& server_url,
                 wxString::FromUTF8(server_url.c_str()))
           : wxString(_("No radar found by mayara -- I recommend you open the "
                        "following link to investigate why:")));
-  msg->Wrap(400);
+  msg->Wrap(msg->FromDIP(400));
   top->Add(msg, 0, wxALL, 12);
   if (!url.IsEmpty()) {
     auto* link = new wxHyperlinkCtrl(dlg, wxID_ANY, url, url);
@@ -1842,7 +1842,7 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
             wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
   auto* server = new wxTextCtrl(
       spage, wxID_ANY, wxString::FromUTF8(m_explicit_server_url.c_str()),
-      wxDefaultPosition, wxSize(240, -1));
+      wxDefaultPosition, spage->FromDIP(wxSize(240, -1)));
   nrow->Add(server, 1, wxALIGN_CENTER_VERTICAL);
   nbox->Add(nrow, 0, wxEXPAND | wxBOTTOM, 4);
   auto* shint = new wxStaticText(
@@ -1850,7 +1850,7 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
       _("Blank = find it automatically (mDNS, or the Signal K server OpenCPN "
         "is set up for). Otherwise a host or host:port - :3000 for Signal K, "
         ":6502 for mayara."));
-  shint->Wrap(330);
+  shint->Wrap(shint->FromDIP(330));
   nbox->Add(shint, 0);
   sbox->Add(nbox, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 24);
   spage->SetSizer(sbox);
@@ -1892,7 +1892,7 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
       _("Radars are spread evenly across the windows. One window shows all "
         "radars; more windows split them (e.g. 8 radars across 2 windows = 4 "
         "per window)."));
-  whint->Wrap(330);
+  whint->Wrap(whint->FromDIP(330));
   dbox->Add(whint, 0, wxALL, 8);
 
   dbox->Add(new wxStaticLine(dpage), 0, wxEXPAND | wxALL, 8);
@@ -1906,7 +1906,7 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
       dpage, wxID_ANY,
       _("OpenCPN's own notification icon still marks a guard-zone alarm "
         "either way; this only controls the audible chime."));
-  ahint->Wrap(330);
+  ahint->Wrap(ahint->FromDIP(330));
   dbox->Add(ahint, 0, wxALL, 8);
 
   dpage->SetSizer(dbox);
@@ -1929,7 +1929,7 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
         "drive the chart's heading and its targets appear in OpenCPN's target "
         "list alongside AIS. Leave both off if another source already "
         "provides them."));
-  fdhint->Wrap(330);
+  fdhint->Wrap(fdhint->FromDIP(330));
   fdbox->Add(fdhint, 0, wxALL, 8);
   fdpage->SetSizer(fdbox);
   book->AddPage(fdpage, _("Feed OpenCPN"));
@@ -1996,7 +1996,7 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
         "magenta and green throughout, so a moving target can never be read "
         "as an echo. Changing a colour on a built-in copies it to a profile "
         "of your own first."));
-  chint->Wrap(330);
+  chint->Wrap(chint->FromDIP(330));
   cbox->Add(chint, 0, wxALL, 8);
   cpage->SetSizer(cbox);
   book->AddPage(cpage, _("Colours"));
@@ -2166,7 +2166,7 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
             wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
   auto* fhead = new wxTextCtrl(fboxw, wxID_ANY,
                                wxString::Format("%.1f", m_diag.fixed_heading),
-                               wxDefaultPosition, wxSize(80, -1));
+                               wxDefaultPosition, fboxw->FromDIP(wxSize(80, -1)));
   frow->Add(fhead, 0, wxALIGN_CENTER_VERTICAL);
   fbox->Add(frow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
 
@@ -2175,13 +2175,13 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
              wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
   auto* flat = new wxTextCtrl(fboxw, wxID_ANY,
                               wxString::Format("%.6f", m_diag.fixed_lat),
-                              wxDefaultPosition, wxSize(110, -1));
+                              wxDefaultPosition, fboxw->FromDIP(wxSize(110, -1)));
   prow2->Add(flat, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12);
   prow2->Add(new wxStaticText(fboxw, wxID_ANY, _("Lon:")), 0,
              wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
   auto* flon = new wxTextCtrl(fboxw, wxID_ANY,
                               wxString::Format("%.6f", m_diag.fixed_lon),
-                              wxDefaultPosition, wxSize(110, -1));
+                              wxDefaultPosition, fboxw->FromDIP(wxSize(110, -1)));
   prow2->Add(flon, 0, wxALIGN_CENTER_VERTICAL);
   fbox->Add(prow2, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
 
@@ -2189,7 +2189,7 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
       fboxw, wxID_ANY,
       _("A fixed heading and position allows use in situations where the "
         "radar is shore based. Do not use on board."));
-  bench_hint->Wrap(300);
+  bench_hint->Wrap(bench_hint->FromDIP(300));
   fbox->Add(bench_hint, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
   gbox->Add(fbox, 0, wxEXPAND | wxALL, 8);
 
@@ -2278,7 +2278,7 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
                                    ? _("mayara-server %s, running.")
                                    : _("mayara-server %s, installed."),
                                m_server->InstalledVersion()));
-    lstatus->Wrap(330);
+    lstatus->Wrap(lstatus->FromDIP(330));
     lstatus->Enable(local);
     // Offer the download when it is missing or a newer release exists.
     const bool can_get =
@@ -2302,7 +2302,7 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
                                           : _("Server log: %s (not written "
                                               "yet)"),
                                       logfile));
-    logpath->Wrap(330);
+    logpath->Wrap(logpath->FromDIP(330));
     logpath->Enable(local);
     logbtn->Show(installed);
     logbtn->Enable(local && have_log);
@@ -2703,11 +2703,12 @@ void mayara_pi::RebuildWindows() {
       m_aui->AddPane(win, pane);
       ++pane_no;
     } else {
+      const wxSize initial = m_parent_window->FromDIP(wxSize(880, 560));
       auto* frame = new wxFrame(m_parent_window, wxID_ANY, wxEmptyString,
-                                wxDefaultPosition, wxSize(880, 560));
+                                wxDefaultPosition, initial);
       win = new MayaraPpiWindow(frame, m_client.get(), grp);
       frame->SetTitle(win->Title());
-      frame->SetMinSize(wxSize(480, 320));
+      frame->SetMinSize(frame->FromDIP(wxSize(480, 320)));
       auto* fs = new wxBoxSizer(wxVERTICAL);
       fs->Add(win, 1, wxEXPAND);
       frame->SetSizer(fs);
