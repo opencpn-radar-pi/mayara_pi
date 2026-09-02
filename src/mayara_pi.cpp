@@ -2098,15 +2098,6 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   hchoice->SetSelection(m_diag.heading_source);
   gbox->Add(hchoice, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
 
-  auto* frow = new wxBoxSizer(wxHORIZONTAL);
-  frow->Add(new wxStaticText(gpage, wxID_ANY, _("Fixed heading (deg T):")), 0,
-            wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
-  auto* fhead = new wxTextCtrl(gpage, wxID_ANY,
-                               wxString::Format("%.1f", m_diag.fixed_heading),
-                               wxDefaultPosition, wxSize(80, -1));
-  frow->Add(fhead, 0, wxALIGN_CENTER_VERTICAL);
-  gbox->Add(frow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
-
   auto* cb_cog = new wxCheckBox(
       gpage, wxID_ANY, _("Use COG as heading when nothing reports one"));
   cb_cog->SetValue(m_diag.cog_as_heading);
@@ -2120,6 +2111,19 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
                                m_diag.heading_timeout_s);
   trow->Add(tspin, 0, wxALIGN_CENTER_VERTICAL);
   gbox->Add(trow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
+
+  // Fixed heading and fixed position are the same idea -- standing in for
+  // instruments a bench has neither of -- so they sit together, below
+  // everything about how heading is normally resolved.
+  gbox->Add(new wxStaticLine(gpage), 0, wxEXPAND | wxLEFT | wxRIGHT, 8);
+  auto* frow = new wxBoxSizer(wxHORIZONTAL);
+  frow->Add(new wxStaticText(gpage, wxID_ANY, _("Fixed heading (deg T):")), 0,
+            wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+  auto* fhead = new wxTextCtrl(gpage, wxID_ANY,
+                               wxString::Format("%.1f", m_diag.fixed_heading),
+                               wxDefaultPosition, wxSize(80, -1));
+  frow->Add(fhead, 0, wxALIGN_CENTER_VERTICAL);
+  gbox->Add(frow, 0, wxALL, 8);
 
   auto* cb_fpos = new wxCheckBox(gpage, wxID_ANY, _("Fixed own-ship position"));
   cb_fpos->SetValue(m_diag.fixed_position);
