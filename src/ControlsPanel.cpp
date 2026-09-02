@@ -1164,10 +1164,9 @@ void ControlsPanel::FillVrmEblSection(wxSizer* content) {
         return;
       }
       off->Enable(true);
-      double deg = m.bearing_rad * 180.0 / M_PI;
-      while (deg < 0) deg += 360.0;
-      val->SetLabel(wxString::Format(L"%.1f°  %s", deg,
-                                     FormatVal(m.distance_m, "m")));
+      const BearingRef ref = m_bearing_ref ? m_bearing_ref() : BearingRef();
+      val->SetLabel(FormatBearing(m.bearing_rad * 180.0 / M_PI, ref) + "  " +
+                    FormatVal(m.distance_m, "m"));
     });
   }
 }

@@ -717,6 +717,36 @@ int RingCount(double report_m) {
 }
 }  // namespace
 
+// One place decides how an angle reads, because the alternative is what this
+// replaced: the picture's own readout printing a marker as "57.1 T" while the
+// controls panel printed the same marker as a bare "17.6", the heading being
+// the whole of the difference and neither of them saying so.
+double SignedRelative(double deg) {
+  while (deg < 0) deg += 360.0;
+  while (deg >= 360.0) deg -= 360.0;
+  return deg > 180.0 ? deg - 360.0 : deg;
+}
+
+wxString FormatBearing(double relative_deg, const BearingRef& ref) {
+  // Head-up already points the bow at the top of the screen, so a bearing
+  // read off it is relative whether or not a heading is available.
+  const bool absolute = ref.has_heading && ref.orientation != kHeadUp;
+  if (!absolute)
+    return wxString::Format(L"%.1f°R", SignedRelative(relative_deg));
+  double t = relative_deg + ref.heading_deg;
+  while (t < 0) t += 360.0;
+  while (t >= 360.0) t -= 360.0;
+  return wxString::Format(L"%.1f°T", t);
+}
+
+BearingRef RadarDisplayPanel::BearingReference() const {
+  BearingRef ref;
+  double up = 0, rot = 0;
+  ResolveOrientation(up, rot, ref.heading_deg, ref.has_heading);
+  ref.orientation = m_orientation;
+  return ref;
+}
+
 void RadarDisplayPanel::ResolveOrientation(double& up_bearing,
                                            double& raster_rot, double& heading,
                                            bool& has_heading) const {
@@ -1326,12 +1356,9 @@ void RadarDisplayPanel::DrawVrmEbl(wxDC& dc, const PpiGeometry& g, double geo) {
     f.SetPointSize(std::max(7, f.GetPointSize() - 1));
     f.MakeBold();
     dc.SetFont(f);
-    double shown = g.has_heading ? brg : m.bearing_rad * 180.0 / M_PI;
-    while (shown < 0) shown += 360.0;
-    while (shown >= 360.0) shown -= 360.0;
     const wxString lines[3] = {
         wxString::Format(_("VRM/EBL %d"), i + 1),
-        wxString::Format(g.has_heading ? L"%.1f° T" : L"%.1f° R", shown),
+        FormatBearing(m.bearing_rad * 180.0 / M_PI, BearingReference()),
         FormatRange(m.distance_m, g.metric)};
     wxCoord tw = 0, th = 0, w1, h1;
     for (const wxString& l : lines) {
@@ -1379,13 +1406,14 @@ void RadarDisplayPanel::DrawCursor(wxDC& dc, const PpiGeometry& g) {
   dc.SetFont(f);
   wxString txt = wxString::Format(L"%03.0f°T  %s", brg,
                                   FormatRange(dist, g.metric));
-  if (g.has_heading) {
-    double rel = brg - g.heading;
-    while (rel < 0) rel += 360;
-    while (rel >= 360) rel -= 360;
-    txt = wxString::Format(L"%03.0f°T %03.0f°R  %s", brg, rel,
+  // This one shows both when it can, rather than letting the orientation
+  // pick -- it is a free measurement, not a placed marker. The relative half
+  // still takes the signed convention FormatBearing uses, so a bearing does
+  // not change sign depending on which readout you happen to read it from.
+  if (g.has_heading)
+    txt = wxString::Format(L"%03.0f°T %+.0f°R  %s", brg,
+                           SignedRelative(brg - g.heading),
                            FormatRange(dist, g.metric));
-  }
   wxCoord tw, th;
   dc.GetTextExtent(txt, &tw, &th);
   // Bottom-left, window-fixed: a readout that follows the pointer covers the

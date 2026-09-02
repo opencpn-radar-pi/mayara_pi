@@ -56,6 +56,26 @@ struct VrmEbl {
 };
 const int kVrmEblCount = 2;
 
+// What a bearing is being read against, so that everything printing one
+// agrees. Two readouts of the same marker disagreeing by the heading, with
+// neither of them labelled, is worse than either convention on its own.
+struct BearingRef {
+  double heading_deg = 0;    // own-ship heading, true
+  bool has_heading = false;  // no heading, no true bearing to be had
+  int orientation = kHeadUp;
+};
+
+// A bearing in (-180, 180] -- signed, so "40 degrees off the port bow" reads
+// as -40 rather than as 320.
+double SignedRelative(double deg);
+
+// A bearing, formatted the way radar_pi formats every angle it prints (see
+// RadarInfo::FormatAngle): the T/R suffix is never optional, head-up reads
+// relative and signed, and every other orientation reads true. Without a
+// heading there is no true bearing to be had, so it stays relative whatever
+// the orientation asks for.
+wxString FormatBearing(double relative_deg, const BearingRef& ref);
+
 // Display preferences that are the operator's, not the radar's, so they are
 // held by the plugin and pushed down rather than read from the control schema.
 struct PpiPrefs {
@@ -152,6 +172,9 @@ class RadarDisplayPanel : public wxPanel {
   int Threshold() const { return m_threshold; }
   // Repaint rate and wheel direction; the rest of PpiPrefs is the window's.
   void SetPrefs(const PpiPrefs& p);
+  // How a bearing should be read on this panel right now, for anything
+  // outside it that has to print one (the controls panel's VRM/EBL rows).
+  BearingRef BearingReference() const;
   // The two VRM/EBL markers, for the controls panel to show and switch off.
   const VrmEbl& Marker(int i) const { return m_vrmebl[i]; }
   void SetMarker(int i, const VrmEbl& m) {

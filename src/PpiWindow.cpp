@@ -535,7 +535,7 @@ void MayaraPpiWindow::WireZoneEditing() {
 
   // VRM/EBL markers belong to the picture showing them, so the panel reads and
   // writes whichever picture its controls are currently bound to.
-  if (m_controls)
+  if (m_controls) {
     m_controls->SetVrmEblHandlers(
         [this](int i) {
           RadarDisplayPanel* p = FocusedPanel();
@@ -544,6 +544,12 @@ void MayaraPpiWindow::WireZoneEditing() {
         [this](int i, const VrmEbl& m) {
           if (RadarDisplayPanel* p = FocusedPanel()) p->SetMarker(i, m);
         });
+    // Same picture, so a marker's bearing reads the same in both places.
+    m_controls->SetBearingRefProvider([this]() {
+      RadarDisplayPanel* p = FocusedPanel();
+      return p ? p->BearingReference() : BearingRef();
+    });
+  }
   // Placing or clearing a marker changes nothing the radar reports, so tell
   // the panel directly; its own updaters would never fire for this.
   for (RadarDisplayPanel* p : m_radars)
