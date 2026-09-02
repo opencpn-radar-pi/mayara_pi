@@ -12,6 +12,7 @@
 #include <wx/display.h>
 #include <wx/popupwin.h>
 #include <wx/tglbtn.h>
+#include <wx/timer.h>
 
 namespace {
 
@@ -56,8 +57,12 @@ class ThemedChoicePopup : public wxPopupTransientWindow {
     // capture and focus-loss, and this app's owner-drawn controls never call
     // SetFocus() on click the way native ones do -- so that path silently
     // never fires here. Watch the real, global button/cursor state instead:
-    // it doesn't care what has capture or focus.
-    Bind(wxEVT_IDLE, &ThemedChoicePopup::OnIdle, this);
+    // it doesn't care what has capture or focus. A short-interval timer,
+    // not wxEVT_IDLE with RequestMore() -- that forces a fresh idle event
+    // right after every one it handles, which pins the event loop at 100% of
+    // a core for as long as the popup stays open.
+    m_watch_timer.SetOwner(this);
+    Bind(wxEVT_TIMER, &ThemedChoicePopup::OnWatchTimer, this);
   }
 
   // Fires exactly once, on every dismissal path (pick, escape, outside
@@ -68,6 +73,12 @@ class ThemedChoicePopup : public wxPopupTransientWindow {
   // ThemedChoice forwards its own key events here while we're open -- see the
   // ctor comment on why we don't rely on receiving them directly.
   void HandleKey(wxKeyEvent& e) { OnKeyDown(e); }
+
+  // A user-initiated close (clicking the button again to toggle the list
+  // shut): goes through OnDismiss(), unlike the destructor's bare Dismiss(),
+  // so it actually gets destroyed rather than just hidden. DismissAndNotify()
+  // is protected -- this is the public door to it.
+  void RequestClose() { DismissAndNotify(); }
 
   // Sizes itself to the anchor's width (or the widest item, if wider), directly
   // under the anchor -- or above it, if it wouldn't fit on screen -- then shows
@@ -106,6 +117,7 @@ class ThemedChoicePopup : public wxPopupTransientWindow {
                        std::max(screen.GetLeft(), screen.GetRight() - w));
     Move(pos);
     Popup();
+    m_watch_timer.Start(60);
   }
 
  protected:
@@ -115,6 +127,7 @@ class ThemedChoicePopup : public wxPopupTransientWindow {
   void OnDismiss() override {
     if (m_dismissed) return;
     m_dismissed = true;
+    m_watch_timer.Stop();
     if (wxWindow* p = GetParent()) p->SetFocus();  // back to the closed button
     if (m_on_close) m_on_close();
     Destroy();
@@ -145,9 +158,20 @@ class ThemedChoicePopup : public wxPopupTransientWindow {
   }
 
   void Pick(int i) {
-    std::function<void(int)> cb = m_on_pick;  // this is about to be destroyed
+    // Deferred: cb(i) fires wxEVT_CHOICE, and a handler for that can reach
+    // ControlsPanel::Rebuild() (e.g. the radar selector), whose
+    // DestroyChildren() deletes this popup and its owning ThemedChoice
+    // immediately -- while this is still a frame on the call stack (inside
+    // one of THIS object's own event handlers). Running cb after unwinding
+    // means nothing is still executing on freed memory when that happens.
+    std::function<void(int)> cb = m_on_pick;
     DismissAndNotify();
-    if (i >= 0 && cb) cb(i);
+    if (i >= 0 && cb) {
+      if (wxWindow* p = GetParent())
+        p->CallAfter([cb, i]() { cb(i); });
+      else
+        cb(i);
+    }
   }
 
   void OnPaint(wxPaintEvent&) {
@@ -169,7 +193,10 @@ class ThemedChoicePopup : public wxPopupTransientWindow {
       wxCoord tw, th;
       dc.GetTextExtent(m_items[i], &tw, &th);
       const int ty = y + (m_row_h - th) / 2;
-      if (i == m_selection) dc.DrawText(wxT("✓"), FromDIP(8), ty);
+      // Explicit code point, not a literal "✓": MSVC decodes the source with
+      // the active code page unless /utf-8 is passed, which mangles it.
+      if (i == m_selection)
+        dc.DrawText(wxString(wxUniChar(0x2713)), FromDIP(8), ty);
       dc.DrawText(m_items[i], FromDIP(24), ty);
     }
   }
@@ -245,8 +272,7 @@ class ThemedChoicePopup : public wxPopupTransientWindow {
   // capture (only wired on macOS by the base class) and on focus loss (which
   // never happens here -- see the comment in the ctor); watching the real
   // global button state sidesteps both and works the same on every platform.
-  void OnIdle(wxIdleEvent& event) {
-    event.RequestMore();
+  void OnWatchTimer(wxTimerEvent&) {
     if (wxGetMouseState().LeftIsDown() &&
         !GetScreenRect().Contains(wxGetMousePosition())) {
       DismissAndNotify();
@@ -257,6 +283,7 @@ class ThemedChoicePopup : public wxPopupTransientWindow {
   std::vector<wxString> m_items;
   int m_selection;
   int m_hover = -1;
+  wxTimer m_watch_timer;
   int m_row_h = 24;
   int m_scroll = 0;
   bool m_dismissed = false;
@@ -443,7 +470,15 @@ ThemedChoice::ThemedChoice(wxWindow* parent, const MayaraTheme& theme)
   Bind(wxEVT_KILL_FOCUS, &ThemedChoice::OnFocusChange, this);
 }
 
-ThemedChoice::~ThemedChoice() { ClosePopup(); }
+ThemedChoice::~ThemedChoice() {
+  // Bare Dismiss(), not ClosePopup()'s RequestClose(): that runs
+  // OnDismiss(), which would SetFocus() this control and fire m_on_close's
+  // callback into it -- both unsafe while this destructor is running.
+  if (m_open_popup) {
+    m_open_popup->Dismiss();
+    m_open_popup = nullptr;
+  }
+}
 
 void ThemedChoice::SetTheme(const MayaraTheme& t) {
   m_theme = t;
@@ -529,13 +564,13 @@ void ThemedChoice::OpenPopup() {
   popup->ShowNear(this);
 }
 
+// A user-initiated close (toggling the button while the list is open). Goes
+// through RequestClose() -> OnDismiss(), so the popup is actually destroyed,
+// not just hidden -- unlike the destructor's own bare Dismiss(), below, which
+// this control being mid-teardown makes unsafe to route the same way.
 void ThemedChoice::ClosePopup() {
   if (!m_open_popup) return;
-  // Bare Dismiss(), not the pick/escape/outside-click path: hides, releases
-  // capture, and pops the handlers immediately, without touching m_open_popup
-  // again or this control (which may itself be mid-destruction right now --
-  // see the header comment on m_open_popup for why that matters).
-  m_open_popup->Dismiss();
+  m_open_popup->RequestClose();
   m_open_popup = nullptr;
 }
 
