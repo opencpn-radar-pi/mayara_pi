@@ -249,6 +249,23 @@ class MayaraClient {
 
   std::mutex m_radars_mutex;  // guards m_radars membership (stable once up)
   std::vector<std::unique_ptr<Radar>> m_radars;
+  // Where a Radar goes instead of being destroyed when it leaves m_radars.
+  // ControlsAt()/StateAt() hand out raw pointers into a Radar's members that
+  // outlive the lock guarding m_radars itself -- a caller mid-way through
+  // e.g. controls()->Value(id) has no lock held between the two calls, so a
+  // concurrent Stop() or reconnect that actually freed the old Radar would
+  // leave it holding a dangling pointer into freed memory (and, since
+  // RadarControls' own mutex lives inside that memory, dereferencing it can
+  // crash inside pthread_mutex_lock rather than anywhere more obviously
+  // wrong). Retiring instead of destroying makes that class of bug
+  // structurally impossible; each socket is stopped first (both here and at
+  // every retire site), so a retired Radar costs its RadarState/
+  // RadarControls buffers but no running thread. Reconnects are a handful
+  // over a session, not a tight loop, so that cost stays small for the
+  // life of the client -- trimming it further would need every raw-pointer
+  // accessor rewritten against something that can outlive its Radar being
+  // reclaimed, which is a bigger change than this bug calls for.
+  std::vector<std::unique_ptr<Radar>> m_retired_radars;
   std::atomic<int> m_active{0};
   std::atomic<float> m_intensity{1.0f};
   std::vector<int> m_shown;  // <= 2 displayed radar indices (empty = default)

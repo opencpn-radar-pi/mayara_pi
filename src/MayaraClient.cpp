@@ -3,10 +3,12 @@
  *****************************************************************************/
 #include "MayaraClient.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <iterator>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -202,6 +204,9 @@ void MayaraClient::Stop() {
   if (m_targets_thread.joinable()) m_targets_thread.join();
   {
     std::lock_guard<std::mutex> lock(m_radars_mutex);
+    // Retire rather than destroy: see m_retired_radars.
+    std::move(m_radars.begin(), m_radars.end(),
+             std::back_inserter(m_retired_radars));
     m_radars.clear();
   }
   m_control_ws.reset();
@@ -847,6 +852,15 @@ MayaraClient::Attempt MayaraClient::DiscoverAndConnect() {
 
   {
     std::lock_guard<std::mutex> lock(m_radars_mutex);
+    // Stop each old socket before retiring, same as Stop() does: a radar
+    // reaching this swap without an intervening Stop() would otherwise
+    // leave its spoke stream connected and running forever in the
+    // background, orphaned rather than merely retired.
+    for (auto& r : m_radars)
+      if (r->spoke_ws) r->spoke_ws->stop();
+    // Retire rather than destroy: see m_retired_radars.
+    std::move(m_radars.begin(), m_radars.end(),
+             std::back_inserter(m_retired_radars));
     m_radars = std::move(live);
     m_active = 0;
   }
