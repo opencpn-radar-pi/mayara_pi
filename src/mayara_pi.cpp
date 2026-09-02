@@ -2671,6 +2671,14 @@ void mayara_pi::ApplyThemeToWindows() {
 // (Re)create the radar windows from the current radar count and window count,
 // preserving the user's show/hide intent.
 void mayara_pi::RebuildWindows() {
+  // Snapshot and persist current geometry before tearing down: the new
+  // windows restore position from disk (RestoreWindowGeometry), which
+  // otherwise only gets written at unload, so a move made earlier this
+  // session -- not just in the last heartbeat tick -- would be lost.
+  if (AnyWindowShown() && !m_ocpn_fullscreen) {
+    CaptureWindowState();
+    SaveWindowState();
+  }
   DestroyWindows(/*sync=*/false);
   m_windows_radar_count = m_client ? m_client->RadarCount() : 0;
   std::vector<std::vector<int>> groups = RadarGroups();
