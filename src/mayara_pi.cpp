@@ -180,6 +180,10 @@ int mayara_pi::Init() {
   // already listening on loopback by the time discovery runs.
   m_server = std::make_unique<MayaraServer>(this);
   m_server->LoadConfig();
+  // Before m_client exists, so a config saved stale from before this fix
+  // (Enabled() false, m_saved_server_url still the loopback address) is
+  // cleaned up before it is ever read into the client as "remembered".
+  ForgetLocalServerIfDisabled();
   if (m_server->Enabled()) m_server->Start();
   m_server->CheckLatest();  // silent when github.com is unreachable
 
