@@ -83,6 +83,11 @@ class ControlsPanel : public wxScrolledWindow {
     m_vrm_get = std::move(get);
     m_vrm_set = std::move(set);
   }
+  // How to read a marker's bearing: the focused picture's own reference, so
+  // that a row and the picture cannot print the same marker differently.
+  void SetBearingRefProvider(std::function<BearingRef()> p) {
+    m_bearing_ref = std::move(p);
+  }
 
   // Share the live guard-zone edit with the picture, so a dragged handle and a
   // typed number are one edit.
@@ -193,6 +198,7 @@ class ControlsPanel : public wxScrolledWindow {
   bool m_dragging_bar = false;  // the drawn scrollbar's thumb  // true while widgets are being destroyed
   std::function<VrmEbl(int)> m_vrm_get;
   std::function<void(int, const VrmEbl&)> m_vrm_set;
+  std::function<BearingRef()> m_bearing_ref;
   std::function<ZoneEdit()> m_zone_get;
   std::function<void(const ZoneEdit&, bool)> m_zone_set;
   std::function<PpiPrefs()> m_get_prefs;
