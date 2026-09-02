@@ -58,9 +58,12 @@ class ThemedSlider : public wxControl {
   bool m_dragging = false;
 };
 
+class ThemedChoicePopup;  // defined in ThemedControls.cpp
+
 class ThemedChoice : public wxControl {
  public:
   ThemedChoice(wxWindow* parent, const MayaraTheme& theme);
+  ~ThemedChoice() override;
   void SetTheme(const MayaraTheme& t);
   void Append(const wxString& label, int data = 0);
   void Clear();
@@ -72,6 +75,11 @@ class ThemedChoice : public wxControl {
  private:
   void OnPaint(wxPaintEvent&);
   void OnClick(wxMouseEvent&);
+  void OnKeyDown(wxKeyEvent&);
+  void OnFocusChange(wxFocusEvent&);
+  void OpenPopup();
+  void ClosePopup();               // dismisses m_open_popup, if any
+  void MoveSelection(int delta);  // arrow keys, closed: change value directly
 
   struct Item {
     wxString label;
@@ -80,6 +88,15 @@ class ThemedChoice : public wxControl {
   MayaraTheme m_theme;
   std::vector<Item> m_items;
   int m_selection = -1;
+  // The open dropdown list, if any -- a wxPopupTransientWindow child of this
+  // control. Tracked so it can be dismissed (releasing its mouse capture)
+  // before this control is destroyed out from under it: DestroyChildren()
+  // (e.g. ControlsPanel::Rebuild(), on a schema change while the list is open)
+  // deletes children immediately, bypassing the popup's own deferred-delete
+  // Destroy() and any chance to clean up first -- a still-capturing popup
+  // deleted that way leaves wxWindow::GetCapture() dangling, crashing on the
+  // next mouse event anywhere in the app.
+  ThemedChoicePopup* m_open_popup = nullptr;
 };
 
 #endif  // MAYARA_THEMED_CONTROLS_H_

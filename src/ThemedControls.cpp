@@ -4,9 +4,13 @@
 #include "ThemedControls.h"
 
 #include <algorithm>
+#include <functional>
+#include <utility>
+#include <vector>
 
 #include <wx/dcclient.h>
-#include <wx/menu.h>
+#include <wx/display.h>
+#include <wx/popupwin.h>
 #include <wx/tglbtn.h>
 
 namespace {
@@ -19,6 +23,246 @@ wxColour Blend(const wxColour& a, const wxColour& b, double t) {
 }
 
 }  // namespace
+
+// The dropdown list ThemedChoice opens: owner-drawn so it looks like the rest
+// of the panel instead of a native popup menu (a checklist on every platform,
+// and on Windows in plain system colours no matter what theme is active).
+// Not in the anonymous namespace above: ThemedChoice needs to forward-declare
+// and hold a pointer to it (see ThemedControls.h for why).
+class ThemedChoicePopup : public wxPopupTransientWindow {
+ public:
+  ThemedChoicePopup(wxWindow* parent, const MayaraTheme& theme,
+                    std::vector<wxString> items, int selection,
+                    std::function<void(int)> on_pick)
+      : wxPopupTransientWindow(parent, wxBORDER_NONE),
+        m_theme(theme),
+        m_items(std::move(items)),
+        m_selection(selection),
+        m_on_pick(std::move(on_pick)) {
+    m_hover = selection >= 0 ? selection : 0;
+    SetBackgroundStyle(wxBG_STYLE_PAINT);
+    Bind(wxEVT_PAINT, &ThemedChoicePopup::OnPaint, this);
+    Bind(wxEVT_MOTION, &ThemedChoicePopup::OnMouseMove, this);
+    Bind(wxEVT_LEFT_UP, &ThemedChoicePopup::OnLeftUp, this);
+    Bind(wxEVT_MOUSEWHEEL, &ThemedChoicePopup::OnMouseWheel, this);
+    Bind(wxEVT_LEAVE_WINDOW, &ThemedChoicePopup::OnLeaveWindow, this);
+    // Not Bind(wxEVT_KEY_DOWN, ...): Popup()'s SetFocus() call doesn't
+    // reliably move real keyboard focus onto this kind of borderless popup
+    // in this embedding (same underlying issue as the outside-click dismiss
+    // below) -- ThemedChoice reliably gets the key instead and forwards it
+    // to HandleKey() while we're open. See ThemedChoice::OnKeyDown.
+    //
+    // wxPopupTransientWindow's own dismiss-on-outside-click relies on mouse
+    // capture and focus-loss, and this app's owner-drawn controls never call
+    // SetFocus() on click the way native ones do -- so that path silently
+    // never fires here. Watch the real, global button/cursor state instead:
+    // it doesn't care what has capture or focus.
+    Bind(wxEVT_IDLE, &ThemedChoicePopup::OnIdle, this);
+  }
+
+  // Fires exactly once, on every dismissal path (pick, escape, outside
+  // click) -- lets the owning ThemedChoice drop its pointer to this popup
+  // before it's gone, so it never holds a dangling one.
+  void SetOnClose(std::function<void()> cb) { m_on_close = std::move(cb); }
+
+  // ThemedChoice forwards its own key events here while we're open -- see the
+  // ctor comment on why we don't rely on receiving them directly.
+  void HandleKey(wxKeyEvent& e) { OnKeyDown(e); }
+
+  // Sizes itself to the anchor's width (or the widest item, if wider), directly
+  // under the anchor -- or above it, if it wouldn't fit on screen -- then shows
+  // itself. Long lists (a radar's range list can run to 20-30 entries) scroll
+  // by wheel rather than growing past a fraction of the screen.
+  void ShowNear(wxWindow* anchor) {
+    wxClientDC dc(anchor);
+    dc.SetFont(anchor->GetFont());
+    int max_w = 0;
+    for (const wxString& s : m_items) {
+      wxCoord tw, th;
+      dc.GetTextExtent(s, &tw, &th);
+      max_w = std::max(max_w, static_cast<int>(tw));
+    }
+    m_row_h = FromDIP(24);
+    const int w = std::max(anchor->GetSize().x, max_w + FromDIP(30));
+    const int display_h = wxGetClientDisplayRect().GetHeight();
+    const int max_h = std::max(m_row_h, display_h * 3 / 5);
+    const int content_h = static_cast<int>(m_items.size()) * m_row_h;
+    const int h = std::min(content_h, max_h);
+    SetSize(w, h);
+
+    // wxPopupWindowBase::Position() is built for a cascading submenu (it
+    // offsets by `size` again on top of `ptOrigin`, and to the right rather
+    // than staying left-aligned) -- wrong shape for a dropdown, so this
+    // places it directly, left-aligned under the anchor, flipping above and
+    // clamping sideways only if it wouldn't otherwise fit on screen.
+    const wxPoint top_left = anchor->ClientToScreen(wxPoint(0, 0));
+    const wxRect screen = wxDisplay(anchor).GetGeometry();
+    wxPoint pos(top_left.x, top_left.y + anchor->GetSize().y);
+    if (pos.y + h > screen.GetBottom()) {
+      const int above_y = top_left.y - h;
+      if (above_y >= screen.GetTop()) pos.y = above_y;
+    }
+    pos.x = std::clamp(pos.x, screen.GetLeft(),
+                       std::max(screen.GetLeft(), screen.GetRight() - w));
+    Move(pos);
+    Popup();
+  }
+
+ protected:
+  // Reached both from our own DismissAndNotify() calls below and from the
+  // base class's own (unreliable, here) dismiss paths -- idempotent so
+  // whichever gets there first doesn't leave the other to double-destroy.
+  void OnDismiss() override {
+    if (m_dismissed) return;
+    m_dismissed = true;
+    if (wxWindow* p = GetParent()) p->SetFocus();  // back to the closed button
+    if (m_on_close) m_on_close();
+    Destroy();
+  }
+
+ private:
+  int RowAt(const wxPoint& pt) const {
+    const int i = (pt.y + m_scroll) / m_row_h;
+    return (i >= 0 && i < static_cast<int>(m_items.size())) ? i : -1;
+  }
+
+  void SetHover(int i) {
+    if (m_items.empty()) return;
+    i = std::clamp(i, 0, static_cast<int>(m_items.size()) - 1);
+    if (i == m_hover) return;
+    m_hover = i;
+    EnsureVisible(i);
+    Refresh();
+  }
+
+  void EnsureVisible(int i) {
+    const int y = i * m_row_h;
+    const int ch = GetClientSize().y;
+    if (y < m_scroll)
+      m_scroll = y;
+    else if (y + m_row_h > m_scroll + ch)
+      m_scroll = y + m_row_h - ch;
+  }
+
+  void Pick(int i) {
+    std::function<void(int)> cb = m_on_pick;  // this is about to be destroyed
+    DismissAndNotify();
+    if (i >= 0 && cb) cb(i);
+  }
+
+  void OnPaint(wxPaintEvent&) {
+    wxPaintDC dc(this);
+    const wxSize cs = GetClientSize();
+    dc.SetPen(wxPen(m_theme.lozenge_border));
+    dc.SetBrush(wxBrush(m_theme.panel_bg));
+    dc.DrawRectangle(0, 0, cs.x, cs.y);
+    dc.SetFont(GetFont());
+    for (int i = 0; i < static_cast<int>(m_items.size()); ++i) {
+      const int y = i * m_row_h - m_scroll;
+      if (y + m_row_h < 0 || y > cs.y) continue;
+      if (i == m_hover) {
+        dc.SetBrush(wxBrush(Blend(m_theme.panel_bg, m_theme.text, 0.15)));
+        dc.SetPen(*wxTRANSPARENT_PEN);
+        dc.DrawRectangle(0, y, cs.x, m_row_h);
+      }
+      dc.SetTextForeground(m_theme.text);
+      wxCoord tw, th;
+      dc.GetTextExtent(m_items[i], &tw, &th);
+      const int ty = y + (m_row_h - th) / 2;
+      if (i == m_selection) dc.DrawText(wxT("✓"), FromDIP(8), ty);
+      dc.DrawText(m_items[i], FromDIP(24), ty);
+    }
+  }
+
+  void OnMouseMove(wxMouseEvent& e) {
+    const int i = RowAt(e.GetPosition());
+    if (i != m_hover) {
+      m_hover = i;
+      Refresh();
+    }
+  }
+
+  void OnLeaveWindow(wxMouseEvent&) {
+    if (m_hover != -1) {
+      m_hover = -1;
+      Refresh();
+    }
+  }
+
+  void OnLeftUp(wxMouseEvent& e) { Pick(RowAt(e.GetPosition())); }
+
+  void OnMouseWheel(wxMouseEvent& e) {
+    const int content_h = static_cast<int>(m_items.size()) * m_row_h;
+    const int max_scroll = std::max(0, content_h - GetClientSize().y);
+    if (max_scroll <= 0) return;
+    const int notches = e.GetWheelRotation() / std::max(1, e.GetWheelDelta());
+    m_scroll = std::clamp(m_scroll - notches * m_row_h, 0, max_scroll);
+    Refresh();
+  }
+
+  void OnKeyDown(wxKeyEvent& e) {
+    switch (e.GetKeyCode()) {
+      case WXK_ESCAPE:
+        DismissAndNotify();
+        return;
+      case WXK_UP:
+        SetHover(m_hover - 1);
+        return;
+      case WXK_DOWN:
+        SetHover(m_hover + 1);
+        return;
+      case WXK_HOME:
+        SetHover(0);
+        return;
+      case WXK_END:
+        SetHover(static_cast<int>(m_items.size()) - 1);
+        return;
+      case WXK_RETURN:
+      case WXK_NUMPAD_ENTER:
+      case WXK_SPACE:
+        Pick(m_hover);
+        return;
+      default:
+        break;
+    }
+    // Typeahead: jump to the next item starting with the typed letter.
+    const int uc = e.GetUnicodeKey();
+    if (uc != WXK_NONE && !m_items.empty()) {
+      const wxUniChar want = wxToupper(wxUniChar(uc));
+      for (size_t n = 1; n <= m_items.size(); ++n) {
+        const size_t i = (m_hover + n) % m_items.size();
+        if (!m_items[i].empty() && wxToupper(m_items[i][0]) == want) {
+          SetHover(static_cast<int>(i));
+          break;
+        }
+      }
+      return;
+    }
+    e.Skip();
+  }
+
+  // wxPopupTransientWindow's own outside-click dismissal depends on mouse
+  // capture (only wired on macOS by the base class) and on focus loss (which
+  // never happens here -- see the comment in the ctor); watching the real
+  // global button state sidesteps both and works the same on every platform.
+  void OnIdle(wxIdleEvent& event) {
+    event.RequestMore();
+    if (wxGetMouseState().LeftIsDown() &&
+        !GetScreenRect().Contains(wxGetMousePosition())) {
+      DismissAndNotify();
+    }
+  }
+
+  MayaraTheme m_theme;
+  std::vector<wxString> m_items;
+  int m_selection;
+  int m_hover = -1;
+  int m_row_h = 24;
+  int m_scroll = 0;
+  bool m_dismissed = false;
+  std::function<void(int)> m_on_pick;
+  std::function<void()> m_on_close;
+};
 
 // ---------------------------------------------------------------- ThemedButton
 ThemedButton::ThemedButton(wxWindow* parent, const wxString& label,
@@ -177,7 +421,7 @@ void ThemedSlider::OnMouse(wxMouseEvent& event) {
 // ---------------------------------------------------------------- ThemedChoice
 ThemedChoice::ThemedChoice(wxWindow* parent, const MayaraTheme& theme)
     : wxControl(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                wxBORDER_NONE),
+                wxBORDER_NONE | wxWANTS_CHARS),
       m_theme(theme) {
   SetBackgroundStyle(wxBG_STYLE_PAINT);
   // Before SetMinSize below and any later Append(), both of which measure
@@ -189,8 +433,17 @@ ThemedChoice::ThemedChoice(wxWindow* parent, const MayaraTheme& theme)
   }
   SetMinSize(wxSize(FromDIP(60), FromDIP(26)));
   Bind(wxEVT_PAINT, &ThemedChoice::OnPaint, this);
-  Bind(wxEVT_LEFT_DOWN, &ThemedChoice::OnClick, this);
+  // On LEFT_UP, not LEFT_DOWN: opening the popup mid-click left it holding
+  // mouse capture when the same click's LEFT_UP arrived a moment later, which
+  // it read as a click on whatever row happened to be under the pointer --
+  // dismissing the list before the user had a chance to look at it.
+  Bind(wxEVT_LEFT_UP, &ThemedChoice::OnClick, this);
+  Bind(wxEVT_KEY_DOWN, &ThemedChoice::OnKeyDown, this);
+  Bind(wxEVT_SET_FOCUS, &ThemedChoice::OnFocusChange, this);
+  Bind(wxEVT_KILL_FOCUS, &ThemedChoice::OnFocusChange, this);
 }
+
+ThemedChoice::~ThemedChoice() { ClosePopup(); }
 
 void ThemedChoice::SetTheme(const MayaraTheme& t) {
   m_theme = t;
@@ -227,7 +480,8 @@ void ThemedChoice::OnPaint(wxPaintEvent&) {
   dc.SetBackground(wxBrush(m_theme.panel_bg));
   dc.Clear();
   dc.SetBrush(wxBrush(m_theme.lozenge_bg));
-  dc.SetPen(wxPen(m_theme.lozenge_border));
+  dc.SetPen(wxPen(HasFocus() ? m_theme.text : m_theme.lozenge_border,
+                  HasFocus() ? 2 : 1));
   dc.DrawRoundedRectangle(0, 0, sz.x, sz.y, FromDIP(5));
   dc.SetTextForeground(IsEnabled() ? m_theme.text : m_theme.dim_text);
   dc.SetFont(GetFont());
@@ -249,16 +503,82 @@ void ThemedChoice::OnPaint(wxPaintEvent&) {
 }
 
 void ThemedChoice::OnClick(wxMouseEvent&) {
+  SetFocus();
+  OpenPopup();
+}
+
+void ThemedChoice::OpenPopup() {
   if (!IsEnabled() || m_items.empty()) return;
-  wxMenu menu;
-  for (int i = 0; i < static_cast<int>(m_items.size()); ++i)
-    menu.AppendCheckItem(1000 + i, m_items[i].label);
-  if (m_selection >= 0) menu.Check(1000 + m_selection, true);
-  const int sel = GetPopupMenuSelectionFromUser(menu);
-  if (sel == wxID_NONE) return;
-  SetSelection(sel - 1000);
+  if (m_open_popup) {  // clicked/pressed again while open: toggle it closed
+    ClosePopup();
+    return;
+  }
+  std::vector<wxString> labels;
+  labels.reserve(m_items.size());
+  for (const Item& it : m_items) labels.push_back(it.label);
+  auto* popup = new ThemedChoicePopup(
+      this, m_theme, std::move(labels), m_selection, [this](int i) {
+        SetSelection(i);
+        wxCommandEvent e(wxEVT_CHOICE, GetId());
+        e.SetEventObject(this);
+        e.SetInt(m_selection);
+        ProcessWindowEvent(e);
+      });
+  m_open_popup = popup;
+  popup->SetOnClose([this]() { m_open_popup = nullptr; });
+  popup->ShowNear(this);
+}
+
+void ThemedChoice::ClosePopup() {
+  if (!m_open_popup) return;
+  // Bare Dismiss(), not the pick/escape/outside-click path: hides, releases
+  // capture, and pops the handlers immediately, without touching m_open_popup
+  // again or this control (which may itself be mid-destruction right now --
+  // see the header comment on m_open_popup for why that matters).
+  m_open_popup->Dismiss();
+  m_open_popup = nullptr;
+}
+
+void ThemedChoice::MoveSelection(int delta) {
+  if (m_items.empty()) return;
+  const int i = std::clamp(m_selection + delta, 0,
+                           static_cast<int>(m_items.size()) - 1);
+  if (i == m_selection) return;
+  SetSelection(i);
   wxCommandEvent e(wxEVT_CHOICE, GetId());
   e.SetEventObject(this);
   e.SetInt(m_selection);
   ProcessWindowEvent(e);
+}
+
+void ThemedChoice::OnKeyDown(wxKeyEvent& e) {
+  if (m_open_popup) {
+    // The list is open: Up/Down/Home/End/typing move its highlighted row,
+    // Enter/Space pick it, Escape cancels -- none of that should reach the
+    // closed-control cases below (which would change the value immediately
+    // instead of just moving the highlight).
+    m_open_popup->HandleKey(e);
+    return;
+  }
+  switch (e.GetKeyCode()) {
+    case WXK_UP:
+      MoveSelection(-1);
+      return;
+    case WXK_DOWN:
+      MoveSelection(1);
+      return;
+    case WXK_SPACE:
+    case WXK_RETURN:
+    case WXK_NUMPAD_ENTER:
+    case WXK_F4:
+      OpenPopup();
+      return;
+    default:
+      e.Skip();
+  }
+}
+
+void ThemedChoice::OnFocusChange(wxFocusEvent& e) {
+  Refresh();
+  e.Skip();
 }
