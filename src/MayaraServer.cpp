@@ -442,8 +442,9 @@ bool MayaraServer::Start() {
     args += " --brand " + wxString::FromUTF8(m_opts.brand.c_str());
   }
   // clap_verbosity_flag's usual -v/-vv, one level per notch above the
-  // server's own default (info). Only useful next to LogPath(), which is
-  // where this goes.
+  // server's own default (Info) -- Debug, then Trace, which is what
+  // Settings labels these as rather than the bare flags. Only useful next
+  // to LogPath(), which is where this goes.
   if (m_opts.log_verbosity > 0)
     args += " -" + wxString('v', std::min(m_opts.log_verbosity, 2));
   const wxString cmd = "\"" + BinaryPath() + "\"" + args;

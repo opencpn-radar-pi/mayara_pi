@@ -1802,8 +1802,8 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
             wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
   wxArrayString vlev;
   vlev.Add(_("Default"));
-  vlev.Add(_("-v"));
-  vlev.Add(_("-vv"));
+  vlev.Add(_("Debug"));
+  vlev.Add(_("Trace"));
   auto* vchoice = new wxChoice(spage, wxID_ANY, wxDefaultPosition,
                                wxDefaultSize, vlev);
   vchoice->SetSelection(m_server->Options().log_verbosity);
