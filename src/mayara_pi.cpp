@@ -513,6 +513,16 @@ void mayara_pi::LoadConfig() {
   bool docked = false;
   cfg->Read("Docked", &docked, false);
   m_docked = docked;
+  // wxFRAME_FLOAT_ON_PARENT is a global NSWindowLevel on macOS (see
+  // m_ppi_stay_on_top), so it floats over unrelated apps too, not just
+  // OpenCPN -- off there by default. Windows and Linux tie it to the actual
+  // parent window as the style name promises, so on by default there.
+#ifdef __WXOSX__
+  const bool default_stay_on_top = false;
+#else
+  const bool default_stay_on_top = true;
+#endif
+  cfg->Read("PpiStayOnTop", &m_ppi_stay_on_top, default_stay_on_top);
   wxString url;
   cfg->Read("ServerUrl", &url);
   m_saved_server_url = std::string(url.mb_str());
@@ -715,6 +725,7 @@ void mayara_pi::SaveConfig() {
     rauto += wxString::Format("%s=%d;", kv.first.c_str(), kv.second ? 1 : 0);
   cfg->Write("RangeAuto", rauto);
   cfg->Write("Docked", m_docked);
+  cfg->Write("PpiStayOnTop", m_ppi_stay_on_top);
   cfg->Write("ServerUrl", wxString::FromUTF8(m_saved_server_url.c_str()));
   cfg->Write("ExplicitServerUrl",
              wxString::FromUTF8(m_explicit_server_url.c_str()));
@@ -1355,6 +1366,16 @@ void mayara_pi::ShowRadarMenu(int canvas) {
                       if (m_parent_window)
                         m_parent_window->CallAfter([this]() { RebuildWindows(); });
                     });
+  p->SetStayOnTopControl(
+      [this]() { return m_ppi_stay_on_top; }, [this](bool on) {
+        if (on == m_ppi_stay_on_top) return;
+        m_ppi_stay_on_top = on;
+        SaveConfig();
+        // A frame's style bits are fixed at creation, so this needs the
+        // same rebuild Docked does.
+        if (m_parent_window)
+          m_parent_window->CallAfter([this]() { RebuildWindows(); });
+      });
   p->SetPrefsControl([this]() { return m_prefs; },
                      [this](const PpiPrefs& q) {
                        m_prefs = q;
@@ -2679,8 +2700,15 @@ void mayara_pi::RebuildWindows() {
       m_aui->AddPane(win, pane);
       ++pane_no;
     } else {
+      // wxFRAME_FLOAT_ON_PARENT, not wxSTAY_ON_TOP: the latter floats above
+      // every application on macOS, not just OpenCPN, which is why this was
+      // off by default for a long time (see m_ppi_stay_on_top). This style
+      // ties it to the specific parent it was created with; a frame's style
+      // cannot be changed later, so toggling it rebuilds the window.
+      const long style = wxDEFAULT_FRAME_STYLE |
+                        (m_ppi_stay_on_top ? wxFRAME_FLOAT_ON_PARENT : 0);
       auto* frame = new wxFrame(m_parent_window, wxID_ANY, wxEmptyString,
-                                wxDefaultPosition, wxSize(880, 560));
+                                wxDefaultPosition, wxSize(880, 560), style);
       win = new MayaraPpiWindow(frame, m_client.get(), grp);
       frame->SetTitle(win->Title());
       frame->SetMinSize(wxSize(480, 320));
@@ -2714,6 +2742,14 @@ void mayara_pi::RebuildWindows() {
                             m_parent_window->CallAfter(
                                 [this]() { RebuildWindows(); });
                         });
+    win->SetStayOnTopControl(
+        [this]() { return m_ppi_stay_on_top; }, [this](bool on) {
+          if (on == m_ppi_stay_on_top) return;
+          m_ppi_stay_on_top = on;
+          SaveConfig();
+          if (m_parent_window)
+            m_parent_window->CallAfter([this]() { RebuildWindows(); });
+        });
     win->SetNavProvider([this]() { return m_nav; });
     win->SetAlarmSoundControl(
         [this]() { return m_guard_alarm_sound; },

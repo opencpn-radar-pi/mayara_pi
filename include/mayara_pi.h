@@ -285,6 +285,13 @@ class mayara_pi : public opencpn_plugin_121 {
   std::vector<wxRect> m_geom_cache;  // last live snapshot of window geometry
   std::vector<wxString> m_persp_cache;  // last live snapshot of AUI pane info
   bool m_docked = false;             // radar windows docked into OpenCPN (AUI)
+  // Floating windows only (meaningless docked): wxFRAME_FLOAT_ON_PARENT, not
+  // wxSTAY_ON_TOP -- the latter is worse, but even this is a global
+  // NSWindowLevel on macOS (floats over unrelated apps too, not just
+  // OpenCPN's own), which is why this was off by default there for so long.
+  // LoadConfig() picks the real default per platform; this initialiser only
+  // covers the sliver of time before LoadConfig() runs.
+  bool m_ppi_stay_on_top = false;
   wxAuiManager* m_aui = nullptr;     // OpenCPN main-frame AUI manager
   bool m_ocpn_fullscreen = false;    // last-seen OpenCPN full-screen state
   std::string m_saved_server_url;    // last-known-good server, persisted

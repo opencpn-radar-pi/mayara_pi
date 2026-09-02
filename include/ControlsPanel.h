@@ -68,6 +68,10 @@ class ControlsPanel : public wxScrolledWindow {
   // "Dock in OpenCPN" toggle for the View section.
   void SetDockControl(std::function<bool()> get, std::function<void(bool)> set);
 
+  // "On top" toggle for the View section (floating windows only).
+  void SetStayOnTopControl(std::function<bool()> get,
+                           std::function<void(bool)> set);
+
   // "Auto" button next to Range: whether the chart's zoom drives this
   // radar's range. get_relevant says whether this radar is on any canvas's
   // overlay right now -- the button is hidden entirely when it is not,
@@ -175,6 +179,8 @@ class ControlsPanel : public wxScrolledWindow {
   std::function<void(int)> m_set_threshold;
   std::function<bool()> m_get_dock;
   std::function<void(bool)> m_set_dock;
+  std::function<bool()> m_get_top;
+  std::function<void(bool)> m_set_top;
   std::function<bool()> m_range_auto_relevant;
   std::function<bool()> m_get_range_auto;
   std::function<void(bool)> m_set_range_auto;
