@@ -139,6 +139,9 @@ class MayaraClient {
   // read; ApiVersionMismatch is true once it is known and differs from ours.
   std::string ServerApiVersion();
   bool ApiVersionMismatch();
+  // mayara-server's own software version, empty until connected. See
+  // m_server_version.
+  std::string ServerVersion();
 
   // Active-radar accessors (the one shown/controlled in the UI).
   RadarState* State();
@@ -192,6 +195,9 @@ class MayaraClient {
   Attempt DiscoverAndConnect();
   // Work out HelpUrl() for `base`, probing :6502 when base is not already it.
   void ResolveHelpUrl(const std::string& base);
+  // Fills m_server_version by asking base's own GET /signalk. See
+  // ServerVersion().
+  void ResolveServerVersion(const std::string& base);
   bool FetchCapabilities(Radar* radar);
   void FetchControlValues(Radar* radar);
   // Surface a JSON error. If the server's API version was seen and differs from
@@ -218,6 +224,11 @@ class MayaraClient {
   std::mutex m_status_mutex;
   std::string m_status{"not connected"};
   std::string m_server_api_version;  // from GET /radars `version`, if present
+  // mayara-server's own software release (e.g. "3.12.3"), distinct from the
+  // Radar API spec version above -- the two are versioned independently.
+  // From GET /signalk's `server.version`, Signal K's standard self-
+  // description; empty if that server does not answer it or is not mayara.
+  std::string m_server_version;
   std::string m_manual;              // user-entered server URL (guarded)
   std::string m_local;               // our own local server, if any (guarded)
   std::string m_hint;                // OpenCPN's Signal K connection (guarded)
