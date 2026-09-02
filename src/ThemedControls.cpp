@@ -65,10 +65,15 @@ class ThemedChoicePopup : public wxPopupTransientWindow {
     Bind(wxEVT_TIMER, &ThemedChoicePopup::OnWatchTimer, this);
   }
 
-  // Fires exactly once, on every dismissal path (pick, escape, outside
-  // click) -- lets the owning ThemedChoice drop its pointer to this popup
-  // before it's gone, so it never holds a dangling one.
-  void SetOnClose(std::function<void()> cb) { m_on_close = std::move(cb); }
+  // Fires exactly once, on every dismissal path -- lets the owning
+  // ThemedChoice drop its pointer to this popup before it's gone, so it never
+  // holds a dangling one. The bool is true only when OnWatchTimer dismissed
+  // us mid-press (the mouse button was still down, just outside): the
+  // matching LEFT_UP is still coming and would otherwise reach
+  // ThemedChoice::OnClick() and reopen a fresh popup for the same press.
+  void SetOnClose(std::function<void(bool reopen_suppressed)> cb) {
+    m_on_close = std::move(cb);
+  }
 
   // ThemedChoice forwards its own key events here while we're open -- see the
   // ctor comment on why we don't rely on receiving them directly.
@@ -129,7 +134,7 @@ class ThemedChoicePopup : public wxPopupTransientWindow {
     m_dismissed = true;
     m_watch_timer.Stop();
     if (wxWindow* p = GetParent()) p->SetFocus();  // back to the closed button
-    if (m_on_close) m_on_close();
+    if (m_on_close) m_on_close(m_reopen_suppressed);
     Destroy();
   }
 
@@ -275,6 +280,11 @@ class ThemedChoicePopup : public wxPopupTransientWindow {
   void OnWatchTimer(wxTimerEvent&) {
     if (wxGetMouseState().LeftIsDown() &&
         !GetScreenRect().Contains(wxGetMousePosition())) {
+      // The button that's down now still owes a LEFT_UP somewhere -- if the
+      // cursor is back over the anchor by then, that event reaches
+      // ThemedChoice::OnClick() and would otherwise open a brand new popup
+      // for what the user experiences as one continuous press.
+      m_reopen_suppressed = true;
       DismissAndNotify();
     }
   }
@@ -287,8 +297,9 @@ class ThemedChoicePopup : public wxPopupTransientWindow {
   int m_row_h = 24;
   int m_scroll = 0;
   bool m_dismissed = false;
+  bool m_reopen_suppressed = false;
   std::function<void(int)> m_on_pick;
-  std::function<void()> m_on_close;
+  std::function<void(bool)> m_on_close;
 };
 
 // ---------------------------------------------------------------- ThemedButton
@@ -539,6 +550,12 @@ void ThemedChoice::OnPaint(wxPaintEvent&) {
 
 void ThemedChoice::OnClick(wxMouseEvent&) {
   SetFocus();
+  if (m_suppress_next_open) {
+    // This LEFT_UP belongs to the same press whose LEFT_DOWN the popup's
+    // watchdog already reacted to by dismissing -- not a fresh click.
+    m_suppress_next_open = false;
+    return;
+  }
   OpenPopup();
 }
 
@@ -560,7 +577,10 @@ void ThemedChoice::OpenPopup() {
         ProcessWindowEvent(e);
       });
   m_open_popup = popup;
-  popup->SetOnClose([this]() { m_open_popup = nullptr; });
+  popup->SetOnClose([this](bool reopen_suppressed) {
+    m_open_popup = nullptr;
+    if (reopen_suppressed) m_suppress_next_open = true;
+  });
   popup->ShowNear(this);
 }
 

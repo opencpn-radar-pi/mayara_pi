@@ -97,6 +97,10 @@ class ThemedChoice : public wxControl {
   // deleted that way leaves wxWindow::GetCapture() dangling, crashing on the
   // next mouse event anywhere in the app.
   ThemedChoicePopup* m_open_popup = nullptr;
+  // Set when the popup's watchdog dismissed it mid-press (see
+  // ThemedChoicePopup::SetOnClose): the LEFT_UP still to come belongs to that
+  // same press and must not reopen a fresh popup. OnClick() clears it.
+  bool m_suppress_next_open = false;
 };
 
 #endif  // MAYARA_THEMED_CONTROLS_H_
