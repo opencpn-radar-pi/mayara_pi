@@ -15,6 +15,7 @@
 #include <utility>
 
 #include <wx/dcclient.h>
+#include <wx/settings.h>
 #include <wx/statline.h>
 #include <wx/tglbtn.h>
 
@@ -126,6 +127,15 @@ void ThemeWindow(wxWindow* w, const MayaraTheme& t) {
   wxTextCtrl* text = wxDynamicCast(w, wxTextCtrl);
   if (wxDynamicCast(w, wxStaticText) || (text && text->IsEditable())) {
     w->SetForegroundColour(t.text);
+  }
+  // Belt and suspenders alongside ControlsPanel's own SetFont() at the top of
+  // Rebuild() (which most children inherit from at construction, already
+  // correctly sized): resizes whatever font a widget already has -- weight,
+  // e.g. the bold section headers, survives since only the point size changes.
+  if (t.menu_font_pt > 0 && w->GetFont().GetPointSize() != t.menu_font_pt) {
+    wxFont f = w->GetFont();
+    f.SetPointSize(t.menu_font_pt);
+    w->SetFont(f);
   }
   for (wxWindow* c : w->GetChildren()) ThemeWindow(c, t);
 }
@@ -484,6 +494,18 @@ void ControlsPanel::Rebuild() {
   DestroyChildren();
   m_updaters.clear();
   m_rebuilding = false;
+
+  // Before any child is built below: native children (wxStaticText, etc.)
+  // inherit a parent's font at construction time, so this needs to happen
+  // first for them to come out the right size. The owner-drawn Themed*
+  // controls instead take m_theme directly and size themselves against it.
+  if (m_theme.menu_font_pt > 0) {
+    wxFont f = GetFont();
+    f.SetPointSize(m_theme.menu_font_pt);
+    SetFont(f);
+  } else {
+    SetFont(wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT));
+  }
 
   RadarControls* c = controls();
   if (!c) {

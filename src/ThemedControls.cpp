@@ -29,6 +29,13 @@ ThemedButton::ThemedButton(wxWindow* parent, const wxString& label,
       m_toggle(toggle) {
   SetLabel(label);
   SetBackgroundStyle(wxBG_STYLE_PAINT);
+  // Before any text-extent-based sizing below, so it's sized for the font it
+  // will actually be painted in.
+  if (theme.menu_font_pt > 0) {
+    wxFont f = GetFont();
+    f.SetPointSize(theme.menu_font_pt);
+    SetFont(f);
+  }
   wxCoord tw, th;
   GetTextExtent(label, &tw, &th);  // uses the window font; no DC needed
   SetMinSize(wxSize(tw + FromDIP(14), th + FromDIP(12)));
@@ -88,6 +95,11 @@ ThemedSlider::ThemedSlider(wxWindow* parent, const MayaraTheme& theme)
                 wxBORDER_NONE),
       m_theme(theme) {
   SetBackgroundStyle(wxBG_STYLE_PAINT);
+  if (theme.menu_font_pt > 0) {
+    wxFont f = GetFont();
+    f.SetPointSize(theme.menu_font_pt);
+    SetFont(f);
+  }
   SetMinSize(wxSize(FromDIP(90), FromDIP(24)));
   Bind(wxEVT_PAINT, &ThemedSlider::OnPaint, this);
   Bind(wxEVT_LEFT_DOWN, &ThemedSlider::OnMouse, this);
@@ -160,6 +172,13 @@ ThemedChoice::ThemedChoice(wxWindow* parent, const MayaraTheme& theme)
                 wxBORDER_NONE),
       m_theme(theme) {
   SetBackgroundStyle(wxBG_STYLE_PAINT);
+  // Before SetMinSize below and any later Append(), both of which measure
+  // text against the window's current font.
+  if (theme.menu_font_pt > 0) {
+    wxFont f = GetFont();
+    f.SetPointSize(theme.menu_font_pt);
+    SetFont(f);
+  }
   SetMinSize(wxSize(FromDIP(60), FromDIP(26)));
   Bind(wxEVT_PAINT, &ThemedChoice::OnPaint, this);
   Bind(wxEVT_LEFT_DOWN, &ThemedChoice::OnClick, this);

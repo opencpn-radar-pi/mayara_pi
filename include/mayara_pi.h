@@ -296,6 +296,7 @@ class mayara_pi : public opencpn_plugin_121 {
   // the real default; this initialiser only covers the sliver of time
   // before it runs.
   bool m_ppi_stay_on_top = true;
+  int m_menu_font_pt = 0;  // control panel text size override; 0 = default
   wxAuiManager* m_aui = nullptr;     // OpenCPN main-frame AUI manager
   bool m_ocpn_fullscreen = false;    // last-seen OpenCPN full-screen state
   std::string m_saved_server_url;    // last-known-good server, persisted
