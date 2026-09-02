@@ -168,6 +168,10 @@ class mayara_pi : public opencpn_plugin_121 {
   static const int kChartMenuMargin = 10;
   ControlsPanel* m_chart_menu = nullptr;  // controls over the chart, not owned
   int m_chart_menu_canvas = -1;
+  // Once the user drags or resizes the chart menu, FitChartMenu() stops
+  // fighting them over that axis until it is next reopened.
+  bool m_chart_menu_user_moved = false;
+  bool m_chart_menu_user_sized = false;
   ZoneEdit m_chart_zone;  // the chart menu's own live guard-zone edit
   int OverlaySel(int canvas) const;
   bool OverlayOn(int canvas) const { return OverlaySel(canvas) != kOverlayNone; }
@@ -285,6 +289,14 @@ class mayara_pi : public opencpn_plugin_121 {
   std::vector<wxRect> m_geom_cache;  // last live snapshot of window geometry
   std::vector<wxString> m_persp_cache;  // last live snapshot of AUI pane info
   bool m_docked = false;             // radar windows docked into OpenCPN (AUI)
+  // Floating windows only (meaningless docked): wxFRAME_FLOAT_ON_PARENT, not
+  // wxSTAY_ON_TOP -- the latter is worse, and even this is technically a
+  // global NSWindowLevel on macOS too, not truly parent-scoped, but live
+  // testing found no trouble against a plain wxFrame. See LoadConfig() for
+  // the real default; this initialiser only covers the sliver of time
+  // before it runs.
+  bool m_ppi_stay_on_top = true;
+  int m_menu_font_pt = 0;  // control panel text size override; 0 = default
   wxAuiManager* m_aui = nullptr;     // OpenCPN main-frame AUI manager
   bool m_ocpn_fullscreen = false;    // last-seen OpenCPN full-screen state
   std::string m_saved_server_url;    // last-known-good server, persisted

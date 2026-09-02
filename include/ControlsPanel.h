@@ -107,6 +107,15 @@ class ControlsPanel : public wxScrolledWindow {
   void SetPrefsControl(std::function<PpiPrefs()> get,
                        std::function<void(const PpiPrefs&)> set);
 
+  // Let the host make this panel free-floating: draggable by its title bar,
+  // resizable via a bottom-right corner grip. Both callbacks get the pointer
+  // delta since the last event; the host owns clamping/persisting the actual
+  // geometry (this panel doesn't know its parent's bounds). Used only for the
+  // chart-canvas overlay -- the PPI window's docked/popup placements manage
+  // their own geometry and never call this.
+  void SetFreeFloatHandlers(std::function<void(int dx, int dy)> on_drag,
+                            std::function<void(int dw, int dh)> on_resize);
+
  private:
 #ifdef __WXMSW__
   // Windows always shows a native scrollbar, so drawing our own would put a
@@ -117,8 +126,10 @@ class ControlsPanel : public wxScrolledWindow {
 #endif
   wxSizer* WithScrollGutter(wxSizer* content);
   wxRect ThumbRect() const;
+  wxRect GripRect() const;  // free-float resize grip, bottom-right corner
   void OnPaint(wxPaintEvent& event);
   void OnBarMouse(wxMouseEvent& event);
+  void OnTitleMouse(wxMouseEvent& event);  // free-float drag, on the title row
   wxSizer* MakeCloseRow();  // a "Controls  ×" header row
   void ThemeChildren();
   void ScrollSectionIntoView(wxWindow* header, wxSizer* content);
@@ -192,6 +203,13 @@ class ControlsPanel : public wxScrolledWindow {
   std::function<void(const ZoneEdit&, bool)> m_zone_set;
   std::function<PpiPrefs()> m_get_prefs;
   std::function<void(const PpiPrefs&)> m_set_prefs;
+
+  wxStaticText* m_title = nullptr;            // "Controls" header label
+  std::function<void(int, int)> m_on_drag;    // free-float: title bar drag
+  std::function<void(int, int)> m_on_resize;  // free-float: corner grip drag
+  bool m_dragging_title = false;
+  bool m_resizing = false;
+  wxPoint m_drag_last;  // screen coords, valid while dragging or resizing
 
   wxDECLARE_EVENT_TABLE();
 };
