@@ -9,8 +9,11 @@
 # The result is a <plugins>-rooted catalog: a <meta-url> include pulling in
 # the matching official OpenCPN/plugins channel (so pointing OpenCPN at ours
 # does not hide every other plugin), followed by our own <plugin> entries.
-# A target whose build failed this run (its -metadata package 404s) is
-# skipped rather than published with a broken tarball-url.
+# A target's upload is pushed with --no-wait-for-sync, so a 404 right after
+# all CI jobs finish can just mean Cloudsmith's CDN hasn't caught up yet, not
+# that the target failed to build -- so a 404 is retried for up to
+# $sync_timeout before that target is finally skipped rather than published
+# with a broken tarball-url.
 #
 # Usage: generate-catalog.sh <channel> <cloudsmith-repo> <cloudsmith-version> <package-version> <output-file>
 #   channel:            alpha | beta | prod
@@ -54,6 +57,12 @@ targets=(
   "msvc-x86-wx32-10.0.20348-MSVC"
 )
 
+# How long to keep retrying a 404 (Cloudsmith CDN sync lag) before giving up
+# on a target, and how long to sleep between attempts. The catalog job has
+# nothing else to do meanwhile, so this errs long.
+sync_timeout=600
+retry_interval=10
+
 {
   echo '<?xml version="1.0" encoding="UTF-8"?>'
   echo '<plugins>'
@@ -66,27 +75,37 @@ targets=(
   for t in "${targets[@]}"; do
     name="mayara_pi-${pkg_version}-${t}-metadata"
     url="https://dl.cloudsmith.io/public/${repo}/raw/names/${name}/versions/${version}/mayara_pi-${pkg_version}-${t}.xml"
-    tmp="$(mktemp)"
-    # -f alone can't tell a real 404 (target didn't build this run) apart
-    # from a 5xx/DNS/timeout/not-yet-synced-upload -- read the status code
-    # instead, retry transient failures, and only skip on a confirmed 404.
-    http_code=$(curl -sS -o "$tmp" -w '%{http_code}' \
-      --retry 5 --retry-all-errors --retry-delay 3 \
-      --connect-timeout 10 --max-time 60 \
-      "$url" || echo 000)
-    case "$http_code" in
-      200) sed '/<?xml/d' "$tmp" ;;
-      # $t is one of our own fixed target names above, safe to embed as-is.
-      # $version is not: it can come straight from a git tag, which (unlike
-      # an XML comment) is allowed to contain "--".
-      404) echo "  <!-- $t: not published, skipped -->" ;;
-      *)
-        echo "generate-catalog.sh: $t: HTTP $http_code fetching $url" >&2
+    deadline=$(( $(date +%s) + sync_timeout ))
+    while :; do
+      tmp="$(mktemp)"
+      # -f alone can't tell a real 404 (target didn't build this run, or
+      # hasn't synced to the CDN yet) apart from a 5xx/DNS/timeout -- read
+      # the status code instead, let curl retry transient failures itself,
+      # and only fall through to the 404 case on a confirmed one.
+      http_code=$(curl -sS -o "$tmp" -w '%{http_code}' \
+        --retry 5 --retry-all-errors --retry-delay 3 \
+        --connect-timeout 10 --max-time 60 \
+        "$url" || echo 000)
+      if [ "$http_code" = 200 ]; then
+        sed '/<?xml/d' "$tmp"
         rm -f "$tmp"
+        break
+      fi
+      rm -f "$tmp"
+      if [ "$http_code" != 404 ]; then
+        echo "generate-catalog.sh: $t: HTTP $http_code fetching $url" >&2
         exit 1
-        ;;
-    esac
-    rm -f "$tmp"
+      fi
+      if [ "$(date +%s)" -ge "$deadline" ]; then
+        # $t is one of our own fixed target names above, safe to embed as-is.
+        # $version is not: it can come straight from a git tag, which (unlike
+        # an XML comment) is allowed to contain "--".
+        echo "  <!-- $t: not published, skipped -->"
+        break
+      fi
+      echo "generate-catalog.sh: $t: not synced yet, retrying in ${retry_interval}s..." >&2
+      sleep "$retry_interval"
+    done
   done
 
   echo '</plugins>'
