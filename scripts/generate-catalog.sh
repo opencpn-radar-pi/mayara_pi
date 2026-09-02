@@ -103,8 +103,11 @@ retry_interval=10
         echo "  <!-- $t: not published, skipped -->"
         break
       fi
-      echo "generate-catalog.sh: $t: not synced yet, retrying in ${retry_interval}s..." >&2
-      sleep "$retry_interval"
+      wait_for="$retry_interval"
+      remaining=$(( deadline - $(date +%s) ))
+      if [ "$remaining" -lt "$wait_for" ]; then wait_for="$remaining"; fi
+      echo "generate-catalog.sh: $t: not synced yet, retrying in ${wait_for}s..." >&2
+      sleep "$wait_for"
     done
   done
 
