@@ -1464,6 +1464,21 @@ void mayara_pi::SyncLocalServerUrl() {
   m_client->SetLocalUrl(use_local ? MayaraServer::LocalUrl() : std::string());
 }
 
+// "Run it here" can be switched off from more than one place -- the Settings
+// dialog, and the search dialog's embedded MayaraServerPanel -- so both call
+// this rather than one of them repeating the cleanup. Without it, the
+// address remembered for a fast reconnect stays the loopback one of a server
+// we just stopped: every future session tries -- and fails against -- a
+// server that was deliberately turned off, before it falls through to real
+// discovery.
+void mayara_pi::ForgetLocalServerIfDisabled() {
+  if (!m_server || m_server->Enabled()) return;
+  if (m_saved_server_url != MayaraServer::LocalUrl()) return;
+  m_saved_server_url.clear();
+  if (m_client) m_client->SetRememberedUrl("");
+  SaveConfig();
+}
+
 // The Signal K server OpenCPN is itself set up to talk to, if any. mayara is
 // commonly installed as a Signal K plugin on the same box, so an existing
 // connection is a good guess at where to find it -- and it works on networks
@@ -1635,6 +1650,7 @@ void mayara_pi::ShowSearchDialog() {
       m_search_dialog->Fit();
     }
     SyncLocalServerUrl();
+    ForgetLocalServerIfDisabled();
   });
   top->Add(local, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
 
@@ -2335,15 +2351,7 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
     SyncLocalServerUrl();
   }
 
-  // Leaving "run it here": the remembered address is the loopback one, which
-  // now points at a server we just stopped. Keeping it would put a guaranteed
-  // failure first in line on every future search.
-  if (!r_local->GetValue() &&
-      m_saved_server_url == MayaraServer::LocalUrl()) {
-    m_saved_server_url.clear();
-    if (m_client) m_client->SetRememberedUrl("");
-    SaveConfig();
-  }
+  ForgetLocalServerIfDisabled();
 
   // Normalise the address (add scheme, drop trailing slash). Running locally
   // means no manual address: the local server is reached at a fixed loopback

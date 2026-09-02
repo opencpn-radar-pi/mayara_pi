@@ -108,6 +108,9 @@ class mayara_pi : public opencpn_plugin_121 {
   void SyncAccessConfig();
   // Point the client at the mayara-server we run ourselves, or clear it.
   void SyncLocalServerUrl();
+  // Clears the remembered fast-reconnect address when it is the local
+  // server's and "Run it here" is now off. See mayara_pi.cpp for why.
+  void ForgetLocalServerIfDisabled();
   // OpenCPN's own Signal K connection, as a discovery hint. Empty if none.
   std::string OpenCpnSignalKUrl() const;
   // Raise a guard-zone alarm with OpenCPN when the server reports a new one.

@@ -3,10 +3,12 @@
  *****************************************************************************/
 #include "MayaraClient.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <iterator>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -202,6 +204,9 @@ void MayaraClient::Stop() {
   if (m_targets_thread.joinable()) m_targets_thread.join();
   {
     std::lock_guard<std::mutex> lock(m_radars_mutex);
+    // Retire rather than destroy: see m_retired_radars.
+    std::move(m_radars.begin(), m_radars.end(),
+             std::back_inserter(m_retired_radars));
     m_radars.clear();
   }
   m_control_ws.reset();
@@ -847,6 +852,9 @@ MayaraClient::Attempt MayaraClient::DiscoverAndConnect() {
 
   {
     std::lock_guard<std::mutex> lock(m_radars_mutex);
+    // Retire rather than destroy: see m_retired_radars.
+    std::move(m_radars.begin(), m_radars.end(),
+             std::back_inserter(m_retired_radars));
     m_radars = std::move(live);
     m_active = 0;
   }
