@@ -18,6 +18,7 @@
 #include <wx/clrpicker.h>
 #include <wx/dcmemory.h>
 #include <wx/display.h>
+#include <wx/ffile.h>
 #include <wx/fileconf.h>
 #include <wx/frame.h>
 #include <wx/graphics.h>
@@ -60,6 +61,205 @@ class CallbackTimer : public wxTimer {
  private:
   std::function<void()> m_cb;
 };
+
+// --- Changelog rendering ----------------------------------------------------
+// A changelog viewer, not a general markdown renderer: this only has to
+// handle the fixed shape git-cliff's Keep a Changelog template (cliff.toml)
+// produces -- headings, bullet lists (with wrapped continuation lines
+// indented under them), inline links/bold/code, and the "[label]: url"
+// reference links at the bottom of each section, which is how git-cliff
+// makes heading text like "## [Unreleased]" linkable.
+
+wxString HtmlEscape(const wxString& s) {
+  wxString out = s;
+  out.Replace("&", "&amp;");
+  out.Replace("<", "&lt;");
+  out.Replace(">", "&gt;");
+  return out;
+}
+
+// A **bold**/`code`-style marker pair, replaced with the given tags. Assumes
+// well-formed (paired) markers -- all this file's generator ever emits --
+// and leaves an unmatched marker as literal text.
+wxString ReplacePairedMarker(const wxString& s, const wxString& marker,
+                             const wxString& open_tag,
+                             const wxString& close_tag) {
+  wxString out;
+  const size_t mlen = marker.Length();
+  size_t i = 0;
+  while (i < s.Length()) {
+    if (s.Mid(i, mlen) == marker) {
+      const int close = s.Mid(i + mlen).Find(marker);
+      if (close != wxNOT_FOUND) {
+        out += open_tag + s.Mid(i + mlen, close) + close_tag;
+        i = i + mlen + close + mlen;
+        continue;
+      }
+    }
+    out += s[i];
+    ++i;
+  }
+  return out;
+}
+
+// [text](url) -> <a href="url">text</a>, the only link form git-cliff emits.
+wxString ReplaceLinks(const wxString& s) {
+  wxString out;
+  size_t i = 0;
+  while (i < s.Length()) {
+    if (s[i] == '[') {
+      const int close_bracket = s.Mid(i + 1).Find(']');
+      if (close_bracket != wxNOT_FOUND) {
+        const size_t paren = i + 1 + close_bracket + 1;
+        if (paren < s.Length() && s[paren] == '(') {
+          const int close_paren = s.Mid(paren + 1).Find(')');
+          if (close_paren != wxNOT_FOUND) {
+            const wxString text = s.Mid(i + 1, close_bracket);
+            const wxString url = s.Mid(paren + 1, close_paren);
+            out += wxString::Format("<a href=\"%s\">%s</a>", url, text);
+            i = paren + 1 + close_paren + 1;
+            continue;
+          }
+        }
+      }
+    }
+    out += s[i];
+    ++i;
+  }
+  return out;
+}
+
+// Escape, then the small set of inline markdown this file uses.
+wxString InlineMarkdown(const wxString& raw) {
+  wxString s = HtmlEscape(raw);
+  s = ReplaceLinks(s);
+  s = ReplacePairedMarker(s, "**", "<b>", "</b>");
+  s = ReplacePairedMarker(s, "`", "<code>", "</code>");
+  return s;
+}
+
+wxString ChangelogMarkdownToHtml(const wxString& markdown) {
+  std::vector<wxString> raw_lines;
+  {
+    wxStringTokenizer lines(markdown, "\n", wxTOKEN_RET_EMPTY_ALL);
+    while (lines.HasMoreTokens()) {
+      wxString l = lines.GetNextToken();
+      l.Replace("\r", "");
+      raw_lines.push_back(l);
+    }
+  }
+
+  // "[label]: url" reference-link definitions, collected up front so a
+  // heading whose bracketed text matches one can be linked below.
+  std::map<wxString, wxString> refs;
+  for (const wxString& raw : raw_lines) {
+    wxString t = raw;
+    t.Trim(false);
+    if (t.IsEmpty() || t[0] != '[') continue;
+    const int close = t.Find("]:");
+    if (close == wxNOT_FOUND) continue;
+    const wxString label = t.Mid(1, close - 1);
+    wxString url = t.Mid(close + 2);
+    url.Trim(false);
+    url.Trim();
+    if (!url.IsEmpty()) refs[label] = url;
+  }
+
+  wxString html;
+  enum class Block { kNone, kPara, kList };
+  Block block = Block::kNone;
+  wxString pending;
+
+  auto flush = [&]() {
+    if (pending.IsEmpty()) return;
+    const wxString rendered = InlineMarkdown(pending);
+    html += (block == Block::kList ? "<li>" : "<p>") + rendered +
+           (block == Block::kList ? "</li>\n" : "</p>\n");
+    pending.Clear();
+  };
+  auto close_block = [&]() {
+    flush();
+    if (block == Block::kList) html += "</ul>\n";
+    block = Block::kNone;
+  };
+
+  for (const wxString& raw : raw_lines) {
+    wxString t = raw;
+    t.Trim(false);  // leading whitespace tells a continuation from new text
+    const bool indented = t.Length() != raw.Length();
+
+    if (t.IsEmpty()) {
+      close_block();
+      continue;
+    }
+    if (t[0] == '[' && t.Find("]:") != wxNOT_FOUND) continue;  // ref link def
+
+    if (t[0] == '#') {
+      size_t level = 0;
+      while (level < t.Length() && t[level] == '#') ++level;
+      if (level <= 6 && level < t.Length() && t[level] == ' ') {
+        close_block();
+        wxString text = t.Mid(level + 1);
+        text.Trim(false);
+        wxString rendered;
+        if (!text.IsEmpty() && text[0] == '[') {
+          const int close_bracket = text.Find(']');
+          if (close_bracket != wxNOT_FOUND) {
+            const wxString label = text.Mid(1, close_bracket - 1);
+            const wxString rest = text.Mid(close_bracket + 1);
+            const auto it = refs.find(label);
+            if (it != refs.end())
+              rendered = wxString::Format("<a href=\"%s\">%s</a>",
+                                          it->second, HtmlEscape(label)) +
+                        InlineMarkdown(rest);
+          }
+        }
+        if (rendered.IsEmpty()) rendered = InlineMarkdown(text);
+        html += wxString::Format("<h%d>%s</h%d>\n", static_cast<int>(level),
+                                 rendered, static_cast<int>(level));
+        continue;
+      }
+    }
+    if (t.Mid(0, 2) == "- ") {
+      if (block != Block::kList) {
+        close_block();
+        html += "<ul>\n";
+        block = Block::kList;
+      } else {
+        flush();
+      }
+      pending = t.Mid(2);
+      continue;
+    }
+    // A continuation of the item/paragraph above, or a new paragraph.
+    if (block == Block::kList && !indented) close_block();
+    if (block == Block::kNone) block = Block::kPara;
+    if (!pending.IsEmpty()) pending += " ";
+    pending += t;
+  }
+  close_block();
+  return html;
+}
+
+wxString ChangelogPage(const wxString& body) {
+  return wxString::Format(
+      "<!doctype html><html><head><meta charset=\"utf-8\"><title>%s</title>"
+      "<style>"
+      "body{font:15px/1.6 -apple-system,'Segoe UI',sans-serif;"
+      "max-width:760px;margin:2em auto;padding:0 1em;color:#1a1a1a}"
+      "h1{font-size:1.6em;border-bottom:1px solid #ddd;padding-bottom:.3em}"
+      "h2{font-size:1.25em;margin-top:1.8em;color:#0a6b46}"
+      "h3{font-size:.95em;text-transform:uppercase;letter-spacing:.04em;"
+      "color:#888;margin:1em 0 .3em}"
+      "ul{margin:.2em 0 1em;padding-left:1.4em}"
+      "li{margin:.3em 0}"
+      "a{color:#0969da;text-decoration:none}"
+      "a:hover{text-decoration:underline}"
+      "code{background:#f2f2f2;padding:.1em .35em;border-radius:3px;"
+      "font-size:.9em}"
+      "</style></head><body>%s</body></html>",
+      _("Mayara Changelog"), body);
+}
 }  // namespace
 #include "RadarState.h"
 #include "version.h"  // generated by FE2 from CMakeLists.txt values
@@ -1701,6 +1901,58 @@ void mayara_pi::PlayGuardAlarmSound() {
   PlugInPlaySoundEx(path);
 }
 
+// data/CHANGELOG.md ships and is found the same way as alarm.wav above, kept
+// in sync with the repo root's own CHANGELOG.md by the release/changelog CI
+// workflows -- so what a build shows is exactly what that build contains,
+// unlike a live fetch from GitHub, which would leak in changes the user
+// does not have yet. Rendered fresh on every click rather than once at
+// install time: cheap, and it means an edited CHANGELOG.md (a dev build)
+// shows up without a separate build step.
+void mayara_pi::OpenChangelog(wxWindow* parent) {
+  const wxString dir = GetPluginDataDir(PLUGIN_PACKAGE_NAME);
+  const wxString src = dir.IsEmpty() ? wxString()
+                                     : dir + wxFileName::GetPathSeparator() +
+                                           "data" +
+                                           wxFileName::GetPathSeparator() +
+                                           "CHANGELOG.md";
+  if (src.IsEmpty() || !wxFileExists(src)) {
+    wxMessageBox(_("No changelog is available in this build."), _("Mayara"),
+                wxOK | wxICON_INFORMATION, parent);
+    return;
+  }
+  wxString markdown;
+  wxFFile in(src, "rb");
+  if (!in.IsOpened() || !in.ReadAll(&markdown, wxConvUTF8)) {
+    wxMessageBox(wxString::Format(_("Cannot read %s."), src), _("Mayara"),
+                wxOK | wxICON_WARNING, parent);
+    return;
+  }
+
+  const wxString out_path = m_server ? m_server->InstallDir() +
+                                           wxFileName::GetPathSeparator() +
+                                           "changelog.html"
+                                     : wxString();
+  if (out_path.IsEmpty()) {
+    wxMessageBox(_("Nowhere writable was found for the changelog page."),
+                _("Mayara"), wxOK | wxICON_WARNING, parent);
+    return;
+  }
+  wxFFile out(out_path, "wb");
+  if (!out.IsOpened() ||
+      !out.Write(ChangelogPage(ChangelogMarkdownToHtml(markdown)),
+                wxConvUTF8)) {
+    wxMessageBox(wxString::Format(_("Cannot write %s."), out_path),
+                _("Mayara"), wxOK | wxICON_WARNING, parent);
+    return;
+  }
+  out.Close();
+  if (!wxLaunchDefaultApplication(out_path))
+    wxMessageBox(
+        wxString::Format(_("Cannot open the changelog. It is here:\n\n%s"),
+                        out_path),
+        _("Mayara"), wxOK | wxICON_INFORMATION, parent);
+}
+
 std::string mayara_pi::OpenCpnSignalKUrl() const {
   wxFileConfig* cfg = GetOCPNConfigObject();
   if (!cfg) return "";
@@ -2387,7 +2639,15 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   live_timer.Start(1000);
 
   top->Add(book, 1, wxEXPAND | wxALL, 8);
-  top->Add(dlg.CreateButtonSizer(wxOK | wxCANCEL), 0, wxALIGN_RIGHT | wxALL, 8);
+  auto* bottom = new wxBoxSizer(wxHORIZONTAL);
+  auto* changelog_btn = new wxButton(&dlg, wxID_ANY, _("Changelog"));
+  changelog_btn->Bind(wxEVT_BUTTON, [this, &dlg](wxCommandEvent&) {
+    OpenChangelog(&dlg);
+  });
+  bottom->Add(changelog_btn, 0, wxALIGN_CENTER_VERTICAL);
+  bottom->AddStretchSpacer(1);
+  bottom->Add(dlg.CreateButtonSizer(wxOK | wxCANCEL), 0);
+  top->Add(bottom, 0, wxEXPAND | wxALL, 8);
 
   // Initial state from what is configured now.
   const bool run_local = have_server && m_server->Enabled();
