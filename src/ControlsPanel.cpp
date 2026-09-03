@@ -35,13 +35,15 @@ namespace {
 
 // TEMP: write the drag/resize trace straight to a file, sidestepping wx's
 // logging framework (whose output depends on OpenCPN's own log-level
-// setting) entirely. Neither $HOME nor GetUserDataDir() were writable
-// inside the flatpak sandbox under test; GetPluginDataDir() is the
-// directory OpenCPN itself already created and manages for this plugin
-// (confirmed to exist from "using data dir: ..." in opencpn.log). To be
-// reverted before merge.
+// setting) entirely. $HOME, GetUserDataDir(), and GetPluginDataDir() all
+// silently failed to produce a file inside the flatpak sandbox under test
+// (likely read-only there) -- hardcode the directory opencpn.log itself
+// is already proven to write into every second. To be reverted before
+// merge.
 void DiagLog(const wxString& msg) {
-  wxFile f(GetPluginDataDir("mayara_pi") + "/mayara-drag-trace.log",
+  wxLogMessage("mayara DIAG: %s", msg);
+  wxFile f("/home/kees/.var/app/org.opencpn.OpenCPN/config/opencpn/"
+            "mayara-drag-trace.log",
             wxFile::write_append);
   if (!f.IsOpened()) return;
   f.Write(wxDateTime::Now().FormatISOTime() + " " + msg + "\n");
