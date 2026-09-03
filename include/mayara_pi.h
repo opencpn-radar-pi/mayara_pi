@@ -172,6 +172,10 @@ class mayara_pi : public opencpn_plugin_121 {
   // fighting them over that axis until it is next reopened.
   bool m_chart_menu_user_moved = false;
   bool m_chart_menu_user_sized = false;
+  // Last position/size the user left the menu at, keyed by canvas. Persisted,
+  // and applied the next time that canvas's menu opens -- in this session or
+  // the next -- instead of the auto-fit corner/size.
+  std::map<int, wxRect> m_chart_menu_rect;
   ZoneEdit m_chart_zone;  // the chart menu's own live guard-zone edit
   int OverlaySel(int canvas) const;
   bool OverlayOn(int canvas) const { return OverlaySel(canvas) != kOverlayNone; }

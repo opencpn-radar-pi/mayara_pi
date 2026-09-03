@@ -431,6 +431,25 @@ void mayara_pi::LoadConfig() {
       m_overlay_sel[0] = kOverlayNone;
     }
   }
+  // "ChartMenuRect" is "canvas:x,y,w,h;...", same shape as OverlaySel above.
+  m_chart_menu_rect.clear();
+  wxString menu_rects;
+  if (cfg->Read("ChartMenuRect", &menu_rects) && !menu_rects.IsEmpty()) {
+    wxStringTokenizer tok(menu_rects, ";");
+    while (tok.HasMoreTokens()) {
+      const wxString entry = tok.GetNextToken();
+      const int colon = entry.Find(':');
+      if (colon == wxNOT_FOUND) continue;
+      long c = 0;
+      if (!entry.Left(colon).ToLong(&c)) continue;
+      wxStringTokenizer nums(entry.Mid(colon + 1), ",");
+      long x, y, w, h;
+      if (nums.CountTokens() == 4 && nums.GetNextToken().ToLong(&x) &&
+          nums.GetNextToken().ToLong(&y) && nums.GetNextToken().ToLong(&w) &&
+          nums.GetNextToken().ToLong(&h) && w > 0 && h > 0)
+        m_chart_menu_rect[static_cast<int>(c)] = wxRect(x, y, w, h);
+    }
+  }
   long hz = 5, autohide = 0;
   bool reverse_zoom = false;
   cfg->Read("RefreshHz", &hz, 5);
@@ -693,6 +712,12 @@ void mayara_pi::SaveConfig() {
   for (const auto& kv : m_overlay_sel)
     sel += wxString::Format("%d:%d;", kv.first, kv.second);
   cfg->Write("OverlaySel", sel);
+  wxString menu_rects;
+  for (const auto& kv : m_chart_menu_rect)
+    menu_rects += wxString::Format("%d:%d,%d,%d,%d;", kv.first, kv.second.x,
+                                   kv.second.y, kv.second.width,
+                                   kv.second.height);
+  cfg->Write("ChartMenuRect", menu_rects);
   cfg->Write("RefreshHz", static_cast<long>(m_prefs.refresh_hz));
   cfg->Write("ReverseZoom", m_prefs.reverse_zoom);
   cfg->Write("MenuAutoHide", static_cast<long>(m_prefs.menu_autohide));
@@ -1291,9 +1316,17 @@ void mayara_pi::ShowRadarMenu(int canvas) {
   auto* p = new ControlsPanel(cw, m_client.get(), m_client->ActiveIndex());
   m_chart_menu = p;
   m_chart_menu_canvas = canvas;
-  // Each fresh open starts from the auto-fit corner/size again.
-  m_chart_menu_user_moved = false;
-  m_chart_menu_user_sized = false;
+  // Where this canvas's menu was last left, if anywhere -- otherwise the
+  // auto-fit corner/size, same as a canvas opening it for the first time.
+  const auto saved = m_chart_menu_rect.find(canvas);
+  if (saved != m_chart_menu_rect.end()) {
+    p->SetSize(saved->second);
+    m_chart_menu_user_moved = true;
+    m_chart_menu_user_sized = true;
+  } else {
+    m_chart_menu_user_moved = false;
+    m_chart_menu_user_sized = false;
+  }
 
   std::vector<int> all;
   for (int i = 0; i < m_client->RadarCount(); ++i) all.push_back(i);
@@ -1391,6 +1424,8 @@ void mayara_pi::ShowRadarMenu(int canvas) {
         pos.y = std::clamp(pos.y + dy, 0, std::max(0, cs.y - sz.y));
         m_chart_menu->SetPosition(pos);
         m_chart_menu_user_moved = true;
+        m_chart_menu_rect[m_chart_menu_canvas] =
+            wxRect(pos, m_chart_menu->GetSize());
       },
       [this](int dw, int dh) {
         if (!m_chart_menu) return;
@@ -1405,6 +1440,7 @@ void mayara_pi::ShowRadarMenu(int canvas) {
         m_chart_menu->Layout();
         m_chart_menu->FitInside();
         m_chart_menu_user_sized = true;
+        m_chart_menu_rect[m_chart_menu_canvas] = wxRect(pos, sz);
       });
 
   // Top-left, clear of the chart bar along the bottom. Height is capped to the
@@ -1416,6 +1452,10 @@ void mayara_pi::ShowRadarMenu(int canvas) {
   // shutdown) takes the panel with it. Notice, rather than keep a dead pointer.
   p->Bind(wxEVT_DESTROY, [this](wxWindowDestroyEvent& e) {
     if (e.GetWindow() == m_chart_menu) {
+      // The canvas taking the panel with it bypasses DestroyChartMenu(), so
+      // its own save (below) never runs -- do it here too, or a moved/sized
+      // menu whose canvas disappears (layout change, shutdown) loses that.
+      if (m_chart_menu_user_moved || m_chart_menu_user_sized) SaveConfig();
       m_chart_menu = nullptr;
       m_chart_menu_canvas = -1;
     }
@@ -1500,6 +1540,9 @@ void mayara_pi::DestroyChartMenu() {
   m_chart_menu = nullptr;
   m_chart_menu_canvas = -1;
   p->Destroy();
+  // m_chart_menu_rect is already current -- every drag/resize wrote straight
+  // into it -- so closing is exactly when there is something new to persist.
+  if (m_chart_menu_user_moved || m_chart_menu_user_sized) SaveConfig();
 }
 
 void mayara_pi::RaisePpiWindows() {
