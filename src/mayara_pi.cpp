@@ -226,9 +226,14 @@ int mayara_pi::Init() {
       m_ocpn_fullscreen = fs;
       SyncRadarFullScreen(fs);
     }
-    // Snapshot geometry for persistence, but not while full-screen (that would
-    // save the full-screen rects).
-    if (AnyWindowShown() && !m_ocpn_fullscreen) CaptureWindowState();
+    // Snapshot geometry and shown/hidden state for persistence, but not while
+    // full-screen (that would save the full-screen rects) or while the whole
+    // group is off: every window reads as hidden then, which would capture
+    // over each window's real individual state with a uniform "all hidden"
+    // the moment the master toggle -- not the user closing one window --
+    // is why they are all hidden right now.
+    if (!m_ocpn_fullscreen && !m_windows.empty() && m_windows_visible)
+      CaptureWindowState();
 
     if (m_client && m_diag.log_level > 0)
       for (const auto& line : m_client->TakeLog())
@@ -625,6 +630,9 @@ bool mayara_pi::RadarInOverlay(int radar_index) const {
 // Snapshot geometry + visibility while the windows are definitely alive. wx may
 // destroy top-level windows before DeInit, so we never read them at shutdown.
 void mayara_pi::CaptureWindowState() {
+  m_shown_cache.clear();
+  for (MayaraPpiWindow* w : m_windows)
+    m_shown_cache.push_back(w != nullptr && w->IsWindowShown());
   if (m_docked) {
     // Docked: remember each pane's AUI layout (dock side, float pos/size, ...).
     m_persp_cache.clear();
@@ -647,6 +655,19 @@ void mayara_pi::SaveWindowState() {
   if (!cfg) return;
   cfg->SetPath(kConfigGroup);
   cfg->Write("WindowsVisible", m_windows_visible);
+  // Per-window shown/hidden, independent of WinCount/PaneRCount (which only
+  // exist for the active host mode): a window closed on its own should stay
+  // closed next launch rather than reappear with the rest. DeInit() calls
+  // this even when no PPI window was ever built this session (no radar,
+  // say), which leaves m_shown_cache empty -- write nothing then, or that
+  // session would wipe out a previous one's real per-window record with an
+  // empty one.
+  if (!m_shown_cache.empty()) {
+    cfg->Write("ShownCount", static_cast<int>(m_shown_cache.size()));
+    for (size_t i = 0; i < m_shown_cache.size(); ++i)
+      cfg->Write(wxString::Format("Win%d_shown", static_cast<int>(i)),
+                 static_cast<bool>(m_shown_cache[i]));
+  }
   cfg->Write("WinCount", static_cast<int>(m_geom_cache.size()));
   for (size_t i = 0; i < m_geom_cache.size(); ++i) {
     const wxRect& r = m_geom_cache[i];
@@ -681,6 +702,25 @@ bool mayara_pi::RestoreWindowGeometry() {
         cfg->Read(wxString::Format("Win%d_w", k), &w) &&
         cfg->Read(wxString::Format("Win%d_h", k), &h) && w > 80 && h > 80)
       m_windows[i]->SetWindowRect(wxRect(x, y, w, h));
+  }
+  return true;
+}
+
+bool mayara_pi::RestoreWindowShown() {
+  wxFileConfig* cfg = GetOCPNConfigObject();
+  if (!cfg) return false;
+  cfg->SetPath(kConfigGroup);
+  int sc = 0;
+  cfg->Read("ShownCount", &sc, 0);
+  if (sc <= 0 || sc != static_cast<int>(m_windows.size())) return false;
+  for (size_t i = 0; i < m_windows.size(); ++i) {
+    if (!m_windows[i]) continue;
+    bool shown = true;
+    cfg->Read(wxString::Format("Win%d_shown", static_cast<int>(i)), &shown,
+              true);
+    // The master toggle still wins: an individually-shown window stays
+    // hidden while the PPI as a whole is off.
+    m_windows[i]->ShowWindow(m_windows_visible && shown);
   }
   return true;
 }
@@ -1548,9 +1588,18 @@ void mayara_pi::DestroyChartMenu() {
 void mayara_pi::RaisePpiWindows() {
   if (m_windows.empty()) RebuildWindows();
   m_windows_visible = true;
+  // Each window's own last shown/hidden state, when available -- a blanket
+  // show would bring back a window the user closed on its own along with
+  // the rest of the group. But this is an explicit "show the PPI" action:
+  // if every window individually saved as hidden, honouring that literally
+  // would show nothing at all and leave the very button that asked for this
+  // with nothing left to do next time either -- fall back to showing
+  // everything rather than restore into a dead end.
+  if (!RestoreWindowShown() || !AnyWindowShown())
+    for (MayaraPpiWindow* win : m_windows)
+      if (win) win->ShowWindow(true);
   for (MayaraPpiWindow* win : m_windows)
-    if (win) {
-      win->ShowWindow(true);
+    if (win && win->IsWindowShown()) {
       if (wxFrame* f = win->HostFrame()) f->Raise();
     }
   SetToolbarItemState(m_tool_id, true);
@@ -2807,7 +2856,10 @@ void mayara_pi::RebuildWindows() {
         m_aui->LoadPaneInfo(saved, pane);
         pane.Name(pane_name).Caption(win->Title()).MinSize(320, 240);
       }
-      if (!m_windows_visible) pane.Hide();
+      // Shown/hidden is decided once, after every window in this rebuild
+      // exists (see RestoreWindowShown()); AddPane just needs a starting
+      // value so it has something to lay out from.
+      pane.Hide();
       m_aui->AddPane(win, pane);
       ++pane_no;
     } else {
@@ -2829,9 +2881,14 @@ void mayara_pi::RebuildWindows() {
       frame->SetSizer(fs);
       win->SetFloatingHost(frame);
       // The plugin owns the window; hide instead of destroying on close.
-      frame->Bind(wxEVT_CLOSE_WINDOW, [win](wxCloseEvent& e) {
+      // Captured and saved right away rather than left to the next heartbeat
+      // tick: AnyWindowShown() goes false the instant the last window closes,
+      // which would otherwise skip the periodic capture for this exact change.
+      frame->Bind(wxEVT_CLOSE_WINDOW, [this, win](wxCloseEvent& e) {
         win->ShowWindow(false);
         e.Veto();
+        CaptureWindowState();
+        SaveWindowState();
       });
     }
     win->ApplyTheme(ThemeFor(m_color_scheme, m_menu_font_pt));
@@ -2889,9 +2946,13 @@ void mayara_pi::RebuildWindows() {
                             for (MayaraPpiWindow* w : m_windows)
                               if (w) w->ApplyPrefs();
                           });
-    win->ShowWindow(m_windows_visible);
     m_windows.push_back(win);
   }
+  // Each window's own shown/hidden state, when it matches this rebuild;
+  // otherwise every window just follows the master toggle.
+  if (!RestoreWindowShown())
+    for (MayaraPpiWindow* w : m_windows)
+      if (w) w->ShowWindow(m_windows_visible);
   if (docked) {
     m_aui->Update();
   } else if (!RestoreWindowGeometry() && m_windows.size() > 1) {
@@ -2998,13 +3059,31 @@ void mayara_pi::SyncRadarFullScreen(bool on) {
 }
 
 void mayara_pi::TogglePpiWindow() {
-  m_windows_visible = !AnyWindowShown();
+  const bool turning_on = !AnyWindowShown();
+  // Capture each window's own state before they all go uniformly hidden
+  // below -- once that happens every window reads the same, and the next
+  // heartbeat tick has nothing left to tell them apart by (it skips the
+  // capture entirely while the group is off; see the heartbeat above).
+  if (!turning_on) CaptureWindowState();
+  m_windows_visible = turning_on;
   const int radar_count = m_client ? m_client->RadarCount() : 0;
   if (m_windows_visible &&
       (m_windows.empty() || m_windows_radar_count != radar_count))
     RebuildWindows();  // build, or rebuild for a changed radar set
-  for (MayaraPpiWindow* win : m_windows)
-    if (win) win->ShowWindow(m_windows_visible);
+  if (m_windows_visible) {
+    // Each window's own last shown/hidden state, when available -- a
+    // blanket show would bring back a window closed on its own along with
+    // the rest of the group. But this is an explicit "show" action: if
+    // every window individually saved as hidden, restoring that literally
+    // would show nothing and leave this same toggle unable to do anything
+    // different next time -- fall back to showing everything instead.
+    if (!RestoreWindowShown() || !AnyWindowShown())
+      for (MayaraPpiWindow* win : m_windows)
+        if (win) win->ShowWindow(true);
+  } else {
+    for (MayaraPpiWindow* win : m_windows)
+      if (win) win->ShowWindow(false);
+  }
   SetToolbarItemState(m_tool_id, m_windows_visible);
   if (m_windows_visible) CaptureWindowState();
 }
