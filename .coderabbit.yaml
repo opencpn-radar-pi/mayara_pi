@@ -76,8 +76,15 @@ reviews:
 
         ## One logical change per PR
         A feature, its config, its UI and its documentation belong together.
-        An unrelated refactor does not. PR titles here are plain prose, not
-        conventional commits -- do not ask for a `feat:` prefix.
+        An unrelated refactor does not.
+
+        ## PR titles are Conventional Commits
+        Squash-merge makes the PR title `main`'s commit message, and the
+        changelog generator (cliff.toml) silently drops any commit that
+        isn't `type(scope): description` -- no warning, it just never
+        appears in CHANGELOG.md. Flag a PR title that isn't one of feat,
+        fix, refactor, perf, docs, style, test, chore or ci, optionally
+        scoped, e.g. `fix(controls): ...`.
 
         ## Say what was not tested
         Much of this plugin can only be judged against live radar hardware.
