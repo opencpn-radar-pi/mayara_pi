@@ -227,11 +227,13 @@ int mayara_pi::Init() {
       SyncRadarFullScreen(fs);
     }
     // Snapshot geometry and shown/hidden state for persistence, but not while
-    // full-screen (that would save the full-screen rects). Unconditional on
-    // AnyWindowShown(): the moment the last window is closed is exactly the
-    // transition the shown/hidden snapshot has to catch, and skipping the
-    // capture there would leave it recorded as still shown.
-    if (!m_ocpn_fullscreen && !m_windows.empty()) CaptureWindowState();
+    // full-screen (that would save the full-screen rects) or while the whole
+    // group is off: every window reads as hidden then, which would capture
+    // over each window's real individual state with a uniform "all hidden"
+    // the moment the master toggle -- not the user closing one window --
+    // is why they are all hidden right now.
+    if (!m_ocpn_fullscreen && !m_windows.empty() && m_windows_visible)
+      CaptureWindowState();
 
     if (m_client && m_diag.log_level > 0)
       for (const auto& line : m_client->TakeLog())
@@ -643,11 +645,17 @@ void mayara_pi::SaveWindowState() {
   cfg->Write("WindowsVisible", m_windows_visible);
   // Per-window shown/hidden, independent of WinCount/PaneRCount (which only
   // exist for the active host mode): a window closed on its own should stay
-  // closed next launch rather than reappear with the rest.
-  cfg->Write("ShownCount", static_cast<int>(m_shown_cache.size()));
-  for (size_t i = 0; i < m_shown_cache.size(); ++i)
-    cfg->Write(wxString::Format("Win%d_shown", static_cast<int>(i)),
-               static_cast<bool>(m_shown_cache[i]));
+  // closed next launch rather than reappear with the rest. DeInit() calls
+  // this even when no PPI window was ever built this session (no radar,
+  // say), which leaves m_shown_cache empty -- write nothing then, or that
+  // session would wipe out a previous one's real per-window record with an
+  // empty one.
+  if (!m_shown_cache.empty()) {
+    cfg->Write("ShownCount", static_cast<int>(m_shown_cache.size()));
+    for (size_t i = 0; i < m_shown_cache.size(); ++i)
+      cfg->Write(wxString::Format("Win%d_shown", static_cast<int>(i)),
+                 static_cast<bool>(m_shown_cache[i]));
+  }
   cfg->Write("WinCount", static_cast<int>(m_geom_cache.size()));
   for (size_t i = 0; i < m_geom_cache.size(); ++i) {
     const wxRect& r = m_geom_cache[i];
@@ -1559,9 +1567,14 @@ void mayara_pi::DestroyChartMenu() {
 void mayara_pi::RaisePpiWindows() {
   if (m_windows.empty()) RebuildWindows();
   m_windows_visible = true;
+  // Each window's own last shown/hidden state, when available -- a blanket
+  // show would bring back a window the user closed on its own along with
+  // the rest of the group.
+  if (!RestoreWindowShown())
+    for (MayaraPpiWindow* win : m_windows)
+      if (win) win->ShowWindow(true);
   for (MayaraPpiWindow* win : m_windows)
-    if (win) {
-      win->ShowWindow(true);
+    if (win && win->IsWindowShown()) {
       if (wxFrame* f = win->HostFrame()) f->Raise();
     }
   SetToolbarItemState(m_tool_id, true);
@@ -3076,13 +3089,28 @@ void mayara_pi::SyncRadarFullScreen(bool on) {
 }
 
 void mayara_pi::TogglePpiWindow() {
-  m_windows_visible = !AnyWindowShown();
+  const bool turning_on = !AnyWindowShown();
+  // Capture each window's own state before they all go uniformly hidden
+  // below -- once that happens every window reads the same, and the next
+  // heartbeat tick has nothing left to tell them apart by (it skips the
+  // capture entirely while the group is off; see the heartbeat above).
+  if (!turning_on) CaptureWindowState();
+  m_windows_visible = turning_on;
   const int radar_count = m_client ? m_client->RadarCount() : 0;
   if (m_windows_visible &&
       (m_windows.empty() || m_windows_radar_count != radar_count))
     RebuildWindows();  // build, or rebuild for a changed radar set
-  for (MayaraPpiWindow* win : m_windows)
-    if (win) win->ShowWindow(m_windows_visible);
+  if (m_windows_visible) {
+    // Each window's own last shown/hidden state, when available -- a
+    // blanket show would bring back a window closed on its own along with
+    // the rest of the group.
+    if (!RestoreWindowShown())
+      for (MayaraPpiWindow* win : m_windows)
+        if (win) win->ShowWindow(true);
+  } else {
+    for (MayaraPpiWindow* win : m_windows)
+      if (win) win->ShowWindow(false);
+  }
   SetToolbarItemState(m_tool_id, m_windows_visible);
   if (m_windows_visible) CaptureWindowState();
 }
