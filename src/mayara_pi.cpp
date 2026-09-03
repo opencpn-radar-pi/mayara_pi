@@ -75,6 +75,7 @@ wxString HtmlEscape(const wxString& s) {
   out.Replace("&", "&amp;");
   out.Replace("<", "&lt;");
   out.Replace(">", "&gt;");
+  out.Replace("\"", "&quot;");  // safe to drop straight into an href="..."
   return out;
 }
 
@@ -103,6 +104,10 @@ wxString ReplacePairedMarker(const wxString& s, const wxString& marker,
 }
 
 // [text](url) -> <a href="url">text</a>, the only link form git-cliff emits.
+// Scheme-restricted: called on already-HTML-escaped text, and this is the
+// only thing in the renderer that produces an attribute (every other tag is
+// fixed markup), so it is the one place a scheme like "javascript:" could
+// turn into something clickable rather than just inert escaped text.
 wxString ReplaceLinks(const wxString& s) {
   wxString out;
   size_t i = 0;
@@ -116,9 +121,11 @@ wxString ReplaceLinks(const wxString& s) {
           if (close_paren != wxNOT_FOUND) {
             const wxString text = s.Mid(i + 1, close_bracket);
             const wxString url = s.Mid(paren + 1, close_paren);
-            out += wxString::Format("<a href=\"%s\">%s</a>", url, text);
-            i = paren + 1 + close_paren + 1;
-            continue;
+            if (url.StartsWith("https://") || url.StartsWith("http://")) {
+              out += wxString::Format("<a href=\"%s\">%s</a>", url, text);
+              i = paren + 1 + close_paren + 1;
+              continue;
+            }
           }
         }
       }
@@ -1928,15 +1935,18 @@ void mayara_pi::OpenChangelog(wxWindow* parent) {
     return;
   }
 
-  const wxString out_path = m_server ? m_server->InstallDir() +
-                                           wxFileName::GetPathSeparator() +
-                                           "changelog.html"
-                                     : wxString();
-  if (out_path.IsEmpty()) {
+  const wxString out_dir = m_server ? m_server->InstallDir() : wxString();
+  if (out_dir.IsEmpty()) {
     wxMessageBox(_("Nowhere writable was found for the changelog page."),
                 _("Mayara"), wxOK | wxICON_WARNING, parent);
     return;
   }
+  // The per-user fallback InstallDir() can name (mayara-server never
+  // downloaded here yet) may not exist on disk yet -- wxFFile does not
+  // create missing parent directories.
+  wxFileName::Mkdir(out_dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+  const wxString out_path =
+      out_dir + wxFileName::GetPathSeparator() + "changelog.html";
   wxFFile out(out_path, "wb");
   if (!out.IsOpened() ||
       !out.Write(ChangelogPage(ChangelogMarkdownToHtml(markdown)),
