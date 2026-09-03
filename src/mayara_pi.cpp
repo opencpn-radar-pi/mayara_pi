@@ -389,6 +389,10 @@ void mayara_pi::LoadConfig() {
   cfg->Read("HeadingTimeout", &hto, 5);
   cfg->Read("CogAsHeading", &cog, false);
   cfg->Read("LogLevel", &lvl, 0);
+  // 3 was kFixedHeading before fixed heading/position was removed; map a
+  // config saved under that version to Automatic, same as the dropdown
+  // itself showed while fixed mode had it disabled.
+  if (hs == 3) hs = Diagnostics::kAuto;
   m_diag.heading_source = static_cast<int>(
       hs < 0 ? 0 : (hs > Diagnostics::kRadarOnly ? Diagnostics::kRadarOnly : hs));
   m_diag.heading_timeout_s = static_cast<int>(hto < 0 ? 0 : (hto > 3600 ? 3600 : hto));
@@ -1893,7 +1897,9 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   auto* ehint = new wxStaticText(
       spage, wxID_ANY,
       _("Extra command-line arguments passed to mayara-server, e.g. for a "
-        "radar or feature not yet exposed above."));
+        "radar or feature not yet exposed above. Run through a shell, so "
+        "anyone able to change this setting can run arbitrary commands as "
+        "you -- only set it yourself, on a computer you trust."));
   ehint->Wrap(ehint->FromDIP(330));
   lbox->Add(ehint, 0, wxTOP, 2);
   sbox->Add(lbox, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 24);
@@ -2331,6 +2337,7 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
     cb_wifi->Enable(local && installed);
     cb_telemetry->Enable(local && installed);
     brand->Enable(local && installed);
+    extra_args->Enable(local && installed);
     // Name the file whether or not it is there yet -- knowing where to look is
     // half the point -- but only offer to open one that exists.
     const wxString logfile = have_server ? m_server->LogPath() : wxString();
@@ -2451,7 +2458,7 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
       o.brand = MayaraServer::Brands()[sel - 1];
     wxString extra = extra_args->GetValue();
     extra.Trim().Trim(false);
-    o.extra_args = std::string(extra.mb_str());
+    o.extra_args = std::string(extra.utf8_str());
     m_server->SetOptions(o);  // restarts the server if it is running
     m_server->SetEnabled(r_local->GetValue());
     SyncLocalServerUrl();

@@ -193,7 +193,7 @@ void MayaraServer::LoadConfig() {
   m_opts.brand = std::string(brand.mb_str());
   wxString extra_args;
   cfg->Read("LocalServerExtraArgs", &extra_args);
-  m_opts.extra_args = std::string(extra_args.mb_str());
+  m_opts.extra_args = std::string(extra_args.utf8_str());
   long last = 0;
   cfg->Read("LocalServerLastCheck", &last, 0);
   m_last_check = static_cast<time_t>(last);
