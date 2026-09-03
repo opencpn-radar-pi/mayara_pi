@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **server:** let the plugin answer mayara-server's telemetry consent (#44) ([PR #44](https://github.com/opencpn-radar-pi/mayara_pi/pull/44))
 - **server:** point at mayara-server's own GUI when no radar is found (#57) ([PR #57](https://github.com/opencpn-radar-pi/mayara_pi/pull/57))
+- **changelog:** add an in-app changelog viewer (#88) ([PR #88](https://github.com/opencpn-radar-pi/mayara_pi/pull/88))
+
+### Changed
+
+- **changelog:** backfill 0.1.4-to-present, lost to the commit filter (#91) ([PR #91](https://github.com/opencpn-radar-pi/mayara_pi/pull/91))
 
 ### Fixed
 
@@ -32,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [Unreleased]: https://github.com/opencpn-radar-pi/mayara_pi/compare/v0.1.1...HEAD
 [0.1.1]: https://github.com/opencpn-radar-pi/mayara_pi/releases/tag/v0.1.1
+
 
 # Changelog history (manual)
 
