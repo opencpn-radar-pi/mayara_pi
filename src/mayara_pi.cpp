@@ -226,9 +226,12 @@ int mayara_pi::Init() {
       m_ocpn_fullscreen = fs;
       SyncRadarFullScreen(fs);
     }
-    // Snapshot geometry for persistence, but not while full-screen (that would
-    // save the full-screen rects).
-    if (AnyWindowShown() && !m_ocpn_fullscreen) CaptureWindowState();
+    // Snapshot geometry and shown/hidden state for persistence, but not while
+    // full-screen (that would save the full-screen rects). Unconditional on
+    // AnyWindowShown(): the moment the last window is closed is exactly the
+    // transition the shown/hidden snapshot has to catch, and skipping the
+    // capture there would leave it recorded as still shown.
+    if (!m_ocpn_fullscreen && !m_windows.empty()) CaptureWindowState();
 
     if (m_client && m_diag.log_level > 0)
       for (const auto& line : m_client->TakeLog())
@@ -613,6 +616,9 @@ bool mayara_pi::RadarInOverlay(int radar_index) const {
 // Snapshot geometry + visibility while the windows are definitely alive. wx may
 // destroy top-level windows before DeInit, so we never read them at shutdown.
 void mayara_pi::CaptureWindowState() {
+  m_shown_cache.clear();
+  for (MayaraPpiWindow* w : m_windows)
+    m_shown_cache.push_back(w != nullptr && w->IsWindowShown());
   if (m_docked) {
     // Docked: remember each pane's AUI layout (dock side, float pos/size, ...).
     m_persp_cache.clear();
@@ -635,6 +641,13 @@ void mayara_pi::SaveWindowState() {
   if (!cfg) return;
   cfg->SetPath(kConfigGroup);
   cfg->Write("WindowsVisible", m_windows_visible);
+  // Per-window shown/hidden, independent of WinCount/PaneRCount (which only
+  // exist for the active host mode): a window closed on its own should stay
+  // closed next launch rather than reappear with the rest.
+  cfg->Write("ShownCount", static_cast<int>(m_shown_cache.size()));
+  for (size_t i = 0; i < m_shown_cache.size(); ++i)
+    cfg->Write(wxString::Format("Win%d_shown", static_cast<int>(i)),
+               static_cast<bool>(m_shown_cache[i]));
   cfg->Write("WinCount", static_cast<int>(m_geom_cache.size()));
   for (size_t i = 0; i < m_geom_cache.size(); ++i) {
     const wxRect& r = m_geom_cache[i];
@@ -669,6 +682,25 @@ bool mayara_pi::RestoreWindowGeometry() {
         cfg->Read(wxString::Format("Win%d_w", k), &w) &&
         cfg->Read(wxString::Format("Win%d_h", k), &h) && w > 80 && h > 80)
       m_windows[i]->SetWindowRect(wxRect(x, y, w, h));
+  }
+  return true;
+}
+
+bool mayara_pi::RestoreWindowShown() {
+  wxFileConfig* cfg = GetOCPNConfigObject();
+  if (!cfg) return false;
+  cfg->SetPath(kConfigGroup);
+  int sc = 0;
+  cfg->Read("ShownCount", &sc, 0);
+  if (sc <= 0 || sc != static_cast<int>(m_windows.size())) return false;
+  for (size_t i = 0; i < m_windows.size(); ++i) {
+    if (!m_windows[i]) continue;
+    bool shown = true;
+    cfg->Read(wxString::Format("Win%d_shown", static_cast<int>(i)), &shown,
+              true);
+    // The master toggle still wins: an individually-shown window stays
+    // hidden while the PPI as a whole is off.
+    m_windows[i]->ShowWindow(m_windows_visible && shown);
   }
   return true;
 }
@@ -2841,7 +2873,10 @@ void mayara_pi::RebuildWindows() {
         m_aui->LoadPaneInfo(saved, pane);
         pane.Name(pane_name).Caption(win->Title()).MinSize(320, 240);
       }
-      if (!m_windows_visible) pane.Hide();
+      // Shown/hidden is decided once, after every window in this rebuild
+      // exists (see RestoreWindowShown()); AddPane just needs a starting
+      // value so it has something to lay out from.
+      pane.Hide();
       m_aui->AddPane(win, pane);
       ++pane_no;
     } else {
@@ -2863,9 +2898,14 @@ void mayara_pi::RebuildWindows() {
       frame->SetSizer(fs);
       win->SetFloatingHost(frame);
       // The plugin owns the window; hide instead of destroying on close.
-      frame->Bind(wxEVT_CLOSE_WINDOW, [win](wxCloseEvent& e) {
+      // Captured and saved right away rather than left to the next heartbeat
+      // tick: AnyWindowShown() goes false the instant the last window closes,
+      // which would otherwise skip the periodic capture for this exact change.
+      frame->Bind(wxEVT_CLOSE_WINDOW, [this, win](wxCloseEvent& e) {
         win->ShowWindow(false);
         e.Veto();
+        CaptureWindowState();
+        SaveWindowState();
       });
     }
     win->ApplyTheme(ThemeFor(m_color_scheme, m_menu_font_pt));
@@ -2923,9 +2963,13 @@ void mayara_pi::RebuildWindows() {
                             for (MayaraPpiWindow* w : m_windows)
                               if (w) w->ApplyPrefs();
                           });
-    win->ShowWindow(m_windows_visible);
     m_windows.push_back(win);
   }
+  // Each window's own shown/hidden state, when it matches this rebuild;
+  // otherwise every window just follows the master toggle.
+  if (!RestoreWindowShown())
+    for (MayaraPpiWindow* w : m_windows)
+      if (w) w->ShowWindow(m_windows_visible);
   if (docked) {
     m_aui->Update();
   } else if (!RestoreWindowGeometry() && m_windows.size() > 1) {

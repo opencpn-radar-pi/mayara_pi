@@ -123,6 +123,10 @@ class mayara_pi : public opencpn_plugin_121 {
   void SaveConfig();
   void SaveWindowState();          // visibility + geometry of the PPI windows
   bool RestoreWindowGeometry();    // apply saved geometry; false if none match
+  // Apply each window's own last shown/hidden state; false (nothing applied,
+  // callers fall back to m_windows_visible for every window) if the saved
+  // count does not match the freshly built windows.
+  bool RestoreWindowShown();
   void CaptureWindowState();       // snapshot geometry while windows are alive
   wxString SavedPaneInfo(int index) const;  // saved AUI pane layout, or empty
   int OrientationFor(const std::string& radar_id) const;   // per-radar mode
@@ -288,6 +292,11 @@ class mayara_pi : public opencpn_plugin_121 {
   std::map<std::string, bool> m_range_auto;
   std::vector<wxRect> m_geom_cache;  // last live snapshot of window geometry
   std::vector<wxString> m_persp_cache;  // last live snapshot of AUI pane info
+  // Last live snapshot of each window's own shown/hidden state, indexed like
+  // m_windows -- independent of m_geom_cache/m_persp_cache (docked or not) so
+  // one window closed by itself stays closed on the next launch instead of
+  // reappearing with the rest.
+  std::vector<bool> m_shown_cache;
   bool m_docked = false;             // radar windows docked into OpenCPN (AUI)
   // Floating windows only (meaningless docked): wxFRAME_FLOAT_ON_PARENT, not
   // wxSTAY_ON_TOP -- the latter is worse, and even this is technically a
