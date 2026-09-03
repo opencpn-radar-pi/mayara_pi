@@ -15,6 +15,7 @@
 #include <utility>
 
 #include <wx/dcclient.h>
+#include <wx/log.h>
 #include <wx/settings.h>
 #include <wx/statline.h>
 #include <wx/tglbtn.h>
@@ -321,6 +322,8 @@ void ControlsPanel::OnTitleMouse(wxMouseEvent& event) {
   m_drag_last = static_cast<wxWindow*>(event.GetEventObject())
                     ->ClientToScreen(event.GetPosition());
   CaptureMouse();
+  wxLogMessage("mayara DIAG: title LeftDown, captured=%d at (%d,%d)",
+               (int)HasCapture(), m_drag_last.x, m_drag_last.y);
 }
 
 // Click or drag anywhere down the gutter, on the free-float resize grip, or
@@ -333,11 +336,14 @@ void ControlsPanel::OnBarMouse(wxMouseEvent& event) {
     if (event.LeftUp()) {
       m_dragging_title = false;
       if (HasCapture()) ReleaseMouse();
+      wxLogMessage("mayara DIAG: title LeftUp, released");
       return;
     }
     if (event.Dragging()) {
       const wxPoint now = ClientToScreen(event.GetPosition());
       const int dx = now.x - m_drag_last.x, dy = now.y - m_drag_last.y;
+      wxLogMessage("mayara DIAG: title Dragging now=(%d,%d) dx=%d dy=%d has_on_drag=%d",
+                   now.x, now.y, dx, dy, (int)(bool)m_on_drag);
       if ((dx || dy) && m_on_drag) m_on_drag(dx, dy);
       m_drag_last = now;
     }
@@ -348,11 +354,14 @@ void ControlsPanel::OnBarMouse(wxMouseEvent& event) {
       m_resizing = false;
       if (HasCapture()) ReleaseMouse();
       Refresh(false);
+      wxLogMessage("mayara DIAG: grip LeftUp, released");
       return;
     }
     if (event.Dragging()) {
       const wxPoint now = ClientToScreen(event.GetPosition());
       const int dx = now.x - m_drag_last.x, dy = now.y - m_drag_last.y;
+      wxLogMessage("mayara DIAG: grip Dragging now=(%d,%d) dx=%d dy=%d has_on_resize=%d",
+                   now.x, now.y, dx, dy, (int)(bool)m_on_resize);
       if ((dx || dy) && m_on_resize) m_on_resize(dx, dy);
       m_drag_last = now;
     }
@@ -364,6 +373,8 @@ void ControlsPanel::OnBarMouse(wxMouseEvent& event) {
     m_drag_last = ClientToScreen(event.GetPosition());
     CaptureMouse();
     Refresh(false);
+    wxLogMessage("mayara DIAG: grip LeftDown, captured=%d at (%d,%d)",
+                 (int)HasCapture(), m_drag_last.x, m_drag_last.y);
     return;
   }
   if ((event.Moving() || event.Dragging()) && !grip.IsEmpty()) {

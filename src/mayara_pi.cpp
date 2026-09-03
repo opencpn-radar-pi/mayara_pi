@@ -1413,6 +1413,9 @@ void mayara_pi::ShowRadarMenu(int canvas) {
         pos.y = std::clamp(pos.y + dy, 0, std::max(0, cs.y - sz.y));
         m_chart_menu->SetPosition(pos);
         m_chart_menu_user_moved = true;
+        wxLogMessage("mayara DIAG: on_drag dx=%d dy=%d -> pos=(%d,%d) actual=(%d,%d)",
+                     dx, dy, pos.x, pos.y, m_chart_menu->GetPosition().x,
+                     m_chart_menu->GetPosition().y);
       },
       [this](int dw, int dh) {
         if (!m_chart_menu) return;
