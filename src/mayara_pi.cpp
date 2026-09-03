@@ -67,12 +67,13 @@ class CallbackTimer : public wxTimer {
 
 // TEMP: write the drag/resize trace straight to a file, sidestepping wx's
 // logging framework (whose output depends on OpenCPN's own log-level
-// setting) entirely. $HOME isn't writable inside the flatpak sandbox under
-// test -- GetUserDataDir() is, and is already used for writable storage
-// elsewhere in this plugin (see MayaraServer.cpp). To be reverted before
-// merge.
+// setting) entirely. Neither $HOME nor GetUserDataDir() were writable
+// inside the flatpak sandbox under test; GetPluginDataDir() is the
+// directory OpenCPN itself already created and manages for this plugin
+// (confirmed to exist from "using data dir: ..." in opencpn.log). To be
+// reverted before merge.
 void TempDragDiagLog(const wxString& msg) {
-  wxFile f(wxStandardPaths::Get().GetUserDataDir() + "/mayara-drag-trace.log",
+  wxFile f(GetPluginDataDir("mayara_pi") + "/mayara-drag-trace.log",
             wxFile::write_append);
   if (!f.IsOpened()) return;
   f.Write(wxDateTime::Now().FormatISOTime() + " " + msg + "\n");
