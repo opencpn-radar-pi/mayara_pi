@@ -1474,6 +1474,10 @@ void mayara_pi::ShowRadarMenu(int canvas) {
   // shutdown) takes the panel with it. Notice, rather than keep a dead pointer.
   p->Bind(wxEVT_DESTROY, [this](wxWindowDestroyEvent& e) {
     if (e.GetWindow() == m_chart_menu) {
+      // The canvas taking the panel with it bypasses DestroyChartMenu(), so
+      // its own save (below) never runs -- do it here too, or a moved/sized
+      // menu whose canvas disappears (layout change, shutdown) loses that.
+      if (m_chart_menu_user_moved || m_chart_menu_user_sized) SaveConfig();
       m_chart_menu = nullptr;
       m_chart_menu_canvas = -1;
     }
