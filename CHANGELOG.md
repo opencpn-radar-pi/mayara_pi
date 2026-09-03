@@ -33,18 +33,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [Unreleased]: https://github.com/opencpn-radar-pi/mayara_pi/compare/v0.1.1...HEAD
 [0.1.1]: https://github.com/opencpn-radar-pi/mayara_pi/releases/tag/v0.1.1
 
+# Changelog history (manual)
 
-# Changelog history (pre-automation)
+Entries the automated pipeline (git-cliff, `cliff.toml`) cannot produce:
+either pre-automation history, or commits its `conventional_commits` +
+`filter_unconventional` settings silently dropped -- no warning, they just
+never appeared in `CHANGELOG.md` -- before a CI check
+([PR #89](https://github.com/opencpn-radar-pi/mayara_pi/pull/89)) started
+rejecting non-conforming PR titles at merge time instead. This file is
+appended to the bottom of the generated `CHANGELOG.md`.
 
-Written by hand, before git-cliff started generating `CHANGELOG.md` from
-commit messages. This file is appended to the bottom of the generated
-`CHANGELOG.md` as history and is no longer updated.
+## Since 0.1.4 (recovered from the conventional-commits filter)
+
+Everything below merged between the 0.1.4 tag and PR #89 landing, and would
+otherwise still be invisible. A CI-only fix ([PR #83](https://github.com/opencpn-radar-pi/mayara_pi/pull/83),
+retrying a flaky catalog-metadata fetch) is left out: it changed no plugin
+behaviour, so it has nothing to say here.
+
+### Added
+
+- Report the built commit id via `GetPlugInVersionBuild()`, so an alpha/beta
+  build can be told apart from another build sharing the same version number
+  ([PR #69](https://github.com/opencpn-radar-pi/mayara_pi/pull/69))
+- Play a sound on a new guard-zone alarm
+  ([PR #70](https://github.com/opencpn-radar-pi/mayara_pi/pull/70)), with
+  per-target notification and a bell lozenge to mute it
+  ([PR #72](https://github.com/opencpn-radar-pi/mayara_pi/pull/72))
+- Local-server log verbosity (-v/-vv), and show the plugin/server versions in
+  Settings ([PR #75](https://github.com/opencpn-radar-pi/mayara_pi/pull/75))
+- Make the chart-canvas radar controls menu draggable and resizable
+  ([PR #78](https://github.com/opencpn-radar-pi/mayara_pi/pull/78)), and
+  persist its position and size per canvas across restarts
+  ([PR #87](https://github.com/opencpn-radar-pi/mayara_pi/pull/87))
+- Optional "On top" for floating PPI windows, default per platform
+  ([PR #77](https://github.com/opencpn-radar-pi/mayara_pi/pull/77))
+- Persist each PPI window's own shown/hidden state, independent of the
+  master show/hide toggle
+  ([PR #86](https://github.com/opencpn-radar-pi/mayara_pi/pull/86))
+- Override the radar controls' font size in Preferences
+  ([PR #81](https://github.com/opencpn-radar-pi/mayara_pi/pull/81))
+- **server:** an "Extra arguments" field for the local mayara-server's launch
+  command line ([PR #85](https://github.com/opencpn-radar-pi/mayara_pi/pull/85))
+
+### Changed
+
+- Show transmit/operating/warmup time in human units, not raw seconds
+  ([PR #76](https://github.com/opencpn-radar-pi/mayara_pi/pull/76))
+- Diagnostics page: group Fixed heading with Fixed position
+  ([PR #74](https://github.com/opencpn-radar-pi/mayara_pi/pull/74))
+
+### Fixed
+
+- A stale local-server reconnect address, and a use-after-free crash
+  ([PR #73](https://github.com/opencpn-radar-pi/mayara_pi/pull/73))
+- **ui:** redraw the themed dropdown list instead of a native popup menu,
+  which looked wrong and could crash on Windows
+  ([PR #79](https://github.com/opencpn-radar-pi/mayara_pi/pull/79))
+- Stuck mouse capture when dragging the Controls panel title bar
+  ([PR #84](https://github.com/opencpn-radar-pi/mayara_pi/pull/84))
+
+### Removed
+
+- The "Fixed position and heading" diagnostics setting -- it never actually
+  reached mayara-server or NMEA output, so it did not do what it looked like
+  it did ([PR #85](https://github.com/opencpn-radar-pi/mayara_pi/pull/85))
+
+## Pre-0.1.0
 
 Everything below predates the plugin's first tagged release, 0.1.0. Entries
 are grouped by the pull request that landed them, because a squash merge made
 the PR the unit of change here.
-
-## Pre-0.1.0
 
 ### Added
 
