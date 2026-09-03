@@ -1569,8 +1569,12 @@ void mayara_pi::RaisePpiWindows() {
   m_windows_visible = true;
   // Each window's own last shown/hidden state, when available -- a blanket
   // show would bring back a window the user closed on its own along with
-  // the rest of the group.
-  if (!RestoreWindowShown())
+  // the rest of the group. But this is an explicit "show the PPI" action:
+  // if every window individually saved as hidden, honouring that literally
+  // would show nothing at all and leave the very button that asked for this
+  // with nothing left to do next time either -- fall back to showing
+  // everything rather than restore into a dead end.
+  if (!RestoreWindowShown() || !AnyWindowShown())
     for (MayaraPpiWindow* win : m_windows)
       if (win) win->ShowWindow(true);
   for (MayaraPpiWindow* win : m_windows)
@@ -3103,8 +3107,11 @@ void mayara_pi::TogglePpiWindow() {
   if (m_windows_visible) {
     // Each window's own last shown/hidden state, when available -- a
     // blanket show would bring back a window closed on its own along with
-    // the rest of the group.
-    if (!RestoreWindowShown())
+    // the rest of the group. But this is an explicit "show" action: if
+    // every window individually saved as hidden, restoring that literally
+    // would show nothing and leave this same toggle unable to do anything
+    // different next time -- fall back to showing everything instead.
+    if (!RestoreWindowShown() || !AnyWindowShown())
       for (MayaraPpiWindow* win : m_windows)
         if (win) win->ShowWindow(true);
   } else {
