@@ -130,6 +130,7 @@ class ControlsPanel : public wxScrolledWindow {
   void OnPaint(wxPaintEvent& event);
   void OnBarMouse(wxMouseEvent& event);
   void OnTitleMouse(wxMouseEvent& event);  // free-float drag, on the title row
+  void OnCaptureLost(wxMouseCaptureLostEvent& event);
   wxSizer* MakeCloseRow();  // a "Controls  ×" header row
   void ThemeChildren();
   void ScrollSectionIntoView(wxWindow* header, wxSizer* content);

@@ -250,6 +250,12 @@ ControlsPanel::ControlsPanel(wxWindow* parent, MayaraClient* client,
   Bind(wxEVT_LEFT_DOWN, &ControlsPanel::OnBarMouse, this);
   Bind(wxEVT_LEFT_UP, &ControlsPanel::OnBarMouse, this);
   Bind(wxEVT_MOTION, &ControlsPanel::OnBarMouse, this);
+  // Capture can be taken away without a LeftUp ever arriving (a dialog
+  // steals focus mid-drag, the window manager intervenes, ...). Without
+  // this, m_dragging_title/m_resizing would stay set forever and
+  // OnBarMouse's early-return for them would swallow every later click on
+  // the panel -- scrollbar, resize grip, all of it -- until restart.
+  Bind(wxEVT_MOUSE_CAPTURE_LOST, &ControlsPanel::OnCaptureLost, this);
   m_timer.Start(400);
 }
 
@@ -409,6 +415,18 @@ void ControlsPanel::OnBarMouse(wxMouseEvent& event) {
   const int span = std::max(1, cs.y - th);
   const int want = (event.GetY() - th / 2) * (vh - cs.y) / span;
   Scroll(-1, std::max(0, want) / yu);
+  Refresh(false);
+}
+
+// Capture taken away by something other than our own ReleaseMouse() calls
+// above (a dialog stealing focus mid-drag, the window manager intervening,
+// ...). wx has already dropped the capture by the time this fires -- just
+// clear whichever drag/resize/scrollbar-thumb state was in progress so
+// OnBarMouse stops swallowing every later click on the panel.
+void ControlsPanel::OnCaptureLost(wxMouseCaptureLostEvent&) {
+  m_dragging_title = false;
+  m_resizing = false;
+  m_dragging_bar = false;
   Refresh(false);
 }
 
