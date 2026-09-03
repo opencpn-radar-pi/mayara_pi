@@ -213,6 +213,14 @@ ControlsPanel::ControlsPanel(wxWindow* parent, MayaraClient* client,
   // panel already wants elsewhere: a bar that comes and goes reflows the
   // controls under the pointer.
   ShowScrollbars(wxSHOW_SB_NEVER, wxSHOW_SB_ALWAYS);
+#else
+  // Everywhere else this panel draws its own themed scrollbar (kScrollBarW)
+  // instead of the native one -- macOS's native bar is invisible until
+  // scrolled, which left the panel with no visible sign that it scrolls at
+  // all (see below). GTK has no such auto-hide: left on default, its native
+  // bar stays permanently visible and doubles up with the themed one,
+  // overlapping it. Hide it explicitly so only the themed one shows.
+  ShowScrollbars(wxSHOW_SB_NEVER, wxSHOW_SB_NEVER);
 #endif
   SetBackgroundStyle(wxBG_STYLE_PAINT);
   auto* sizer = new wxBoxSizer(wxVERTICAL);
@@ -242,6 +250,12 @@ ControlsPanel::ControlsPanel(wxWindow* parent, MayaraClient* client,
   Bind(wxEVT_LEFT_DOWN, &ControlsPanel::OnBarMouse, this);
   Bind(wxEVT_LEFT_UP, &ControlsPanel::OnBarMouse, this);
   Bind(wxEVT_MOTION, &ControlsPanel::OnBarMouse, this);
+  // Capture can be taken away without a LeftUp ever arriving (a dialog
+  // steals focus mid-drag, the window manager intervenes, ...). Without
+  // this, m_dragging_title/m_resizing would stay set forever and
+  // OnBarMouse's early-return for them would swallow every later click on
+  // the panel -- scrollbar, resize grip, all of it -- until restart.
+  Bind(wxEVT_MOUSE_CAPTURE_LOST, &ControlsPanel::OnCaptureLost, this);
   m_timer.Start(400);
 }
 
@@ -305,37 +319,44 @@ void ControlsPanel::OnPaint(wxPaintEvent&) {
   }
 }
 
-// Drag on the "Controls" title label: reported as screen-space deltas to
-// whatever the host wired via SetFreeFloatHandlers, which owns clamping the
-// panel into its parent. A no-op (event.Skip()) when nothing is wired.
+// LeftDown on the "Controls" title label starts a free-float drag. Only the
+// hit-detection lives here (title is the only widget that covers that
+// pixel area); the capture itself is taken on the panel (see OnBarMouse),
+// not on this child label. Capturing on a child wxStaticText is unreliable
+// under GTK -- the panel never reliably sees the follow-up Motion/LeftUp,
+// so the capture is left dangling and silently hijacks every later click
+// and scroll wheel event anywhere in the app until OpenCPN is restarted.
 void ControlsPanel::OnTitleMouse(wxMouseEvent& event) {
-  wxWindow* src = static_cast<wxWindow*>(event.GetEventObject());
-  if (event.LeftDown() && m_on_drag) {
-    m_dragging_title = true;
-    m_drag_last = src->ClientToScreen(event.GetPosition());
-    src->CaptureMouse();
-    return;
-  }
-  if (!m_dragging_title) {
+  if (!event.LeftDown() || !m_on_drag) {
     event.Skip();
     return;
   }
-  if (event.LeftUp()) {
-    m_dragging_title = false;
-    if (src->HasCapture()) src->ReleaseMouse();
-    return;
-  }
-  if (event.Dragging()) {
-    const wxPoint now = src->ClientToScreen(event.GetPosition());
-    const int dx = now.x - m_drag_last.x, dy = now.y - m_drag_last.y;
-    if ((dx || dy) && m_on_drag) m_on_drag(dx, dy);
-    m_drag_last = now;
-  }
+  m_dragging_title = true;
+  m_drag_last = static_cast<wxWindow*>(event.GetEventObject())
+                    ->ClientToScreen(event.GetPosition());
+  CaptureMouse();
 }
 
-// Click or drag anywhere down the gutter, or on the free-float resize grip.
-// Nothing else lives there, so the panel itself sees these events.
+// Click or drag anywhere down the gutter, on the free-float resize grip, or
+// (once OnTitleMouse above has started one) continuing a title-bar drag.
+// Nothing else lives there, so the panel itself sees these events -- and,
+// crucially, is also the window that holds the mouse capture during a drag
+// or resize, so it keeps receiving Motion/LeftUp for the whole gesture.
 void ControlsPanel::OnBarMouse(wxMouseEvent& event) {
+  if (m_dragging_title) {
+    if (event.LeftUp()) {
+      m_dragging_title = false;
+      if (HasCapture()) ReleaseMouse();
+      return;
+    }
+    if (event.Dragging()) {
+      const wxPoint now = ClientToScreen(event.GetPosition());
+      const int dx = now.x - m_drag_last.x, dy = now.y - m_drag_last.y;
+      if ((dx || dy) && m_on_drag) m_on_drag(dx, dy);
+      m_drag_last = now;
+    }
+    return;
+  }
   if (m_resizing) {
     if (event.LeftUp()) {
       m_resizing = false;
@@ -397,6 +418,18 @@ void ControlsPanel::OnBarMouse(wxMouseEvent& event) {
   Refresh(false);
 }
 
+// Capture taken away by something other than our own ReleaseMouse() calls
+// above (a dialog stealing focus mid-drag, the window manager intervening,
+// ...). wx has already dropped the capture by the time this fires -- just
+// clear whichever drag/resize/scrollbar-thumb state was in progress so
+// OnBarMouse stops swallowing every later click on the panel.
+void ControlsPanel::OnCaptureLost(wxMouseCaptureLostEvent&) {
+  m_dragging_title = false;
+  m_resizing = false;
+  m_dragging_bar = false;
+  Refresh(false);
+}
+
 wxSizer* ControlsPanel::MakeCloseRow() {
   auto* row = new wxBoxSizer(wxHORIZONTAL);
   auto* title = new wxStaticText(this, wxID_ANY, _("Controls"));
@@ -405,10 +438,9 @@ wxSizer* ControlsPanel::MakeCloseRow() {
   title->SetFont(f);
   m_title = title;
   // A no-op when SetFreeFloatHandlers was never called (the PPI window's
-  // docked/popup placements manage their own geometry).
+  // docked/popup placements manage their own geometry). The drag itself,
+  // once started, is driven by OnBarMouse on the panel -- see there.
   title->Bind(wxEVT_LEFT_DOWN, &ControlsPanel::OnTitleMouse, this);
-  title->Bind(wxEVT_LEFT_UP, &ControlsPanel::OnTitleMouse, this);
-  title->Bind(wxEVT_MOTION, &ControlsPanel::OnTitleMouse, this);
   row->Add(title, 1, wxALIGN_CENTER_VERTICAL | wxLEFT, 6);
   auto* gear = new ThemedButton(this, wxT("⚙"), m_theme, /*toggle=*/false);
   gear->SetToolTip(_("Settings"));

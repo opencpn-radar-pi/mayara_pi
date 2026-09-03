@@ -32,6 +32,30 @@ elseif ($ENV{APPVEYOR})
   set(GIT_REPOSITORY "$ENV{APPVEYOR_REPO_NAME}")
   set(GIT_REPOSITORY_BRANCH "$ENV{APPVEYOR_REPO_BRANCH}")
   set(GIT_REPOSITORY_TAG "$ENV{APPVEYOR_REPO_TAG_NAME}")
+elseif ($ENV{GITHUB_ACTIONS})
+  # None of CIRCLECI/TRAVIS/APPVEYOR are set here, so without this branch
+  # the generic git-command fallback below runs instead -- and
+  # `git rev-parse --abbrev-ref HEAD` returns the literal string "HEAD" on
+  # actions/checkout's detached-HEAD checkouts (both pull_request and tag
+  # builds), not a real branch/tag name. That "HEAD" then went straight
+  # into the flatpak manifest as `branch: HEAD`, which flatpak-builder
+  # resolves against the *remote's* symbolic HEAD -- the repo's default
+  # branch -- so every flatpak build silently built main/master instead of
+  # the commit actually under test, regardless of source branch or PR.
+  set(GIT_REPOSITORY "$ENV{GITHUB_REPOSITORY}")
+  if ("$ENV{GITHUB_REF_TYPE}" STREQUAL "tag")
+    set(GIT_REPOSITORY_BRANCH "")
+    set(GIT_REPOSITORY_TAG "$ENV{GITHUB_REF_NAME}")
+  elseif (NOT "$ENV{GITHUB_HEAD_REF}" STREQUAL "")
+    # pull_request: GITHUB_REF_NAME is "<pr-number>/merge", not a real
+    # branch flatpak-builder's git source could clone. GITHUB_HEAD_REF is
+    # the PR's actual source branch.
+    set(GIT_REPOSITORY_BRANCH "$ENV{GITHUB_HEAD_REF}")
+    set(GIT_REPOSITORY_TAG "")
+  else ()
+    set(GIT_REPOSITORY_BRANCH "$ENV{GITHUB_REF_NAME}")
+    set(GIT_REPOSITORY_TAG "")
+  endif ()
 else ()
   if ("${GIT_REPOSITORY_EXISTS}" STREQUAL "0")
     # Get the current working branch
