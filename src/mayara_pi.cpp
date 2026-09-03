@@ -2255,7 +2255,7 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   gbox->Add(trow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
 
   // Deliberately its own row, not folded into the box above: this is about
-  // OpenCPN's log, unrelated to whether heading and position are fixed.
+  // OpenCPN's log, independent of the selected heading and position sources.
   auto* lrow = new wxBoxSizer(wxHORIZONTAL);
   lrow->Add(new wxStaticText(gpage, wxID_ANY, _("Log to the OpenCPN log:")), 0,
             wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
