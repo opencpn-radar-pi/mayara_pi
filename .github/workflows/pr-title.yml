@@ -1,0 +1,40 @@
+name: PR Title
+
+# Squash-merge uses the PR title as main's commit message, and cliff.toml's
+# changelog generator (conventional_commits + filter_unconventional) silently
+# drops any commit that isn't "type(scope): description" -- it doesn't warn,
+# it just disappears from CHANGELOG.md. This check catches that before merge
+# instead of after, when the entry is already unrecoverable without a manual
+# CHANGELOG.manual.md backfill.
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize]
+
+permissions:
+  pull-requests: write  # posts a comment explaining a failing title
+
+jobs:
+  lint:
+    name: Lint PR title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Kept in sync with cliff.toml's commit_parsers: these are the
+          # types it groups into the changelog (feat/fix/refactor/perf/docs)
+          # or explicitly drops on purpose (style/test/chore/ci) -- anything
+          # else is the "silently vanishes" case this check exists to catch.
+          types: |
+            feat
+            fix
+            refactor
+            perf
+            docs
+            style
+            test
+            chore
+            ci
+          requireScope: false
