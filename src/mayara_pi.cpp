@@ -215,9 +215,11 @@ wxString ChangelogMarkdownToHtml(const wxString& markdown) {
             const wxString label = text.Mid(1, close_bracket - 1);
             const wxString rest = text.Mid(close_bracket + 1);
             const auto it = refs.find(label);
-            if (it != refs.end())
+            if (it != refs.end() && (it->second.StartsWith("https://") ||
+                                     it->second.StartsWith("http://")))
               rendered = wxString::Format("<a href=\"%s\">%s</a>",
-                                          it->second, HtmlEscape(label)) +
+                                          HtmlEscape(it->second),
+                                          HtmlEscape(label)) +
                         InlineMarkdown(rest);
           }
         }
