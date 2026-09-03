@@ -104,6 +104,11 @@ class MayaraServer : public wxEvtHandler {
     // 0 = server default, 1 = -v, 2 = -vv. Only useful next to LogPath():
     // more detail is only worth having when there is somewhere to read it.
     int log_verbosity = 0;
+    // Appended verbatim to the launch command line, after every option above.
+    // Shell syntax on POSIX (it is handed to /bin/sh along with the rest of
+    // the command), so an escape or quote here behaves as it would in a
+    // terminal.
+    std::string extra_args;
   };
   // What can be asked for, in menu order. "playback" is absent: it needs a
   // recording to play, which there is nowhere to choose here.

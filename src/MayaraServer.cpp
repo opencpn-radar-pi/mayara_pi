@@ -191,6 +191,9 @@ void MayaraServer::LoadConfig() {
   wxString brand;
   cfg->Read("LocalServerBrand", &brand);
   m_opts.brand = std::string(brand.mb_str());
+  wxString extra_args;
+  cfg->Read("LocalServerExtraArgs", &extra_args);
+  m_opts.extra_args = std::string(extra_args.utf8_str());
   long last = 0;
   cfg->Read("LocalServerLastCheck", &last, 0);
   m_last_check = static_cast<time_t>(last);
@@ -209,6 +212,8 @@ void MayaraServer::SaveConfig() {
   cfg->Write("LocalServerLogVerbosity", static_cast<long>(m_opts.log_verbosity));
   cfg->Write("LocalServerBrand",
              wxString::FromUTF8(m_opts.brand.c_str()));
+  cfg->Write("LocalServerExtraArgs",
+             wxString::FromUTF8(m_opts.extra_args.c_str()));
   cfg->Write("LocalServerLastCheck", static_cast<long>(m_last_check));
   cfg->Flush();
 }
@@ -447,6 +452,11 @@ bool MayaraServer::Start() {
   // to LogPath(), which is where this goes.
   if (m_opts.log_verbosity > 0)
     args += " -" + wxString('v', std::min(m_opts.log_verbosity, 2));
+  // Whatever the user typed into Settings, last so it can override anything
+  // above it. Not quoted or escaped: it is meant to hold shell-style
+  // arguments (flags, quoted values), not a single opaque token.
+  if (!m_opts.extra_args.empty())
+    args += " " + wxString::FromUTF8(m_opts.extra_args.c_str());
   const wxString cmd = "\"" + BinaryPath() + "\"" + args;
   // MAYARA_DEPLOYMENT tells mayara-server's telemetry how it reached the
   // boat, so "nobody runs Garmin radars" can be told apart from "nobody runs
@@ -527,7 +537,9 @@ const std::vector<std::string>& MayaraServer::Brands() {
 
 void MayaraServer::SetOptions(const LocalOptions& o) {
   if (o.allow_wifi == m_opts.allow_wifi && o.brand == m_opts.brand &&
-      o.telemetry == m_opts.telemetry)
+      o.telemetry == m_opts.telemetry &&
+      o.log_verbosity == m_opts.log_verbosity &&
+      o.extra_args == m_opts.extra_args)
     return;
   m_opts = o;
   SaveConfig();

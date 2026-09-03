@@ -170,8 +170,7 @@ came from — because "why is the picture in the wrong place" is nearly always
 one of those two, and until now nothing said which.
 
 - **Heading source** — Automatic (OpenCPN, else the radar) / OpenCPN only /
-  Radar only / Fixed. Covers radar_pi's *ignore-radar-heading* and
-  *fixed heading* in one control.
+  Radar only. Covers radar_pi's *ignore-radar-heading*.
 - **COG as heading** — off by default. COG is not heading; it differs by leeway
   and set, so it is a last resort and the readout says when it is being used.
 - **Heading timeout** — a heading older than this is not used (0 = never
@@ -179,7 +178,6 @@ one of those two, and until now nothing said which.
   it looks: a radar that stops transmitting keeps its last heading for ever,
   and a stale heading points the picture the wrong way with no sign that
   anything is wrong.
-- **Fixed position** — run on a bench with no GPS.
 - **Log level** — Off / Problems / Verbose, into OpenCPN's own log. Worker
   threads never call `wxLog` (its deferred cross-thread flush can dereference
   an unloaded plugin dylib), so the client queues its lines and the UI thread
@@ -200,9 +198,9 @@ Two behaviour fixes came out of it. Heading was previously taken as "0 means
 missing", which is a lie on a boat heading due north; and a missing heading now
 means the chart overlay is not drawn at all rather than drawn at north.
 
-The PPI reaches the same resolver through a provider, so the heading source,
-the fixed heading and the timeout mean the same thing on the picture as on the
-chart. It does not share the second fix: a picture with no heading is still
+The PPI reaches the same resolver through a provider, so the heading source
+and the timeout mean the same thing on the picture as on the chart. It does
+not share the second fix: a picture with no heading is still
 drawn, because a PPI is bow-relative to begin with and head-up needs no heading
 at all. Its orientation lozenge says which input is missing when north-up or
 course-up cannot be honoured.

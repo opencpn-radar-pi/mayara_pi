@@ -188,13 +188,10 @@ class mayara_pi : public opencpn_plugin_121 {
   // which is nearly always heading or position, and to let a bench setup run
   // without a compass or a GPS.
   struct Diagnostics {
-    enum HeadingSource { kAuto = 0, kOpenCpnOnly, kRadarOnly, kFixedHeading };
+    enum HeadingSource { kAuto = 0, kOpenCpnOnly, kRadarOnly };
     int heading_source = kAuto;
-    double fixed_heading = 0.0;
     bool cog_as_heading = false;  // last resort when nothing reports heading
     int heading_timeout_s = 5;    // 0 = a heading never goes stale
-    bool fixed_position = false;
-    double fixed_lat = 0.0, fixed_lon = 0.0;
     int log_level = 0;  // 0 off, 1 problems, 2 verbose
   };
   Diagnostics m_diag;
@@ -204,7 +201,7 @@ class mayara_pi : public opencpn_plugin_121 {
   // "any radar". Returns false when nothing usable is available -- which is
   // not the same as 0 degrees, and the difference shows on the chart.
   bool ResolveHeading(int radar, double* deg, wxString* source) const;
-  // Own-ship position to draw from, honouring a fixed position.
+  // Own-ship position to draw from.
   bool ResolvePosition(int radar, double* lat, double* lon,
                        wxString* source) const;
   void Log(int level, const wxString& msg) const;
