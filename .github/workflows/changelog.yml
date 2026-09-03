@@ -49,13 +49,18 @@ jobs:
         printf '\n' >> CHANGELOG.md
         cat CHANGELOG.manual.md >> CHANGELOG.md
 
+    - name: Ship the changelog with the plugin
+      # data/ is installed alongside the binary on every platform (see
+      # PluginInstall.cmake); the in-app changelog viewer reads this copy.
+      run: cp CHANGELOG.md data/CHANGELOG.md
+
     - name: Create changelog PR
       env:
         GH_TOKEN: ${{ secrets.RELEASE_PAT }}
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add CHANGELOG.md
+        git add CHANGELOG.md data/CHANGELOG.md
         if ! git diff --staged --quiet; then
           # Fixed branch name keeps runs idempotent: if a previous run was
           # interrupted after opening its PR, this run force-pushes the same

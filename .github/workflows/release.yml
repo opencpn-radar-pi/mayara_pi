@@ -70,7 +70,10 @@ jobs:
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         cp /tmp/CHANGELOG.md CHANGELOG.md
-        git add CHANGELOG.md
+        # data/ is installed alongside the binary on every platform (see
+        # PluginInstall.cmake); the in-app changelog viewer reads this copy.
+        cp CHANGELOG.md data/CHANGELOG.md
+        git add CHANGELOG.md data/CHANGELOG.md
         if ! git diff --staged --quiet; then
           BRANCH="docs-changelog-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}"
           git switch -C "$BRANCH"

@@ -95,6 +95,10 @@ class mayara_pi : public opencpn_plugin_121 {
   // display fill that display (splitting it if several share it).
   void SyncRadarFullScreen(bool on);
   void ShowSettings(wxWindow* parent);
+  // Renders the CHANGELOG.md shipped in data/ (see PluginInstall.cmake) to a
+  // local HTML page and opens it in the default browser. Message-boxes on
+  // `parent` if there is nothing to show or nowhere writable to put it.
+  void OpenChangelog(wxWindow* parent);
   void ShowSearchDialog();  // "looking for a server" + manual entry
   // "found the server, it just isn't seeing a radar", with a link to
   // mayara-server's GUI when there is one to link to (help_url may be empty,
