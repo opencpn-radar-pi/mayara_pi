@@ -2459,8 +2459,11 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
     wxString extra = extra_args->GetValue();
     extra.Trim().Trim(false);
     o.extra_args = std::string(extra.utf8_str());
-    m_server->SetOptions(o);  // restarts the server if it is running
+    // Disable first: SetOptions() restarts the server (with the new options)
+    // when it is currently enabled, and switching to network mode in the
+    // same click should stop it, not launch it once more on the way out.
     m_server->SetEnabled(r_local->GetValue());
+    m_server->SetOptions(o);  // restarts the server if it is (still) running
     SyncLocalServerUrl();
   }
 
