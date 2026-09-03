@@ -384,26 +384,15 @@ void mayara_pi::LoadConfig() {
   m_windows_count = windows < 1 ? 1 : windows;
   LoadPalettes(cfg);
   long hs = 0, hto = 5, lvl = 0;
-  bool cog = false, fpos = false;
-  double fh = 0.0, fla = 0.0, flo = 0.0;
+  bool cog = false;
   cfg->Read("HeadingSource", &hs, 0);
   cfg->Read("HeadingTimeout", &hto, 5);
-  cfg->Read("FixedHeading", &fh, 0.0);
   cfg->Read("CogAsHeading", &cog, false);
-  cfg->Read("FixedPosition", &fpos, false);
-  cfg->Read("FixedLat", &fla, 0.0);
-  cfg->Read("FixedLon", &flo, 0.0);
   cfg->Read("LogLevel", &lvl, 0);
-  m_diag.heading_source =
-      static_cast<int>(hs < 0 ? 0 : (hs > Diagnostics::kFixedHeading
-                                         ? Diagnostics::kFixedHeading
-                                         : hs));
+  m_diag.heading_source = static_cast<int>(
+      hs < 0 ? 0 : (hs > Diagnostics::kRadarOnly ? Diagnostics::kRadarOnly : hs));
   m_diag.heading_timeout_s = static_cast<int>(hto < 0 ? 0 : (hto > 3600 ? 3600 : hto));
-  m_diag.fixed_heading = fh;
   m_diag.cog_as_heading = cog;
-  m_diag.fixed_position = fpos;
-  m_diag.fixed_lat = fla;
-  m_diag.fixed_lon = flo;
   m_diag.log_level = static_cast<int>(lvl < 0 ? 0 : (lvl > 2 ? 2 : lvl));
   // "OverlayOffCanvases" is a comma list; the old single OverlayEnabled flag is
   // still honoured so an existing config does not silently switch the overlay
@@ -693,11 +682,7 @@ void mayara_pi::SaveConfig() {
   SavePalettes(cfg);
   cfg->Write("HeadingSource", static_cast<long>(m_diag.heading_source));
   cfg->Write("HeadingTimeout", static_cast<long>(m_diag.heading_timeout_s));
-  cfg->Write("FixedHeading", m_diag.fixed_heading);
   cfg->Write("CogAsHeading", m_diag.cog_as_heading);
-  cfg->Write("FixedPosition", m_diag.fixed_position);
-  cfg->Write("FixedLat", m_diag.fixed_lat);
-  cfg->Write("FixedLon", m_diag.fixed_lon);
   cfg->Write("LogLevel", static_cast<long>(m_diag.log_level));
   cfg->Write("OverlayEnabled", OverlayOnAny());
   wxString sel;
@@ -1163,9 +1148,6 @@ bool mayara_pi::ResolveHeading(int radar, double* deg, wxString* source) const {
     return true;
   };
 
-  if (m_diag.heading_source == Diagnostics::kFixedHeading)
-    return give(m_diag.fixed_heading, _("fixed"));
-
   // OpenCPN's, if it is a real number and has not gone stale.
   if (m_diag.heading_source != Diagnostics::kRadarOnly && m_nav.has_hdt) {
     const int64_t age = DiagNowMs() - m_hdt_ms;
@@ -1200,12 +1182,6 @@ bool mayara_pi::ResolveHeading(int radar, double* deg, wxString* source) const {
 
 bool mayara_pi::ResolvePosition(int radar, double* lat, double* lon,
                                 wxString* source) const {
-  if (m_diag.fixed_position) {
-    if (lat) *lat = m_diag.fixed_lat;
-    if (lon) *lon = m_diag.fixed_lon;
-    if (source) *source = _("fixed");
-    return true;
-  }
   if (m_nav.valid) {
     if (lat) *lat = m_nav.lat;
     if (lon) *lon = m_nav.lon;
@@ -1243,15 +1219,13 @@ void mayara_pi::Log(int level, const wxString& msg) const {
 // What the plugin is set to do, written once when logging is turned on so a
 // log sent by a user explains itself without a second round trip.
 void mayara_pi::LogSettings() const {
-  static const char* kSources[] = {"auto", "OpenCPN only", "radar only",
-                                   "fixed"};
+  static const char* kSources[] = {"auto", "OpenCPN only", "radar only"};
   Log(2, wxString::Format(
-             "settings: heading source %s (fixed %.1f, timeout %ds, COG "
-             "fallback %s), fixed position %s, palette \"%s\", overlay "
-             "alpha %d%%, nest second radar %s, feed HDT %s, feed TTM %s",
-             kSources[m_diag.heading_source], m_diag.fixed_heading,
-             m_diag.heading_timeout_s, m_diag.cog_as_heading ? "on" : "off",
-             m_diag.fixed_position ? "on" : "off",
+             "settings: heading source %s (timeout %ds, COG fallback %s), "
+             "palette \"%s\", overlay alpha %d%%, nest second radar %s, "
+             "feed HDT %s, feed TTM %s",
+             kSources[m_diag.heading_source], m_diag.heading_timeout_s,
+             m_diag.cog_as_heading ? "on" : "off",
              wxString::FromUTF8(m_palette_active.c_str()),
              m_prefs.overlay_alpha,
              m_prefs.nest_range ? "on" : "off", m_feed_heading ? "on" : "off",
@@ -1907,6 +1881,21 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   lbox->Add(logpath, 0, wxTOP, 8);
   auto* logbtn = new wxButton(spage, wxID_ANY, _("Open server log"));
   lbox->Add(logbtn, 0, wxTOP, 4);
+  auto* erow = new wxBoxSizer(wxHORIZONTAL);
+  erow->Add(new wxStaticText(spage, wxID_ANY, _("Extra arguments:")), 0,
+            wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+  auto* extra_args = new wxTextCtrl(
+      spage, wxID_ANY,
+      wxString::FromUTF8(m_server->Options().extra_args.c_str()),
+      wxDefaultPosition, spage->FromDIP(wxSize(240, -1)));
+  erow->Add(extra_args, 1, wxALIGN_CENTER_VERTICAL);
+  lbox->Add(erow, 0, wxEXPAND | wxTOP, 8);
+  auto* ehint = new wxStaticText(
+      spage, wxID_ANY,
+      _("Extra command-line arguments passed to mayara-server, e.g. for a "
+        "radar or feature not yet exposed above."));
+  ehint->Wrap(ehint->FromDIP(330));
+  lbox->Add(ehint, 0, wxTOP, 2);
   sbox->Add(lbox, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 24);
 
   sbox->Add(r_net, 0, wxALL, 8);
@@ -2242,11 +2231,7 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   hsrc.Add(_("Radar only"));
   auto* hchoice = new wxChoice(gpage, wxID_ANY, wxDefaultPosition,
                                wxDefaultSize, hsrc);
-  const bool fixed_on = m_diag.heading_source == Diagnostics::kFixedHeading;
-  // The dropdown no longer offers "Fixed" as one of its own choices (that is
-  // the box below now); Automatic is just a sane, harmless thing to show
-  // while fixed mode has it disabled.
-  hchoice->SetSelection(fixed_on ? Diagnostics::kAuto : m_diag.heading_source);
+  hchoice->SetSelection(m_diag.heading_source);
   gbox->Add(hchoice, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
 
   auto* cb_cog = new wxCheckBox(
@@ -2262,65 +2247,6 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
                                m_diag.heading_timeout_s);
   trow->Add(tspin, 0, wxALIGN_CENTER_VERTICAL);
   gbox->Add(trow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
-
-  // Fixed heading and fixed position are one switch, not two: standing in
-  // for instruments a bench has neither of, one without the other makes no
-  // sense, so a single checkbox drives both -- bordered, and below
-  // everything about how heading is normally resolved, since none of that
-  // applies once this is on.
-  auto* fbox = new wxStaticBoxSizer(wxVERTICAL, gpage);
-  wxWindow* fboxw = fbox->GetStaticBox();
-  auto* cb_fixed =
-      new wxCheckBox(fboxw, wxID_ANY, _("Fixed position and heading"));
-  cb_fixed->SetValue(fixed_on);
-  fbox->Add(cb_fixed, 0, wxALL, 8);
-
-  auto* frow = new wxBoxSizer(wxHORIZONTAL);
-  frow->Add(new wxStaticText(fboxw, wxID_ANY, _("Heading (deg T):")), 0,
-            wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
-  auto* fhead = new wxTextCtrl(fboxw, wxID_ANY,
-                               wxString::Format("%.1f", m_diag.fixed_heading),
-                               wxDefaultPosition, fboxw->FromDIP(wxSize(80, -1)));
-  frow->Add(fhead, 0, wxALIGN_CENTER_VERTICAL);
-  fbox->Add(frow, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
-
-  auto* prow2 = new wxBoxSizer(wxHORIZONTAL);
-  prow2->Add(new wxStaticText(fboxw, wxID_ANY, _("Lat:")), 0,
-             wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-  auto* flat = new wxTextCtrl(fboxw, wxID_ANY,
-                              wxString::Format("%.6f", m_diag.fixed_lat),
-                              wxDefaultPosition, fboxw->FromDIP(wxSize(110, -1)));
-  prow2->Add(flat, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12);
-  prow2->Add(new wxStaticText(fboxw, wxID_ANY, _("Lon:")), 0,
-             wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-  auto* flon = new wxTextCtrl(fboxw, wxID_ANY,
-                              wxString::Format("%.6f", m_diag.fixed_lon),
-                              wxDefaultPosition, fboxw->FromDIP(wxSize(110, -1)));
-  prow2->Add(flon, 0, wxALIGN_CENTER_VERTICAL);
-  fbox->Add(prow2, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
-
-  auto* bench_hint = new wxStaticText(
-      fboxw, wxID_ANY,
-      _("A fixed heading and position allows use in situations where the "
-        "radar is shore based. Do not use on board."));
-  bench_hint->Wrap(bench_hint->FromDIP(300));
-  fbox->Add(bench_hint, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
-  gbox->Add(fbox, 0, wxEXPAND | wxALL, 8);
-
-  // The three fields only mean anything while the box is checked; the
-  // controls above only mean anything while it is not.
-  auto sync_fixed = [hchoice, cb_cog, tspin, fhead, flat, flon](bool on) {
-    hchoice->Enable(!on);
-    cb_cog->Enable(!on);
-    tspin->Enable(!on);
-    fhead->Enable(on);
-    flat->Enable(on);
-    flon->Enable(on);
-  };
-  sync_fixed(fixed_on);
-  cb_fixed->Bind(wxEVT_CHECKBOX, [cb_fixed, sync_fixed](wxCommandEvent&) {
-    sync_fixed(cb_fixed->GetValue());
-  });
 
   // Deliberately its own row, not folded into the box above: this is about
   // OpenCPN's log, unrelated to whether heading and position are fixed.
@@ -2451,23 +2377,7 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
 
   {
     Diagnostics d = m_diag;
-    // Fixed heading and fixed position are one switch: kFixedHeading and
-    // fixed_position always agree, so nothing downstream has to consider
-    // the (heading fixed, position live) combination that never appears
-    // in the UI.
-    if (cb_fixed->GetValue()) {
-      d.heading_source = Diagnostics::kFixedHeading;
-      d.fixed_position = true;
-    } else {
-      d.heading_source = hchoice->GetSelection();
-      d.fixed_position = false;
-    }
-    // A locale that writes 1,5 must still be able to type it: wx parses with
-    // the locale, and this is a user typing, not a wire format.
-    double v = 0.0;
-    if (fhead->GetValue().ToDouble(&v)) d.fixed_heading = v;
-    if (flat->GetValue().ToDouble(&v)) d.fixed_lat = v;
-    if (flon->GetValue().ToDouble(&v)) d.fixed_lon = v;
+    d.heading_source = hchoice->GetSelection();
     d.cog_as_heading = cb_cog->GetValue();
     d.heading_timeout_s = tspin->GetValue();
     d.log_level = lchoice->GetSelection();
@@ -2539,6 +2449,9 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
     const int sel = brand->GetSelection();
     if (sel > 0 && sel <= static_cast<int>(MayaraServer::Brands().size()))
       o.brand = MayaraServer::Brands()[sel - 1];
+    wxString extra = extra_args->GetValue();
+    extra.Trim().Trim(false);
+    o.extra_args = std::string(extra.mb_str());
     m_server->SetOptions(o);  // restarts the server if it is running
     m_server->SetEnabled(r_local->GetValue());
     SyncLocalServerUrl();
