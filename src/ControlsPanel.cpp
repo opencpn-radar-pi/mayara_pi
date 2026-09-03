@@ -214,6 +214,14 @@ ControlsPanel::ControlsPanel(wxWindow* parent, MayaraClient* client,
   // panel already wants elsewhere: a bar that comes and goes reflows the
   // controls under the pointer.
   ShowScrollbars(wxSHOW_SB_NEVER, wxSHOW_SB_ALWAYS);
+#else
+  // Everywhere else this panel draws its own themed scrollbar (kScrollBarW)
+  // instead of the native one -- macOS's native bar is invisible until
+  // scrolled, which left the panel with no visible sign that it scrolls at
+  // all (see below). GTK has no such auto-hide: left on default, its native
+  // bar stays permanently visible and doubles up with the themed one,
+  // overlapping it. Hide it explicitly so only the themed one shows.
+  ShowScrollbars(wxSHOW_SB_NEVER, wxSHOW_SB_NEVER);
 #endif
   SetBackgroundStyle(wxBG_STYLE_PAINT);
   auto* sizer = new wxBoxSizer(wxVERTICAL);
