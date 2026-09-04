@@ -319,7 +319,25 @@ ThemedButton::ThemedButton(wxWindow* parent, const wxString& label,
   }
   SetLabel(label);  // sets the min size from the text; see below
   Bind(wxEVT_PAINT, &ThemedButton::OnPaint, this);
-  Bind(wxEVT_LEFT_DOWN, &ThemedButton::OnClick, this);
+  // On LEFT_UP, not LEFT_DOWN -- same reasoning as ThemedChoice's popup
+  // below: firing mid-click let the close button's own action (hiding the
+  // Controls panel) expose whatever sits underneath before this same
+  // click's LEFT_UP arrived, which the PPI window's radar picture read as a
+  // click on its own hamburger menu hitbox at that spot -- reopening the
+  // panel that had just been closed.
+  //
+  // No capture is taken, which means a LEFT_UP over this button doesn't
+  // guarantee a matching LEFT_DOWN happened here first (e.g. a press
+  // started on another control, dragged over, and released here) -- so
+  // OnClick only fires when m_pressed_here says the press did originate on
+  // this button, and LEAVE_WINDOW clears that if the pointer wanders off
+  // before release, matching ordinary button-cancel-by-dragging-away.
+  Bind(wxEVT_LEFT_DOWN, [this](wxMouseEvent&) { m_pressed_here = true; });
+  Bind(wxEVT_LEFT_UP, &ThemedButton::OnClick, this);
+  Bind(wxEVT_LEAVE_WINDOW, [this](wxMouseEvent& e) {
+    m_pressed_here = false;
+    e.Skip();
+  });
 }
 
 // The min size follows the label rather than being fixed at construction:
@@ -364,7 +382,9 @@ void ThemedButton::OnPaint(wxPaintEvent&) {
 }
 
 void ThemedButton::OnClick(wxMouseEvent&) {
-  if (!IsEnabled()) return;
+  const bool fire = m_pressed_here;
+  m_pressed_here = false;
+  if (!fire || !IsEnabled()) return;
   if (m_toggle) {
     m_pressed = !m_pressed;
     Refresh();
