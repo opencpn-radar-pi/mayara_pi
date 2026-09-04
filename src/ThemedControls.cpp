@@ -319,7 +319,13 @@ ThemedButton::ThemedButton(wxWindow* parent, const wxString& label,
   }
   SetLabel(label);  // sets the min size from the text; see below
   Bind(wxEVT_PAINT, &ThemedButton::OnPaint, this);
-  Bind(wxEVT_LEFT_DOWN, &ThemedButton::OnClick, this);
+  // On LEFT_UP, not LEFT_DOWN -- same reasoning as ThemedChoice's popup
+  // below: firing mid-click let the close button's own action (hiding the
+  // Controls panel) expose whatever sits underneath before this same
+  // click's LEFT_UP arrived, which the PPI window's radar picture read as a
+  // click on its own hamburger menu hitbox at that spot -- reopening the
+  // panel that had just been closed.
+  Bind(wxEVT_LEFT_UP, &ThemedButton::OnClick, this);
 }
 
 // The min size follows the label rather than being fixed at construction:
