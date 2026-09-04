@@ -31,6 +31,9 @@ namespace {
 const int kRates[] = {1, 2, 5, 10};
 const int kRateCount = static_cast<int>(sizeof(kRates) / sizeof(kRates[0]));
 
+// ControlsPanel's free-float resize grip: side length, in DIP.
+const int kGripDIP = 14;
+
 std::string Num(double v) { return JsonNum(v); }
 
 // How many distinct values a number control can take. A slider is fine for a
@@ -192,39 +195,175 @@ class SectionHeader : public wxPanel {
 
 }  // namespace
 
-wxBEGIN_EVENT_TABLE(ControlsPanel, wxScrolledWindow)
-    EVT_TIMER(kControlsTimerId, ControlsPanel::OnTimer)
+// The actual schema-driven, scrollable content: everything below
+// ControlsPanel's fixed title/gear/close row. Kept as a distinct class (never
+// exposed outside this file -- ControlsPanel.h only forward-declares it and
+// holds a pointer) so its content can scroll while that row stays put; see
+// ControlsPanel's own class comment.
+class ControlsBody : public wxScrolledWindow {
+ public:
+  ControlsBody(wxWindow* parent, MayaraClient* client, int radar_index);
+
+  void SetRadarIndex(int index);
+  int RadarIndex() const { return m_index; }
+  void SetSingleControl(const std::string& id);
+  const std::string& SingleControl() const { return m_single_id; }
+  void SetRadarList(std::vector<int> indices) {
+    m_radar_list = std::move(indices);
+    if (m_built) Rebuild();
+  }
+  void SetAutoLayoutCallback(std::function<void()> cb) {
+    m_on_autolayout = std::move(cb);
+    if (m_built) Rebuild();  // add the button to the View section
+  }
+  void ApplyTheme(const MayaraTheme& theme);
+
+  void SetViewControls(std::function<bool()> get_overlay,
+                       std::function<void(bool)> set_overlay,
+                       std::function<bool()> get_ppi,
+                       std::function<void(bool)> set_ppi);
+  void SetOrientationControl(std::function<int()> get,
+                             std::function<void(int)> set);
+  void SetThresholdControl(std::function<int()> get,
+                           std::function<void(int)> set);
+  void SetDockControl(std::function<bool()> get, std::function<void(bool)> set);
+  void SetRangeAutoControl(std::function<bool()> get_relevant,
+                           std::function<bool()> get,
+                           std::function<void(bool)> set);
+  void SetVrmEblHandlers(std::function<VrmEbl(int)> get,
+                         std::function<void(int, const VrmEbl&)> set) {
+    m_vrm_get = std::move(get);
+    m_vrm_set = std::move(set);
+  }
+  void SetBearingRefProvider(std::function<BearingRef()> p) {
+    m_bearing_ref = std::move(p);
+  }
+  void SyncNow() { ApplyValues(); }
+  void SetZoneEditHandlers(
+      std::function<ZoneEdit()> get,
+      std::function<void(const ZoneEdit&, bool commit)> set) {
+    m_zone_get = std::move(get);
+    m_zone_set = std::move(set);
+  }
+  void SetPrefsControl(std::function<PpiPrefs()> get,
+                       std::function<void(const PpiPrefs&)> set);
+
+ private:
+#if defined(__WXMSW__) || defined(__WXGTK__)
+  // See ControlsPanel's constructor for why: same reasoning, same values.
+  static const int kScrollBarW = 0;
+#else
+  static const int kScrollBarW = 10;  // gutter for the scrollbar we draw
+#endif
+  wxSizer* WithScrollGutter(wxSizer* content);
+  wxRect ThumbRect() const;
+  void OnPaint(wxPaintEvent& event);
+  void OnBarMouse(wxMouseEvent& event);  // the drawn scrollbar's thumb only
+  void OnCaptureLost(wxMouseCaptureLostEvent& event);
+  void ThemeChildren();
+  void ScrollSectionIntoView(wxWindow* header, wxSizer* content);
+  void AddCollapsibleSection(wxSizer* root, const wxString& title,
+                             const std::string& key,
+                             std::function<void(wxSizer*)> fill);
+  void AddControl(wxSizer* content, const ControlDef& def);
+  void AddServerRow(wxSizer* content);  // active server URL, in Info
+  void FillVrmEblSection(wxSizer* content);  // the two local markers
+  void FillViewSection(wxSizer* content);
+  // A labelled row of mutually exclusive buttons over an int, kept in sync by
+  // an updater. The View section is made of these.
+  void AddChoiceRow(wxSizer* content, const wxString& label,
+                    const std::vector<wxString>& labels,
+                    std::function<int()> get, std::function<void(int)> set);
+  void OnTimer(wxTimerEvent& event);
+  void Rebuild();      // (re)build widgets from the schema
+  void ApplyValues();  // push current model values into the widgets
+
+  // Widget builders. Each adds a row to `sizer` and registers a value updater.
+  void AddNumber(wxSizer* sizer, const ControlDef& def);
+  void AddEnum(wxSizer* sizer, const ControlDef& def, bool as_buttons);
+  void AddButton(wxSizer* sizer, const ControlDef& def);
+  void AddReadonly(wxSizer* sizer, const ControlDef& def);
+  void AddRange(wxSizer* sizer, const ControlDef& def,
+                const std::vector<int>& ranges);
+  void AddSector(wxSizer* sizer, const ControlDef& def);  // no-transmit sector
+  void AddZone(wxSizer* sizer, const ControlDef& def);    // guard zone
+  void AddPlaceholder(wxSizer* sizer, const ControlDef& def);
+
+  void Set(const std::string& id, const std::string& json_body);
+  RadarControls* controls();  // the bound radar's controls, or null
+
+  MayaraClient* m_client;  // not owned
+  int m_index = 0;         // which radar these controls drive
+  std::vector<int> m_radar_list;  // radars this window hosts (for the selector)
+  std::string m_single_id;        // non-empty: show only this control
+  wxTimer m_timer;
+  uint64_t m_last_gen = ~0ull;
+  uint64_t m_schema_gen = ~0ull;
+  bool m_built = false;
+
+  // Value updaters: read the model and refresh the corresponding widgets.
+  std::vector<std::function<void()>> m_updaters;
+  std::function<void()> m_on_autolayout;
+  MayaraTheme m_theme;
+
+  std::map<std::string, bool> m_collapsed;  // per-section collapse state
+
+  std::function<bool()> m_get_overlay;
+  std::function<void(bool)> m_set_overlay;
+  std::function<bool()> m_get_ppi;
+  std::function<void(bool)> m_set_ppi;
+  std::function<int()> m_get_orientation;
+  std::function<void(int)> m_set_orientation;
+  std::function<int()> m_get_threshold;
+  std::function<void(int)> m_set_threshold;
+  std::function<bool()> m_get_dock;
+  std::function<void(bool)> m_set_dock;
+  std::function<bool()> m_range_auto_relevant;
+  std::function<bool()> m_get_range_auto;
+  std::function<void(bool)> m_set_range_auto;
+  bool m_rebuilding = false;     // true while widgets are being destroyed
+  bool m_dragging_bar = false;   // the drawn scrollbar's thumb
+  std::function<VrmEbl(int)> m_vrm_get;
+  std::function<void(int, const VrmEbl&)> m_vrm_set;
+  std::function<BearingRef()> m_bearing_ref;
+  std::function<ZoneEdit()> m_zone_get;
+  std::function<void(const ZoneEdit&, bool)> m_zone_set;
+  std::function<PpiPrefs()> m_get_prefs;
+  std::function<void(const PpiPrefs&)> m_set_prefs;
+
+  wxDECLARE_EVENT_TABLE();
+};
+
+wxBEGIN_EVENT_TABLE(ControlsBody, wxScrolledWindow)
+    EVT_TIMER(kControlsTimerId, ControlsBody::OnTimer)
 wxEND_EVENT_TABLE()
 
-ControlsPanel::ControlsPanel(wxWindow* parent, MayaraClient* client,
-                             int radar_index)
+ControlsBody::ControlsBody(wxWindow* parent, MayaraClient* client,
+                            int radar_index)
     : wxScrolledWindow(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                        wxVSCROLL | wxCLIP_CHILDREN),
       m_client(client),
       m_index(radar_index),
       m_timer(this, kControlsTimerId) {
-  SetMinSize(wxSize(FromDIP(250), -1));
   SetScrollRate(0, 12);
-#ifdef __WXMSW__
-  // Keep the native vertical scrollbar permanently. A bar that appears only
-  // once the content grows narrows the client area *after* the children have
-  // been laid out, so their right edge ends up hidden behind it and nothing
-  // triggers a fresh layout. A constant client width also matches what this
-  // panel already wants elsewhere: a bar that comes and goes reflows the
-  // controls under the pointer.
+#if defined(__WXMSW__) || defined(__WXGTK__)
+  // Keep the native vertical scrollbar permanently, toolkit-managed, on both
+  // platforms. On Windows: a bar that appears only once the content grows
+  // narrows the client area *after* the children have been laid out, so
+  // their right edge ends up hidden behind it and nothing triggers a fresh
+  // layout. On GTK: this used to instead force the native bar permanently
+  // *hidden* (wxSHOW_SB_NEVER for both), to avoid it doubling up with this
+  // panel's own themed one (kScrollBarW) -- but that broke
+  // wxScrolledWindow's own scroll/child-repositioning bookkeeping there,
+  // leaving content whose position relative to the scroll offset just
+  // changed (e.g. a section crossing the panel's visible-height boundary)
+  // genuinely misplaced, not just cosmetically doubled-up. Managing it the
+  // same way Windows already does -- always shown, never hidden -- avoids
+  // that; kScrollBarW is 0 on both platforms so nothing is drawn over it.
   ShowScrollbars(wxSHOW_SB_NEVER, wxSHOW_SB_ALWAYS);
-#else
-  // Everywhere else this panel draws its own themed scrollbar (kScrollBarW)
-  // instead of the native one -- macOS's native bar is invisible until
-  // scrolled, which left the panel with no visible sign that it scrolls at
-  // all (see below). GTK has no such auto-hide: left on default, its native
-  // bar stays permanently visible and doubles up with the themed one,
-  // overlapping it. Hide it explicitly so only the themed one shows.
-  ShowScrollbars(wxSHOW_SB_NEVER, wxSHOW_SB_NEVER);
 #endif
   SetBackgroundStyle(wxBG_STYLE_PAINT);
   auto* sizer = new wxBoxSizer(wxVERTICAL);
-  sizer->Add(MakeCloseRow(), 0, wxEXPAND);
   // Three ASCII periods, not an ellipsis: translated msgids are kept ASCII
   // so a compiler reading the source in the system codepage cannot mangle them.
   sizer->Add(new wxStaticText(this, wxID_ANY, _("Waiting for radar...")), 0,
@@ -234,7 +373,7 @@ ControlsPanel::ControlsPanel(wxWindow* parent, MayaraClient* client,
   // The scrollbar is drawn, not native: macOS hides the real one until it is
   // being used (and inside a plugin's own child window it never appeared at
   // all), which leaves a panel that scrolls with no sign that it does.
-  Bind(wxEVT_PAINT, &ControlsPanel::OnPaint, this);
+  Bind(wxEVT_PAINT, &ControlsBody::OnPaint, this);
   auto redraw = [this](wxScrollWinEvent& e) {
     Refresh(false);
     e.Skip();
@@ -247,19 +386,19 @@ ControlsPanel::ControlsPanel(wxWindow* parent, MayaraClient* client,
   Bind(wxEVT_SCROLLWIN_PAGEDOWN, redraw);
   Bind(wxEVT_SCROLLWIN_THUMBTRACK, redraw);
   Bind(wxEVT_SCROLLWIN_THUMBRELEASE, redraw);
-  Bind(wxEVT_LEFT_DOWN, &ControlsPanel::OnBarMouse, this);
-  Bind(wxEVT_LEFT_UP, &ControlsPanel::OnBarMouse, this);
-  Bind(wxEVT_MOTION, &ControlsPanel::OnBarMouse, this);
+  Bind(wxEVT_LEFT_DOWN, &ControlsBody::OnBarMouse, this);
+  Bind(wxEVT_LEFT_UP, &ControlsBody::OnBarMouse, this);
+  Bind(wxEVT_MOTION, &ControlsBody::OnBarMouse, this);
   // Capture can be taken away without a LeftUp ever arriving (a dialog
   // steals focus mid-drag, the window manager intervenes, ...). Without
-  // this, m_dragging_title/m_resizing would stay set forever and
-  // OnBarMouse's early-return for them would swallow every later click on
-  // the panel -- scrollbar, resize grip, all of it -- until restart.
-  Bind(wxEVT_MOUSE_CAPTURE_LOST, &ControlsPanel::OnCaptureLost, this);
+  // this, m_dragging_bar would stay set forever and OnBarMouse's
+  // early-return for it would swallow every later click on the scrollbar
+  // until restart.
+  Bind(wxEVT_MOUSE_CAPTURE_LOST, &ControlsBody::OnCaptureLost, this);
   m_timer.Start(400);
 }
 
-wxSizer* ControlsPanel::WithScrollGutter(wxSizer* content) {
+wxSizer* ControlsBody::WithScrollGutter(wxSizer* content) {
   auto* outer = new wxBoxSizer(wxHORIZONTAL);
   outer->Add(content, 1, wxEXPAND);
   outer->AddSpacer(kScrollBarW);  // kept clear of children, so the bar shows
@@ -267,7 +406,7 @@ wxSizer* ControlsPanel::WithScrollGutter(wxSizer* content) {
 }
 
 // Where the thumb sits, in client coordinates. Empty when everything fits.
-wxRect ControlsPanel::ThumbRect() const {
+wxRect ControlsBody::ThumbRect() const {
   if (kScrollBarW <= 0) return wxRect();  // native scrollbar in use
   const wxSize cs = GetClientSize();
   const int vh = GetVirtualSize().y;
@@ -280,17 +419,7 @@ wxRect ControlsPanel::ThumbRect() const {
   return wxRect(cs.x - kScrollBarW + 1, ty, kScrollBarW - 2, th);
 }
 
-// Free-float resize grip, bottom-right corner. Empty (nothing to grab, nothing
-// to draw) unless the host wired SetFreeFloatHandlers.
-wxRect ControlsPanel::GripRect() const {
-  if (!m_on_resize) return wxRect();
-  const wxSize cs = GetClientSize();
-  const int g = FromDIP(14);
-  if (cs.x < g || cs.y < g) return wxRect();
-  return wxRect(cs.x - g, cs.y - g, g, g);
-}
-
-void ControlsPanel::OnPaint(wxPaintEvent&) {
+void ControlsBody::OnPaint(wxPaintEvent&) {
   wxPaintDC dc(this);
   const wxSize cs = GetClientSize();
   dc.SetPen(*wxTRANSPARENT_PEN);
@@ -305,86 +434,13 @@ void ControlsPanel::OnPaint(wxPaintEvent&) {
     dc.SetBrush(wxBrush(m_dragging_bar ? m_theme.text : m_theme.lozenge_border));
     dc.DrawRoundedRectangle(thumb, (kScrollBarW - 2) / 2.0);
   }
-
-  const wxRect grip = GripRect();
-  if (!grip.IsEmpty()) {
-    // Three short diagonal strokes in the corner -- the usual resize-grip
-    // glyph -- so the panel doesn't just look small, it looks stretchable.
-    dc.SetPen(wxPen(m_resizing ? m_theme.text : m_theme.lozenge_border, 1));
-    for (int i = 1; i <= 3; ++i) {
-      const int off = i * grip.width / 4;
-      dc.DrawLine(grip.GetRight(), grip.GetBottom() - off,
-                  grip.GetRight() - off, grip.GetBottom());
-    }
-  }
 }
 
-// LeftDown on the "Controls" title label starts a free-float drag. Only the
-// hit-detection lives here (title is the only widget that covers that
-// pixel area); the capture itself is taken on the panel (see OnBarMouse),
-// not on this child label. Capturing on a child wxStaticText is unreliable
-// under GTK -- the panel never reliably sees the follow-up Motion/LeftUp,
-// so the capture is left dangling and silently hijacks every later click
-// and scroll wheel event anywhere in the app until OpenCPN is restarted.
-void ControlsPanel::OnTitleMouse(wxMouseEvent& event) {
-  if (!event.LeftDown() || !m_on_drag) {
-    event.Skip();
-    return;
-  }
-  m_dragging_title = true;
-  m_drag_last = static_cast<wxWindow*>(event.GetEventObject())
-                    ->ClientToScreen(event.GetPosition());
-  CaptureMouse();
-}
-
-// Click or drag anywhere down the gutter, on the free-float resize grip, or
-// (once OnTitleMouse above has started one) continuing a title-bar drag.
-// Nothing else lives there, so the panel itself sees these events -- and,
-// crucially, is also the window that holds the mouse capture during a drag
-// or resize, so it keeps receiving Motion/LeftUp for the whole gesture.
-void ControlsPanel::OnBarMouse(wxMouseEvent& event) {
-  if (m_dragging_title) {
-    if (event.LeftUp()) {
-      m_dragging_title = false;
-      if (HasCapture()) ReleaseMouse();
-      return;
-    }
-    if (event.Dragging()) {
-      const wxPoint now = ClientToScreen(event.GetPosition());
-      const int dx = now.x - m_drag_last.x, dy = now.y - m_drag_last.y;
-      if ((dx || dy) && m_on_drag) m_on_drag(dx, dy);
-      m_drag_last = now;
-    }
-    return;
-  }
-  if (m_resizing) {
-    if (event.LeftUp()) {
-      m_resizing = false;
-      if (HasCapture()) ReleaseMouse();
-      Refresh(false);
-      return;
-    }
-    if (event.Dragging()) {
-      const wxPoint now = ClientToScreen(event.GetPosition());
-      const int dx = now.x - m_drag_last.x, dy = now.y - m_drag_last.y;
-      if ((dx || dy) && m_on_resize) m_on_resize(dx, dy);
-      m_drag_last = now;
-    }
-    return;
-  }
-  const wxRect grip = GripRect();
-  if (event.LeftDown() && !grip.IsEmpty() && grip.Contains(event.GetPosition())) {
-    m_resizing = true;
-    m_drag_last = ClientToScreen(event.GetPosition());
-    CaptureMouse();
-    Refresh(false);
-    return;
-  }
-  if ((event.Moving() || event.Dragging()) && !grip.IsEmpty()) {
-    SetCursor(grip.Contains(event.GetPosition()) ? wxCursor(wxCURSOR_SIZENWSE)
-                                                  : wxCursor(*wxSTANDARD_CURSOR));
-  }
-
+// Click or drag anywhere down the drawn scrollbar's gutter. Nothing else
+// lives there, so the panel itself sees these events -- and is also the
+// window that holds the mouse capture during a drag, so it keeps receiving
+// Motion/LeftUp for the whole gesture.
+void ControlsBody::OnBarMouse(wxMouseEvent& event) {
   const wxSize cs = GetClientSize();
   const int vh = GetVirtualSize().y;
   const bool in_bar = event.GetX() >= cs.x - kScrollBarW;
@@ -418,67 +474,38 @@ void ControlsPanel::OnBarMouse(wxMouseEvent& event) {
   Refresh(false);
 }
 
-// Capture taken away by something other than our own ReleaseMouse() calls
+// Capture taken away by something other than our own ReleaseMouse() call
 // above (a dialog stealing focus mid-drag, the window manager intervening,
 // ...). wx has already dropped the capture by the time this fires -- just
-// clear whichever drag/resize/scrollbar-thumb state was in progress so
-// OnBarMouse stops swallowing every later click on the panel.
-void ControlsPanel::OnCaptureLost(wxMouseCaptureLostEvent&) {
-  m_dragging_title = false;
-  m_resizing = false;
+// clear the scrollbar-thumb-dragging state so OnBarMouse stops swallowing
+// every later click on the panel.
+void ControlsBody::OnCaptureLost(wxMouseCaptureLostEvent&) {
   m_dragging_bar = false;
   Refresh(false);
 }
 
-wxSizer* ControlsPanel::MakeCloseRow() {
-  auto* row = new wxBoxSizer(wxHORIZONTAL);
-  auto* title = new wxStaticText(this, wxID_ANY, _("Controls"));
-  wxFont f = title->GetFont();
-  f.MakeBold();
-  title->SetFont(f);
-  m_title = title;
-  // A no-op when SetFreeFloatHandlers was never called (the PPI window's
-  // docked/popup placements manage their own geometry). The drag itself,
-  // once started, is driven by OnBarMouse on the panel -- see there.
-  title->Bind(wxEVT_LEFT_DOWN, &ControlsPanel::OnTitleMouse, this);
-  row->Add(title, 1, wxALIGN_CENTER_VERTICAL | wxLEFT, 6);
-  auto* gear = new ThemedButton(this, wxT("⚙"), m_theme, /*toggle=*/false);
-  gear->SetToolTip(_("Settings"));
-  gear->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-    if (m_on_settings) m_on_settings();
-  });
-  row->Add(gear, 0, wxTOP | wxBOTTOM | wxLEFT, 4);
-  auto* close = new ThemedButton(this, wxT("✕"), m_theme, /*toggle=*/false);
-  close->SetToolTip(_("Hide controls"));
-  close->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-    if (m_on_close) m_on_close();
-  });
-  row->Add(close, 0, wxALL, 4);
-  return row;
-}
-
-void ControlsPanel::Set(const std::string& id, const std::string& body) {
+void ControlsBody::Set(const std::string& id, const std::string& body) {
   if (m_client) m_client->SetControlAt(m_index, id, body);
 }
 
-RadarControls* ControlsPanel::controls() {
+RadarControls* ControlsBody::controls() {
   return m_client ? m_client->ControlsAt(m_index) : nullptr;
 }
 
-void ControlsPanel::SetRadarIndex(int index) {
+void ControlsBody::SetRadarIndex(int index) {
   if (index == m_index) return;
   m_index = index;
   m_schema_gen = ~0ull;  // force a rebuild against the new radar's schema
   if (m_built) Rebuild();
 }
 
-void ControlsPanel::SetSingleControl(const std::string& id) {
+void ControlsBody::SetSingleControl(const std::string& id) {
   if (id == m_single_id) return;
   m_single_id = id;
   if (m_built) Rebuild();
 }
 
-void ControlsPanel::ApplyTheme(const MayaraTheme& theme) {
+void ControlsBody::ApplyTheme(const MayaraTheme& theme) {
   m_theme = theme;
   if (m_built)
     Rebuild();  // re-theme owner-drawn section headers too
@@ -487,12 +514,12 @@ void ControlsPanel::ApplyTheme(const MayaraTheme& theme) {
   Refresh();
 }
 
-void ControlsPanel::ThemeChildren() {
+void ControlsBody::ThemeChildren() {
   SetBackgroundColour(m_theme.panel_bg);
   for (wxWindow* c : GetChildren()) ThemeWindow(c, m_theme);
 }
 
-void ControlsPanel::OnTimer(wxTimerEvent&) {
+void ControlsBody::OnTimer(wxTimerEvent&) {
   RadarControls* c = controls();
   if (!c || !c->HasSchema()) return;
   const uint64_t sgen = c->SchemaGeneration();
@@ -514,12 +541,12 @@ void ControlsPanel::OnTimer(wxTimerEvent&) {
   ApplyValues();
 }
 
-void ControlsPanel::ApplyValues() {
+void ControlsBody::ApplyValues() {
   if (!m_client || !controls()) return;
   for (auto& u : m_updaters) u();
 }
 
-void ControlsPanel::Rebuild() {
+void ControlsBody::Rebuild() {
   // Destroying a focused text control fires KILL_FOCUS, whose handler would
   // otherwise run against widgets that are already going away.
   m_rebuilding = true;
@@ -542,7 +569,8 @@ void ControlsPanel::Rebuild() {
   RadarControls* c = controls();
   if (!c) {
     auto* sizer = new wxBoxSizer(wxVERTICAL);
-    sizer->Add(MakeCloseRow(), 0, wxEXPAND);
+    sizer->Add(new wxStaticText(this, wxID_ANY, _("Waiting for radar...")), 0,
+               wxALL, 8);
     SetSizer(WithScrollGutter(sizer));
     return;
   }
@@ -553,7 +581,6 @@ void ControlsPanel::Rebuild() {
   for (const auto& d : defs) by_id[d.id] = &d;
 
   auto* root = new wxBoxSizer(wxVERTICAL);
-  root->Add(MakeCloseRow(), 0, wxEXPAND);
 
   // Single-control mode: just one control (opened by a gauge icon).
   if (!m_single_id.empty()) {
@@ -571,11 +598,12 @@ void ControlsPanel::Rebuild() {
   }
 
   // Radar selector: switches which of this window's radars these controls
-  // drive. Shown only when the window hosts more than one radar.
+  // drive. Shown only when the window hosts more than one radar. No caption
+  // label: the dropdown's own entries are radar names, and ControlsPanel's
+  // fixed title row directly above already reads "Radar" in the overlay
+  // case -- a repeated "Radar" caption right under it read as a duplicate.
   if (m_radar_list.size() > 1) {
     std::vector<std::string> names = m_client->RadarNames();
-    root->Add(new wxStaticText(this, wxID_ANY, _("Radar")), 0, wxLEFT | wxTOP,
-              4);
     auto* sel = new ThemedChoice(this, m_theme);
     int selected = 0;
     for (size_t i = 0; i < m_radar_list.size(); ++i) {
@@ -646,7 +674,7 @@ void ControlsPanel::Rebuild() {
 // Opening a section whose contents fall below the bottom of the panel shows a
 // header and nothing else, which reads as an empty section. Bring as much of it
 // up as fits, without ever pushing its own header out of sight.
-void ControlsPanel::ScrollSectionIntoView(wxWindow* header, wxSizer* content) {
+void ControlsBody::ScrollSectionIntoView(wxWindow* header, wxSizer* content) {
   int xu = 0, yu = 0;
   GetScrollPixelsPerUnit(&xu, &yu);
   if (yu <= 0) return;
@@ -662,7 +690,7 @@ void ControlsPanel::ScrollSectionIntoView(wxWindow* header, wxSizer* content) {
   if (want != start) Scroll(-1, want / yu);
 }
 
-void ControlsPanel::AddCollapsibleSection(wxSizer* root, const wxString& title,
+void ControlsBody::AddCollapsibleSection(wxSizer* root, const wxString& title,
                                           const std::string& key,
                                           std::function<void(wxSizer*)> fill) {
   const bool collapsed = m_collapsed.count(key) ? m_collapsed[key] : true;
@@ -694,7 +722,7 @@ void ControlsPanel::AddCollapsibleSection(wxSizer* root, const wxString& title,
   root->Show(content, !collapsed, true);
 }
 
-void ControlsPanel::AddControl(wxSizer* content, const ControlDef& d) {
+void ControlsBody::AddControl(wxSizer* content, const ControlDef& d) {
   if (d.isReadOnly)
     AddReadonly(content, d);
   else if (d.dataType == "number")
@@ -713,7 +741,7 @@ void ControlsPanel::AddControl(wxSizer* content, const ControlDef& d) {
     AddPlaceholder(content, d);  // rect: editor later
 }
 
-void ControlsPanel::FillViewSection(wxSizer* content) {
+void ControlsBody::FillViewSection(wxSizer* content) {
   // Where the radar picture appears. Independent toggles rather than one
   // exclusive choice: overlay and PPI can both be up, and "docked" is a
   // property of the PPI window rather than a third place to put the picture.
@@ -848,7 +876,7 @@ void ControlsPanel::FillViewSection(wxSizer* content) {
   }
 }
 
-void ControlsPanel::AddChoiceRow(wxSizer* content, const wxString& label,
+void ControlsBody::AddChoiceRow(wxSizer* content, const wxString& label,
                                  const std::vector<wxString>& labels,
                                  std::function<int()> get,
                                  std::function<void(int)> set) {
@@ -874,45 +902,35 @@ void ControlsPanel::AddChoiceRow(wxSizer* content, const wxString& label,
   });
 }
 
-void ControlsPanel::SetPrefsControl(std::function<PpiPrefs()> get,
+void ControlsBody::SetPrefsControl(std::function<PpiPrefs()> get,
                                     std::function<void(const PpiPrefs&)> set) {
   m_get_prefs = std::move(get);
   m_set_prefs = std::move(set);
   if (m_built) Rebuild();
 }
 
-void ControlsPanel::SetFreeFloatHandlers(std::function<void(int, int)> on_drag,
-                                         std::function<void(int, int)> on_resize) {
-  m_on_drag = std::move(on_drag);
-  m_on_resize = std::move(on_resize);
-  if (m_title)
-    m_title->SetCursor(m_on_drag ? wxCursor(wxCURSOR_SIZING)
-                                 : wxCursor(*wxSTANDARD_CURSOR));
-  Refresh(false);  // the grip's presence/absence depends on m_on_resize
-}
-
-void ControlsPanel::SetOrientationControl(std::function<int()> get,
+void ControlsBody::SetOrientationControl(std::function<int()> get,
                                           std::function<void(int)> set) {
   m_get_orientation = std::move(get);
   m_set_orientation = std::move(set);
   if (m_built) Rebuild();
 }
 
-void ControlsPanel::SetThresholdControl(std::function<int()> get,
+void ControlsBody::SetThresholdControl(std::function<int()> get,
                                         std::function<void(int)> set) {
   m_get_threshold = std::move(get);
   m_set_threshold = std::move(set);
   if (m_built) Rebuild();
 }
 
-void ControlsPanel::SetDockControl(std::function<bool()> get,
+void ControlsBody::SetDockControl(std::function<bool()> get,
                                    std::function<void(bool)> set) {
   m_get_dock = std::move(get);
   m_set_dock = std::move(set);
   if (m_built) Rebuild();
 }
 
-void ControlsPanel::SetRangeAutoControl(std::function<bool()> get_relevant,
+void ControlsBody::SetRangeAutoControl(std::function<bool()> get_relevant,
                                         std::function<bool()> get,
                                         std::function<void(bool)> set) {
   m_range_auto_relevant = std::move(get_relevant);
@@ -921,7 +939,7 @@ void ControlsPanel::SetRangeAutoControl(std::function<bool()> get_relevant,
   if (m_built) Rebuild();
 }
 
-void ControlsPanel::SetViewControls(std::function<bool()> get_overlay,
+void ControlsBody::SetViewControls(std::function<bool()> get_overlay,
                                     std::function<void(bool)> set_overlay,
                                     std::function<bool()> get_ppi,
                                     std::function<void(bool)> set_ppi) {
@@ -932,7 +950,7 @@ void ControlsPanel::SetViewControls(std::function<bool()> get_overlay,
   if (m_built) Rebuild();  // add the View section now that we can drive it
 }
 
-void ControlsPanel::AddNumber(wxSizer* outer, const ControlDef& def) {
+void ControlsBody::AddNumber(wxSizer* outer, const ControlDef& def) {
   auto* box = new wxBoxSizer(wxVERTICAL);
   box->Add(new wxStaticText(this, wxID_ANY,
                             wxString::FromUTF8(def.name.c_str())),
@@ -1127,7 +1145,7 @@ void ControlsPanel::AddNumber(wxSizer* outer, const ControlDef& def) {
       [this, id, refresh]() { refresh(controls()->Value(id)); });
 }
 
-void ControlsPanel::AddEnum(wxSizer* outer, const ControlDef& def,
+void ControlsBody::AddEnum(wxSizer* outer, const ControlDef& def,
                             bool as_buttons) {
   outer->Add(new wxStaticText(this, wxID_ANY,
                               wxString::FromUTF8(def.name.c_str())),
@@ -1187,7 +1205,7 @@ void ControlsPanel::AddEnum(wxSizer* outer, const ControlDef& def,
   }
 }
 
-void ControlsPanel::AddRange(wxSizer* outer, const ControlDef& def,
+void ControlsBody::AddRange(wxSizer* outer, const ControlDef& def,
                              const std::vector<int>& supported) {
   outer->Add(new wxStaticText(this, wxID_ANY, _("Range")), 0, wxLEFT | wxTOP, 4);
   auto* row = new wxBoxSizer(wxHORIZONTAL);
@@ -1258,7 +1276,7 @@ void ControlsPanel::AddRange(wxSizer* outer, const ControlDef& def,
   });
 }
 
-void ControlsPanel::AddButton(wxSizer* outer, const ControlDef& def) {
+void ControlsBody::AddButton(wxSizer* outer, const ControlDef& def) {
   auto* b = new ThemedButton(this, wxString::FromUTF8(def.name.c_str()),
                              m_theme, /*toggle=*/false);
   outer->Add(b, 0, wxEXPAND | wxALL, 4);
@@ -1273,7 +1291,7 @@ void ControlsPanel::AddButton(wxSizer* outer, const ControlDef& def) {
 // The two VRM/EBL markers. They are the plugin's own -- the radar has no such
 // control -- so this section is built by hand rather than from the schema, and
 // sits with the other things you look at rather than set.
-void ControlsPanel::FillVrmEblSection(wxSizer* content) {
+void ControlsBody::FillVrmEblSection(wxSizer* content) {
   for (int i = 0; i < kVrmEblCount; ++i) {
     auto* row = new wxBoxSizer(wxHORIZONTAL);
     // Just the marker number: the section is already called EBL/VRM, and
@@ -1320,7 +1338,7 @@ void ControlsPanel::FillVrmEblSection(wxSizer* content) {
   }
 }
 
-void ControlsPanel::AddServerRow(wxSizer* outer) {
+void ControlsBody::AddServerRow(wxSizer* outer) {
   auto* row = new wxBoxSizer(wxHORIZONTAL);
   row->Add(new wxStaticText(this, wxID_ANY, _("Server:")), 0, wxRIGHT, 6);
   auto* val = new wxStaticText(this, wxID_ANY, wxEmptyString);
@@ -1359,7 +1377,7 @@ void ControlsPanel::AddServerRow(wxSizer* outer) {
   });
 }
 
-void ControlsPanel::AddReadonly(wxSizer* outer, const ControlDef& def) {
+void ControlsBody::AddReadonly(wxSizer* outer, const ControlDef& def) {
   auto* row = new wxBoxSizer(wxHORIZONTAL);
   row->Add(new wxStaticText(this, wxID_ANY,
                             wxString::FromUTF8((def.name + ":").c_str())),
@@ -1387,7 +1405,7 @@ void ControlsPanel::AddReadonly(wxSizer* outer, const ControlDef& def) {
 }
 
 // A no-transmit sector: start/end angles (degrees) + Enabled + Save.
-void ControlsPanel::AddSector(wxSizer* outer, const ControlDef& def) {
+void ControlsBody::AddSector(wxSizer* outer, const ControlDef& def) {
   const std::string id = def.id;
   auto* box = new wxBoxSizer(wxVERTICAL);
   box->Add(new wxStaticText(this, wxID_ANY,
@@ -1463,7 +1481,7 @@ void ControlsPanel::AddSector(wxSizer* outer, const ControlDef& def) {
 
 // A guard zone: start/end angles (degrees), inner/outer distance (metres),
 // Enabled + Save.
-void ControlsPanel::AddZone(wxSizer* outer, const ControlDef& def) {
+void ControlsBody::AddZone(wxSizer* outer, const ControlDef& def) {
   const std::string id = def.id;
   const double maxDist = def.maxDistance > 0 ? def.maxDistance : 4000.0;
   auto* box = new wxBoxSizer(wxVERTICAL);
@@ -1682,9 +1700,281 @@ void ControlsPanel::AddZone(wxSizer* outer, const ControlDef& def) {
   });
 }
 
-void ControlsPanel::AddPlaceholder(wxSizer* outer, const ControlDef& def) {
+void ControlsBody::AddPlaceholder(wxSizer* outer, const ControlDef& def) {
   outer->Add(new wxStaticText(
                  this, wxID_ANY,
                  wxString::FromUTF8((def.name + " (" + def.dataType + ")").c_str())),
              0, wxALL, 4);
+}
+
+// ---------------------------------------------------------------------------
+// ControlsPanel: the fixed title/gear/close header, plus a ControlsBody doing
+// all the actual scrollable, schema-driven work. See the class comment in
+// ControlsPanel.h for why the split exists.
+// ---------------------------------------------------------------------------
+
+ControlsPanel::ControlsPanel(wxWindow* parent, MayaraClient* client,
+                             int radar_index, const wxString& title)
+    : wxWindow(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+               wxCLIP_CHILDREN) {
+  SetMinSize(wxSize(FromDIP(250), -1));
+  SetBackgroundStyle(wxBG_STYLE_PAINT);
+
+  m_body = new ControlsBody(this, client, radar_index);
+
+  auto* outer = new wxBoxSizer(wxVERTICAL);
+  outer->Add(MakeCloseRow(title.empty() ? _("Controls") : title), 0, wxEXPAND);
+  outer->Add(m_body, 1, wxEXPAND);
+  // The free-float resize grip (see GripRect()) lives in this reserved strip,
+  // not inside m_body -- it has to sit above screen area that m_body's own
+  // EXPAND would otherwise claim right down to this panel's own corner, and
+  // this shell (unlike m_body) has no scrollable content of its own to give
+  // that space to instead. Empty and undrawn (see GripRect()) unless the host
+  // wired SetFreeFloatHandlers.
+  outer->AddSpacer(FromDIP(kGripDIP));
+  SetSizer(outer);
+
+  Bind(wxEVT_PAINT, &ControlsPanel::OnPaint, this);
+  Bind(wxEVT_LEFT_DOWN, &ControlsPanel::OnBarMouse, this);
+  Bind(wxEVT_LEFT_UP, &ControlsPanel::OnBarMouse, this);
+  Bind(wxEVT_MOTION, &ControlsPanel::OnBarMouse, this);
+  // Capture can be taken away without a LeftUp ever arriving (a dialog
+  // steals focus mid-drag, the window manager intervenes, ...). Without
+  // this, m_dragging_title/m_resizing would stay set forever and
+  // OnBarMouse's early-return for them would swallow every later click on
+  // this panel -- title drag, resize grip, all of it -- until restart.
+  Bind(wxEVT_MOUSE_CAPTURE_LOST, &ControlsPanel::OnCaptureLost, this);
+}
+
+void ControlsPanel::SetRadarIndex(int index) { m_body->SetRadarIndex(index); }
+int ControlsPanel::RadarIndex() const { return m_body->RadarIndex(); }
+void ControlsPanel::SetSingleControl(const std::string& id) {
+  m_body->SetSingleControl(id);
+}
+const std::string& ControlsPanel::SingleControl() const {
+  return m_body->SingleControl();
+}
+void ControlsPanel::SetRadarList(std::vector<int> indices) {
+  m_body->SetRadarList(std::move(indices));
+}
+void ControlsPanel::SetAutoLayoutCallback(std::function<void()> cb) {
+  m_body->SetAutoLayoutCallback(std::move(cb));
+}
+
+void ControlsPanel::SetViewControls(std::function<bool()> get_overlay,
+                                    std::function<void(bool)> set_overlay,
+                                    std::function<bool()> get_ppi,
+                                    std::function<void(bool)> set_ppi) {
+  m_body->SetViewControls(std::move(get_overlay), std::move(set_overlay),
+                          std::move(get_ppi), std::move(set_ppi));
+}
+
+void ControlsPanel::SetOrientationControl(std::function<int()> get,
+                                          std::function<void(int)> set) {
+  m_body->SetOrientationControl(std::move(get), std::move(set));
+}
+
+void ControlsPanel::SetThresholdControl(std::function<int()> get,
+                                        std::function<void(int)> set) {
+  m_body->SetThresholdControl(std::move(get), std::move(set));
+}
+
+void ControlsPanel::SetDockControl(std::function<bool()> get,
+                                   std::function<void(bool)> set) {
+  m_body->SetDockControl(std::move(get), std::move(set));
+}
+
+void ControlsPanel::SetRangeAutoControl(std::function<bool()> get_relevant,
+                                        std::function<bool()> get,
+                                        std::function<void(bool)> set) {
+  m_body->SetRangeAutoControl(std::move(get_relevant), std::move(get),
+                              std::move(set));
+}
+
+void ControlsPanel::SetVrmEblHandlers(
+    std::function<VrmEbl(int)> get,
+    std::function<void(int, const VrmEbl&)> set) {
+  m_body->SetVrmEblHandlers(std::move(get), std::move(set));
+}
+
+void ControlsPanel::SetBearingRefProvider(std::function<BearingRef()> p) {
+  m_body->SetBearingRefProvider(std::move(p));
+}
+
+void ControlsPanel::SyncNow() { m_body->SyncNow(); }
+
+void ControlsPanel::SetZoneEditHandlers(
+    std::function<ZoneEdit()> get,
+    std::function<void(const ZoneEdit&, bool)> set) {
+  m_body->SetZoneEditHandlers(std::move(get), std::move(set));
+}
+
+void ControlsPanel::SetPrefsControl(std::function<PpiPrefs()> get,
+                                    std::function<void(const PpiPrefs&)> set) {
+  m_body->SetPrefsControl(std::move(get), std::move(set));
+}
+
+void ControlsPanel::ApplyTheme(const MayaraTheme& theme) {
+  m_theme = theme;
+  ThemeChildren();
+  m_body->ApplyTheme(theme);
+  Refresh();
+}
+
+// This shell's own chrome only (title/gear/close) -- m_body themes itself,
+// including rebuilding its owner-drawn section headers; see ApplyTheme.
+void ControlsPanel::ThemeChildren() {
+  SetBackgroundColour(m_theme.panel_bg);
+  for (wxWindow* c : GetChildren()) {
+    if (c == m_body) continue;
+    ThemeWindow(c, m_theme);
+  }
+}
+
+wxSizer* ControlsPanel::MakeCloseRow(const wxString& title) {
+  auto* row = new wxBoxSizer(wxHORIZONTAL);
+  auto* t = new wxStaticText(this, wxID_ANY, title);
+  wxFont f = t->GetFont();
+  f.MakeBold();
+  t->SetFont(f);
+  m_title = t;
+  // A no-op when SetFreeFloatHandlers was never called (the PPI window's
+  // docked/popup placements manage their own geometry). The drag itself,
+  // once started, is driven by OnBarMouse on this panel -- see there.
+  t->Bind(wxEVT_LEFT_DOWN, &ControlsPanel::OnTitleMouse, this);
+  row->Add(t, 1, wxALIGN_CENTER_VERTICAL | wxLEFT, 6);
+  auto* gear = new ThemedButton(this, wxT("⚙"), m_theme, /*toggle=*/false);
+  gear->SetToolTip(_("Settings"));
+  gear->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+    if (m_on_settings) m_on_settings();
+  });
+  row->Add(gear, 0, wxTOP | wxBOTTOM | wxLEFT, 4);
+  auto* close = new ThemedButton(this, wxT("✕"), m_theme, /*toggle=*/false);
+  close->SetToolTip(_("Hide controls"));
+  close->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+    if (m_on_close) m_on_close();
+  });
+  row->Add(close, 0, wxALL, 4);
+  return row;
+}
+
+// Free-float resize grip, bottom-right corner. Empty (nothing to grab, nothing
+// to draw) unless the host wired SetFreeFloatHandlers.
+wxRect ControlsPanel::GripRect() const {
+  if (!m_on_resize) return wxRect();
+  const wxSize cs = GetClientSize();
+  const int g = FromDIP(kGripDIP);
+  if (cs.x < g || cs.y < g) return wxRect();
+  return wxRect(cs.x - g, cs.y - g, g, g);
+}
+
+void ControlsPanel::OnPaint(wxPaintEvent&) {
+  wxPaintDC dc(this);
+  const wxSize cs = GetClientSize();
+  dc.SetPen(*wxTRANSPARENT_PEN);
+  dc.SetBrush(wxBrush(m_theme.panel_bg));
+  dc.DrawRectangle(0, 0, cs.x, cs.y);
+
+  const wxRect grip = GripRect();
+  if (!grip.IsEmpty()) {
+    // Three short diagonal strokes in the corner -- the usual resize-grip
+    // glyph -- so the panel doesn't just look small, it looks stretchable.
+    dc.SetPen(wxPen(m_resizing ? m_theme.text : m_theme.lozenge_border, 1));
+    for (int i = 1; i <= 3; ++i) {
+      const int off = i * grip.width / 4;
+      dc.DrawLine(grip.GetRight(), grip.GetBottom() - off,
+                  grip.GetRight() - off, grip.GetBottom());
+    }
+  }
+}
+
+// LeftDown on the title label starts a free-float drag. Only the
+// hit-detection lives here (title is the only widget that covers that
+// pixel area); the capture itself is taken on this panel (see OnBarMouse),
+// not on this child label. Capturing on a child wxStaticText is unreliable
+// under GTK -- the panel never reliably sees the follow-up Motion/LeftUp,
+// so the capture is left dangling and silently hijacks every later click
+// and scroll wheel event anywhere in the app until OpenCPN is restarted.
+void ControlsPanel::OnTitleMouse(wxMouseEvent& event) {
+  if (!event.LeftDown() || !m_on_drag) {
+    event.Skip();
+    return;
+  }
+  m_dragging_title = true;
+  m_drag_last = static_cast<wxWindow*>(event.GetEventObject())
+                    ->ClientToScreen(event.GetPosition());
+  CaptureMouse();
+}
+
+// Click or drag on the free-float resize grip, or (once OnTitleMouse above
+// has started one) continuing a title-bar drag. Nothing else lives in this
+// shell outside the close row and m_body, so this panel itself sees these
+// events -- and, crucially, is also the window that holds the mouse capture
+// during a drag or resize, so it keeps receiving Motion/LeftUp for the whole
+// gesture.
+void ControlsPanel::OnBarMouse(wxMouseEvent& event) {
+  if (m_dragging_title) {
+    if (event.LeftUp()) {
+      m_dragging_title = false;
+      if (HasCapture()) ReleaseMouse();
+      return;
+    }
+    if (event.Dragging()) {
+      const wxPoint now = ClientToScreen(event.GetPosition());
+      const int dx = now.x - m_drag_last.x, dy = now.y - m_drag_last.y;
+      if ((dx || dy) && m_on_drag) m_on_drag(dx, dy);
+      m_drag_last = now;
+    }
+    return;
+  }
+  if (m_resizing) {
+    if (event.LeftUp()) {
+      m_resizing = false;
+      if (HasCapture()) ReleaseMouse();
+      Refresh(false);
+      return;
+    }
+    if (event.Dragging()) {
+      const wxPoint now = ClientToScreen(event.GetPosition());
+      const int dx = now.x - m_drag_last.x, dy = now.y - m_drag_last.y;
+      if ((dx || dy) && m_on_resize) m_on_resize(dx, dy);
+      m_drag_last = now;
+    }
+    return;
+  }
+  const wxRect grip = GripRect();
+  if (event.LeftDown() && !grip.IsEmpty() && grip.Contains(event.GetPosition())) {
+    m_resizing = true;
+    m_drag_last = ClientToScreen(event.GetPosition());
+    CaptureMouse();
+    Refresh(false);
+    return;
+  }
+  if ((event.Moving() || event.Dragging()) && !grip.IsEmpty()) {
+    SetCursor(grip.Contains(event.GetPosition()) ? wxCursor(wxCURSOR_SIZENWSE)
+                                                  : wxCursor(*wxSTANDARD_CURSOR));
+  }
+  event.Skip();
+}
+
+// Capture taken away by something other than our own ReleaseMouse() calls
+// above (a dialog stealing focus mid-drag, the window manager intervening,
+// ...). wx has already dropped the capture by the time this fires -- just
+// clear whichever drag/resize state was in progress so OnBarMouse stops
+// swallowing every later click on this panel.
+void ControlsPanel::OnCaptureLost(wxMouseCaptureLostEvent&) {
+  m_dragging_title = false;
+  m_resizing = false;
+  Refresh(false);
+}
+
+void ControlsPanel::SetFreeFloatHandlers(
+    std::function<void(int, int)> on_drag,
+    std::function<void(int, int)> on_resize) {
+  m_on_drag = std::move(on_drag);
+  m_on_resize = std::move(on_resize);
+  if (m_title)
+    m_title->SetCursor(m_on_drag ? wxCursor(wxCURSOR_SIZING)
+                                 : wxCursor(*wxSTANDARD_CURSOR));
+  Refresh(false);  // the grip's presence/absence depends on m_on_resize
 }

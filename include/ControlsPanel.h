@@ -8,14 +8,10 @@
 #ifndef MAYARA_CONTROLS_PANEL_H_
 #define MAYARA_CONTROLS_PANEL_H_
 
-#include <cstdint>
 #include <functional>
-#include <map>
 #include <string>
 #include <vector>
 
-#include <wx/scrolwin.h>
-#include <wx/timer.h>
 #include <wx/wx.h>
 
 #include "MayaraTheme.h"
@@ -23,31 +19,33 @@
 #include "RadarDisplayPanel.h"  // PpiPrefs
 
 class MayaraClient;
+class ControlsBody;  // the scrollable content; defined in ControlsPanel.cpp
 
-class ControlsPanel : public wxScrolledWindow {
+// A fixed "<title>  <gear>  X" header over a scrollable body of schema-driven
+// radar controls (ControlsBody). The header is a plain, non-scrolling wxWindow
+// so it never scrolls out of view with the body's content, and so the close
+// button can never end up under the body's scrollbar -- which, unlike this
+// shell, has to stay native and toolkit-managed on GTK; see ControlsBody's
+// constructor for why.
+class ControlsPanel : public wxWindow {
  public:
-  ControlsPanel(wxWindow* parent, MayaraClient* client, int radar_index = 0);
+  ControlsPanel(wxWindow* parent, MayaraClient* client, int radar_index = 0,
+                const wxString& title = wxEmptyString);
 
   // Bind these controls to a specific radar, and (when a window hosts more than
   // one) the set of radars its selector may switch between.
   void SetRadarIndex(int index);
-  int RadarIndex() const { return m_index; }
+  int RadarIndex() const;
   // Single-control mode shows just one control (opened by a gauge icon).
   void SetSingleControl(const std::string& id);
-  const std::string& SingleControl() const { return m_single_id; }
-  void SetRadarList(std::vector<int> indices) {
-    m_radar_list = std::move(indices);
-    if (m_built) Rebuild();
-  }
+  const std::string& SingleControl() const;
+  void SetRadarList(std::vector<int> indices);
 
   void SetCloseCallback(std::function<void()> cb) { m_on_close = std::move(cb); }
   void SetSettingsCallback(std::function<void()> cb) {
     m_on_settings = std::move(cb);
   }
-  void SetAutoLayoutCallback(std::function<void()> cb) {
-    m_on_autolayout = std::move(cb);
-    if (m_built) Rebuild();  // add the button to the View section
-  }
+  void SetAutoLayoutCallback(std::function<void()> cb);
   void ApplyTheme(const MayaraTheme& theme);
 
   // View section wiring (overlay + PPI visibility live in the plugin/window).
@@ -79,28 +77,20 @@ class ControlsPanel : public wxScrolledWindow {
   // The picture's two VRM/EBL markers. Local to the plugin, so they are read
   // and written straight on the focused picture rather than through a control.
   void SetVrmEblHandlers(std::function<VrmEbl(int)> get,
-                         std::function<void(int, const VrmEbl&)> set) {
-    m_vrm_get = std::move(get);
-    m_vrm_set = std::move(set);
-  }
+                         std::function<void(int, const VrmEbl&)> set);
   // How to read a marker's bearing: the focused picture's own reference, so
   // that a row and the picture cannot print the same marker differently.
-  void SetBearingRefProvider(std::function<BearingRef()> p) {
-    m_bearing_ref = std::move(p);
-  }
+  void SetBearingRefProvider(std::function<BearingRef()> p);
 
   // Share the live guard-zone edit with the picture, so a dragged handle and a
   // typed number are one edit.
   // Re-read every widget from the model now, rather than at the next timer
   // tick. Used when a drag on the picture changes a value the panel shows.
-  void SyncNow() { ApplyValues(); }
+  void SyncNow();
 
   void SetZoneEditHandlers(
       std::function<ZoneEdit()> get,
-      std::function<void(const ZoneEdit&, bool commit)> set) {
-    m_zone_get = std::move(get);
-    m_zone_set = std::move(set);
-  }
+      std::function<void(const ZoneEdit&, bool commit)> set);
 
   // Operator display preferences (refresh rate, wheel direction, menu
   // auto-hide) for the View section. Global, not per radar.
@@ -117,102 +107,25 @@ class ControlsPanel : public wxScrolledWindow {
                             std::function<void(int dw, int dh)> on_resize);
 
  private:
-#ifdef __WXMSW__
-  // Windows always shows a native scrollbar, so drawing our own would put a
-  // second bar beside it. Only macOS, which hides the native one, needs it.
-  static const int kScrollBarW = 0;
-#else
-  static const int kScrollBarW = 10;  // gutter for the scrollbar we draw
-#endif
-  wxSizer* WithScrollGutter(wxSizer* content);
-  wxRect ThumbRect() const;
+  wxSizer* MakeCloseRow(const wxString& title);  // fixed "<title>  <gear>  X"
   wxRect GripRect() const;  // free-float resize grip, bottom-right corner
   void OnPaint(wxPaintEvent& event);
-  void OnBarMouse(wxMouseEvent& event);
+  void OnBarMouse(wxMouseEvent& event);    // free-float drag/resize only
   void OnTitleMouse(wxMouseEvent& event);  // free-float drag, on the title row
   void OnCaptureLost(wxMouseCaptureLostEvent& event);
-  wxSizer* MakeCloseRow();  // a "Controls  ×" header row
-  void ThemeChildren();
-  void ScrollSectionIntoView(wxWindow* header, wxSizer* content);
-  void AddCollapsibleSection(wxSizer* root, const wxString& title,
-                             const std::string& key,
-                             std::function<void(wxSizer*)> fill);
-  void AddControl(wxSizer* content, const ControlDef& def);
-  void AddServerRow(wxSizer* content);  // active server URL, in Info
-  void FillVrmEblSection(wxSizer* content);  // the two local markers
-  void FillViewSection(wxSizer* content);
-  // A labelled row of mutually exclusive buttons over an int, kept in sync by
-  // an updater. The View section is made of these.
-  void AddChoiceRow(wxSizer* content, const wxString& label,
-                    const std::vector<wxString>& labels,
-                    std::function<int()> get, std::function<void(int)> set);
-  void OnTimer(wxTimerEvent& event);
-  void Rebuild();      // (re)build widgets from the schema
-  void ApplyValues();  // push current model values into the widgets
+  void ThemeChildren();  // this shell's own chrome; the body themes itself
 
-  // Widget builders. Each adds a row to `sizer` and registers a value updater.
-  void AddNumber(wxSizer* sizer, const ControlDef& def);
-  void AddEnum(wxSizer* sizer, const ControlDef& def, bool as_buttons);
-  void AddButton(wxSizer* sizer, const ControlDef& def);
-  void AddReadonly(wxSizer* sizer, const ControlDef& def);
-  void AddRange(wxSizer* sizer, const ControlDef& def,
-                const std::vector<int>& ranges);
-  void AddSector(wxSizer* sizer, const ControlDef& def);  // no-transmit sector
-  void AddZone(wxSizer* sizer, const ControlDef& def);    // guard zone
-  void AddPlaceholder(wxSizer* sizer, const ControlDef& def);
-
-  void Set(const std::string& id, const std::string& json_body);
-  RadarControls* controls();  // the bound radar's controls, or null
-
-  MayaraClient* m_client;  // not owned
-  int m_index = 0;         // which radar these controls drive
-  std::vector<int> m_radar_list;  // radars this window hosts (for the selector)
-  std::string m_single_id;        // non-empty: show only this control
-  wxTimer m_timer;
-  uint64_t m_last_gen = ~0ull;
-  uint64_t m_schema_gen = ~0ull;
-  bool m_built = false;
-
-  // Value updaters: read the model and refresh the corresponding widgets.
-  std::vector<std::function<void()>> m_updaters;
+  ControlsBody* m_body;
+  MayaraTheme m_theme;
   std::function<void()> m_on_close;
   std::function<void()> m_on_settings;
-  std::function<void()> m_on_autolayout;
-  MayaraTheme m_theme;
 
-  std::map<std::string, bool> m_collapsed;  // per-section collapse state
-
-  std::function<bool()> m_get_overlay;
-  std::function<void(bool)> m_set_overlay;
-  std::function<bool()> m_get_ppi;
-  std::function<void(bool)> m_set_ppi;
-  std::function<int()> m_get_orientation;
-  std::function<void(int)> m_set_orientation;
-  std::function<int()> m_get_threshold;
-  std::function<void(int)> m_set_threshold;
-  std::function<bool()> m_get_dock;
-  std::function<void(bool)> m_set_dock;
-  std::function<bool()> m_range_auto_relevant;
-  std::function<bool()> m_get_range_auto;
-  std::function<void(bool)> m_set_range_auto;
-  bool m_rebuilding = false;
-  bool m_dragging_bar = false;  // the drawn scrollbar's thumb  // true while widgets are being destroyed
-  std::function<VrmEbl(int)> m_vrm_get;
-  std::function<void(int, const VrmEbl&)> m_vrm_set;
-  std::function<BearingRef()> m_bearing_ref;
-  std::function<ZoneEdit()> m_zone_get;
-  std::function<void(const ZoneEdit&, bool)> m_zone_set;
-  std::function<PpiPrefs()> m_get_prefs;
-  std::function<void(const PpiPrefs&)> m_set_prefs;
-
-  wxStaticText* m_title = nullptr;            // "Controls" header label
+  wxStaticText* m_title = nullptr;            // "<title>" header label
   std::function<void(int, int)> m_on_drag;    // free-float: title bar drag
   std::function<void(int, int)> m_on_resize;  // free-float: corner grip drag
   bool m_dragging_title = false;
   bool m_resizing = false;
   wxPoint m_drag_last;  // screen coords, valid while dragging or resizing
-
-  wxDECLARE_EVENT_TABLE();
 };
 
 #endif  // MAYARA_CONTROLS_PANEL_H_

@@ -1562,7 +1562,8 @@ void mayara_pi::ShowRadarMenu(int canvas) {
   if (!cw) cw = GetOCPNCanvasWindow();
   if (!cw) return;
 
-  auto* p = new ControlsPanel(cw, m_client.get(), m_client->ActiveIndex());
+  auto* p = new ControlsPanel(cw, m_client.get(), m_client->ActiveIndex(),
+                              _("Radar"));
   m_chart_menu = p;
   m_chart_menu_canvas = canvas;
   // Where this canvas's menu was last left, if anywhere -- otherwise the
