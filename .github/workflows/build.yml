@@ -36,9 +36,21 @@ jobs:
     env:
       OCPN_TARGET: macos
       WX_VER: '32'
+    outputs:
+      target-version: ${{ steps.vers.outputs.target-version }}
     steps:
       - uses: actions/checkout@v7
         with: { submodules: recursive, fetch-depth: 0 }
+      - name: Record OS version
+        id: vers
+        # PluginSetup.cmake bakes this same "sw_vers -productVersion" value
+        # into the package name (see PKG_TARGET_VERSION there) -- GitHub
+        # patches the macos-14 runner's OS over time, so it drifts (14.8.7 ->
+        # 14.8.9, say) independently of this workflow. Recording the actual
+        # value here, for publish-catalog to consume, keeps the catalog
+        # generator from having to hardcode -- and silently fall out of sync
+        # with -- a version nothing here controls.
+        run: echo "target-version=$(sw_vers -productVersion)" >> "$GITHUB_OUTPUT"
       - name: Build (arm64 + x86_64 universal)
         run: bash ci/circleci-build-macos-universal.sh
       - name: Publish to Cloudsmith
@@ -389,9 +401,15 @@ jobs:
           REPO: ${{ steps.chan.outputs.repo }}
           VERSION: ${{ steps.chan.outputs.version }}
           PKG_VERSION: ${{ steps.chan.outputs.pkg_version }}
+          # From the macos-universal job itself, not hardcoded here: GitHub
+          # patches the macos-14 runner's OS over time (14.8.7 -> 14.8.9, say)
+          # independently of this workflow, and a hardcoded value silently
+          # drifts out of sync with it -- see generate-catalog.sh's darwin
+          # handling. Empty when that job didn't run/report (e.g. it failed).
+          DARWIN_VERSION: ${{ needs.macos-universal.outputs.target-version }}
         run: |
           set -e
-          bash scripts/generate-catalog.sh "$CHANNEL" "$REPO" "$VERSION" "$PKG_VERSION" "$CHANNEL.xml"
+          bash scripts/generate-catalog.sh "$CHANNEL" "$REPO" "$VERSION" "$PKG_VERSION" "$CHANNEL.xml" "$DARWIN_VERSION"
       - name: Push to opencpn-radar-pi/plugins (catalog branch)
         if: env.CLOUDSMITH_API_KEY != ''
         env:
