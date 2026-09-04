@@ -27,7 +27,25 @@ jobs:
         # forever. A real user PAT is exempt from that.
         token: ${{ secrets.RELEASE_PAT }}
 
+    # For a beta tag (vX.Y.Z-beta.N), git-cliff's --latest picks "the latest
+    # release" by tag_pattern match, which is the beta tag itself -- but
+    # cliff.toml's skip_tags then discards exactly that release, leaving
+    # --latest with nothing to render (verified locally: empty output).
+    # Extract the existing [Unreleased] section from CHANGELOG.md instead --
+    # changelog.yml keeps it current on every push to main, so at the
+    # commit a beta tag points to it already holds everything queued for
+    # the next real release.
+    - name: Generate release notes (beta)
+      if: ${{ contains(github.ref_name, '-beta.') }}
+      run: |
+        {
+          echo "## [${{ github.ref_name }}] - beta snapshot"
+          echo ""
+          awk '/^## \[Unreleased\]/{flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md
+        } > CHANGES.md
+
     - name: Generate release notes
+      if: ${{ !contains(github.ref_name, '-beta.') }}
       uses: orhun/git-cliff-action@v4
       with:
         config: cliff.toml
