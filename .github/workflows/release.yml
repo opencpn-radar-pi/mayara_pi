@@ -36,7 +36,14 @@ jobs:
         OUTPUT: CHANGES.md
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+    # Skipped for beta tags (vX.Y.Z-beta.N, see release.sh --beta): a beta is
+    # a snapshot, not a changelog milestone. git-cliff's --tag here forces a
+    # "## [<tag>]" boundary regardless of cliff.toml's skip_tags (that only
+    # governs tags it discovers via `git tag`, not this explicit override),
+    # so running it for a beta would close out [Unreleased] early and leave
+    # the following real release's diff looking empty.
     - name: Generate full changelog
+      if: ${{ !contains(github.ref_name, '-beta.') }}
       uses: orhun/git-cliff-action@v4
       with:
         config: cliff.toml
@@ -45,6 +52,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Append historical changelog
+      if: ${{ !contains(github.ref_name, '-beta.') }}
       run: |
         printf '\n' >> CHANGELOG.md
         cat CHANGELOG.manual.md >> CHANGELOG.md
@@ -53,8 +61,10 @@ jobs:
       uses: softprops/action-gh-release@v3
       with:
         body_path: CHANGES.md
+        prerelease: ${{ contains(github.ref_name, '-beta.') }}
 
     - name: Commit changelog
+      if: ${{ !contains(github.ref_name, '-beta.') }}
       env:
         GH_TOKEN: ${{ secrets.RELEASE_PAT }}
       run: |
