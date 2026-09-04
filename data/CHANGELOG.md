@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **overlay:** PPI show/hide, range-auto oscillation, per-radar Range Auto (#62) ([PR #62](https://github.com/opencpn-radar-pi/mayara_pi/pull/62))
 - **server:** only link to a mayara GUI that is there, and keep its log (#64) ([PR #64](https://github.com/opencpn-radar-pi/mayara_pi/pull/64))
 - **ui:** scale for DPI, repaint relabelled buttons, unify bearing readouts (#80) ([PR #80](https://github.com/opencpn-radar-pi/mayara_pi/pull/80))
+- GTK Controls-panel corruption, pinned title row, close-button race (#93) ([PR #93](https://github.com/opencpn-radar-pi/mayara_pi/pull/93))
 
 ## [0.1.1] - 2026-08-29
 
