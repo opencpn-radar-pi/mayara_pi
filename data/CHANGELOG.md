@@ -7,29 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- **server:** let the plugin answer mayara-server's telemetry consent (#44) ([PR #44](https://github.com/opencpn-radar-pi/mayara_pi/pull/44))
-- **server:** point at mayara-server's own GUI when no radar is found (#57) ([PR #57](https://github.com/opencpn-radar-pi/mayara_pi/pull/57))
-- **changelog:** add an in-app changelog viewer (#88) ([PR #88](https://github.com/opencpn-radar-pi/mayara_pi/pull/88))
-- **release:** add release.sh --beta, route channels by tag not branch (#97) ([PR #97](https://github.com/opencpn-radar-pi/mayara_pi/pull/97))
-
-### Changed
-
-- **changelog:** backfill 0.1.4-to-present, lost to the commit filter (#91) ([PR #91](https://github.com/opencpn-radar-pi/mayara_pi/pull/91))
-
 ### Fixed
 
-- detect GIT_REPOSITORY from origin, not tracking-branch status (#42) ([PR #42](https://github.com/opencpn-radar-pi/mayara_pi/pull/42))
-- **controls:** three bugs in the control panel (#49) ([PR #49](https://github.com/opencpn-radar-pi/mayara_pi/pull/49))
-- **windows:** stop the radar and chart canvases erasing the control panel (#50) ([PR #50](https://github.com/opencpn-radar-pi/mayara_pi/pull/50))
-- **i18n:** build the sources as UTF-8 and keep non-ASCII out of msgids (#55) ([PR #55](https://github.com/opencpn-radar-pi/mayara_pi/pull/55))
-- **windows:** antialias and DPI-scale the hand-drawn chrome (#56) ([PR #56](https://github.com/opencpn-radar-pi/mayara_pi/pull/56))
-- **windows:** survive the VS2017-era C++ runtime OpenCPN ships (#60) ([PR #60](https://github.com/opencpn-radar-pi/mayara_pi/pull/60))
-- **overlay:** PPI show/hide, range-auto oscillation, per-radar Range Auto (#62) ([PR #62](https://github.com/opencpn-radar-pi/mayara_pi/pull/62))
-- **server:** only link to a mayara GUI that is there, and keep its log (#64) ([PR #64](https://github.com/opencpn-radar-pi/mayara_pi/pull/64))
-- **ui:** scale for DPI, repaint relabelled buttons, unify bearing readouts (#80) ([PR #80](https://github.com/opencpn-radar-pi/mayara_pi/pull/80))
-- GTK Controls-panel corruption, pinned title row, close-button race (#93) ([PR #93](https://github.com/opencpn-radar-pi/mayara_pi/pull/93))
+- **release:** beta tags got an empty GitHub Release body (#99) ([PR #99](https://github.com/opencpn-radar-pi/mayara_pi/pull/99))
 
 ## [0.1.1] - 2026-08-29
 
