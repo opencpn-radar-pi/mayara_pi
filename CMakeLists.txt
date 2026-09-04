@@ -141,6 +141,25 @@ if(GIT_FOUND)
 endif()
 message(STATUS "${CMLOC}PLUGIN_GIT_COMMIT: ${PLUGIN_GIT_COMMIT}")
 
+# Channel this build publishes to (alpha/beta/prod/dev), baked into
+# GetPlugInVersionBuild() via version.h.extra so OpenCPN's plugin manager can
+# show which channel a running binary came from, not just its commit --
+# mirrors the tag-string routing in cmake/in-files/cloudsmith-upload.sh.in
+# and .github/workflows/build.yml exactly. This repo's only real CI is
+# GitHub Actions (see build.yml), so no need to handle CircleCI/Travis/
+# AppVeyor here the way PluginConfigure.cmake does for GIT_REPOSITORY_TAG.
+set(PLUGIN_CHANNEL "dev")
+if("$ENV{GITHUB_REF_TYPE}" STREQUAL "tag")
+  if("$ENV{GITHUB_REF_NAME}" MATCHES "-beta\\.[0-9]+")
+    string(REGEX MATCH "beta\\.[0-9]+" PLUGIN_CHANNEL "$ENV{GITHUB_REF_NAME}")
+  else()
+    set(PLUGIN_CHANNEL "prod")
+  endif()
+elseif(DEFINED ENV{GITHUB_ACTIONS})
+  set(PLUGIN_CHANNEL "alpha")
+endif()
+message(STATUS "${CMLOC}PLUGIN_CHANNEL: ${PLUGIN_CHANNEL}")
+
 include("PluginConfigure")
 
 # ---------------------------------------------------------------------------

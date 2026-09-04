@@ -144,6 +144,45 @@ do_release() {
     echo "Merge it to continue development."
 }
 
+do_beta() {
+    ensure_clean
+    ensure_on_main
+    git pull --ff-only origin main
+    git fetch --tags --quiet
+
+    local version
+    version=$(get_version)
+
+    # Find next beta number from existing tags for this version.
+    local last_beta
+    last_beta=$(git tag -l "v${version}-beta.*" \
+        | sed "s/^v${version}-beta\.//" \
+        | awk '/^[0-9]+$/' \
+        | sort -n | tail -1)
+    local next_beta
+    if [ -z "$last_beta" ]; then
+        next_beta=1
+    else
+        next_beta=$((last_beta + 1))
+    fi
+    local beta_tag="v${version}-beta.${next_beta}"
+
+    echo "Current version: $version"
+    echo "Beta tag:        $beta_tag"
+    confirm "Tag and publish beta ${beta_tag}?"
+
+    # Unlike --release, this does not touch CMakeLists.txt or open a PR:
+    # CMake's numeric-only VERSION_MAJOR/MINOR/PATCH/TWEAK can't carry a
+    # "-beta.N" suffix, so the plugin's own version stays ${version}
+    # (unreleased) straight through to the real --release. The beta tag
+    # alone is what routes this build to the beta Cloudsmith channel (see
+    # cmake/in-files/cloudsmith-upload.sh.in and build.yml) and skips the
+    # changelog boundary (see cliff.toml's skip_tags / release.yml).
+    git tag "$beta_tag" HEAD
+    git push origin "$beta_tag"
+    echo "Tagged and pushed ${beta_tag} at $(git rev-parse --short HEAD)"
+}
+
 do_bump() {
     local part="$1"
 
@@ -213,6 +252,16 @@ Commands:
                     changelog) and build.yml's Cloudsmith PROD upload
                   • opens a follow-up PR to bump to the next patch version
 
+  --beta        Cut a beta pre-release of the current version:
+                  • tags main's current tip directly as
+                    vMAJOR.MINOR.PATCH-beta.N (N auto-incremented)
+                  • no CMakeLists.txt change, no PR: CMake's numeric-only
+                    version fields can't carry a "-beta.N" suffix, so the
+                    plugin's own version stays what it is until --release
+                  • the tag push triggers release.yml (GitHub Release,
+                    marked prerelease, no CHANGELOG.md change) and
+                    build.yml's Cloudsmith BETA upload
+
   --major       Bump major version (N+1.0.0) via PR
   --minor       Bump minor version (x.N+1.0) via PR
   --patch       Bump patch version (x.y.N+1) via PR
@@ -220,12 +269,14 @@ Commands:
 Workflow:
   1. ./release.sh --minor       # PR: 0.1.0 → 0.2.0
   2. (development happens)
-  3. ./release.sh --release     # PR, tag v0.2.0, PR: 0.2.1
+  3. ./release.sh --beta        # tag v0.2.0-beta.1 (repeatable)
+  4. ./release.sh --release     # tag v0.2.0, PR: 0.2.1
 
-Unlike mayara-server, there's no --beta command: this plugin's Cloudsmith
-alpha/beta/prod routing is driven by branch + tag state (see
-cmake/in-files/cloudsmith-upload.sh.in), not by a version-string suffix, so
-a beta release is just: tag from a non-main branch instead of main.
+Cloudsmith alpha/beta/prod routing (see cmake/in-files/cloudsmith-upload.sh.in
+and build.yml) is driven by the tag string, not by branch: no tag is alpha,
+a tag containing "-beta." is beta, any other tag is prod. release.sh always
+tags main's tip directly for both --release and --beta, so every tag sits
+"on main" and branch/ancestry can no longer tell them apart.
 
 Requires: gh CLI (authenticated)
 EOF
@@ -237,6 +288,7 @@ EOF
 
 case "${1:-}" in
     --release)  do_release ;;
+    --beta)     do_beta ;;
     --major)    do_bump major ;;
     --minor)    do_bump minor ;;
     --patch)    do_bump patch ;;

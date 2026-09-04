@@ -3,12 +3,14 @@
 #
 # Upload the .tar.gz and .xml artifacts to cloudsmith
 #
-# Builds are uploaded to one of PROD, BETA or ALPHA repositories
-# The repository depends on the branch and use of tag to determine which repo.
-# ALPHA: Non-master branch no tag
-# BETA: Non-master branch with annotated tag
-# ALPHA: Master branch no tag
-# PROD: Master branch with annotated tag
+# Builds are uploaded to one of PROD, BETA or ALPHA repositories, decided by
+# the tag string itself, not by branch: release.sh tags main's current tip
+# directly for both a real release and a beta (see release.sh --release /
+# --beta), so every tag sits "on main" -- a branch/ancestry check can no
+# longer tell them apart.
+# ALPHA: no tag
+# BETA:  tag contains "-beta."
+# PROD:  any other tag
 #
 # If this script is used on CIRCLECI, TRAVIS or APPVEYOR it will upload the correct files to the chosen repository
 # If this script is used locally it will build the correct artifacts but will not do the upload
@@ -152,40 +154,23 @@ if [ "$BUILD_TAG" = "" ] && [ "$tag" != "" ]; then
     BUILD_TAG=$tag
     echo "Build tag: $BUILD_TAG"
 fi
-if [ "$BUILD_BRANCH" = "" ]; then
-    build_commit=$(git show -s --format=%d $BUILD_TAG)
-    is_master=$(echo $build_commit | awk '/\/(master|main)/ {print}')
-    if [ "$is_master" != "" ] || [ "$TRAVIS" ]; then
-        BUILD_BRANCH="master"
-    fi
-fi
 
-BUILD_BRANCH_LOWER=`echo $BUILD_BRANCH | tr '[A-Z]' '[a-z]'`
-# "main" is this repo's default branch; upstream FE2 only knows "master", so
-# without this every build of main was landing in the alpha repo and every
-# release in beta.
-if [ "$BUILD_BRANCH_LOWER" = "master" ] || [ "$BUILD_BRANCH_LOWER" = "main" ]; then
-    echo "In master branch "
-    if [ -n "$BUILD_TAG"  ]; then
-        echo "building with tag"
-        VERSION=$BUILD_TAG
-        REPO="$PROD_REPO"
-    else
-        VERSION="@PROJECT_VERSION@+${BUILD_ID}.${commit}"
-        echo "building without tag"
-        REPO="$ALPHA_REPO"
-    fi
+if [ -n "$BUILD_TAG" ]; then
+    VERSION=$BUILD_TAG
+    case "$BUILD_TAG" in
+        *-beta.*)
+            echo "Building beta tag $BUILD_TAG"
+            REPO="$BETA_REPO"
+            ;;
+        *)
+            echo "Building release tag $BUILD_TAG"
+            REPO="$PROD_REPO"
+            ;;
+    esac
 else
-    echo "In non master branch " $BUILD_BRANCH
-    if [ -n "$BUILD_TAG" ]; then
-        echo "building with tag"
-        VERSION=$BUILD_TAG
-        REPO="$BETA_REPO"
-    else
-        echo "building without tag"
-        VERSION="@PROJECT_VERSION@+${BUILD_ID}.${commit}"
-        REPO="$ALPHA_REPO"
-    fi
+    echo "Building without tag (branch: $BUILD_BRANCH)"
+    VERSION="@PROJECT_VERSION@+${BUILD_ID}.${commit}"
+    REPO="$ALPHA_REPO"
 fi
 echo $VERSION
 echo $REPO

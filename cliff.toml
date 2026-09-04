@@ -82,7 +82,12 @@ commit_parsers = [
 ]
 filter_commits = false
 tag_pattern = "v[0-9].*"
-skip_tags = ""
+# Beta tags (vX.Y.Z-beta.N, see release.sh --beta) are snapshots, not
+# changelog milestones: skip them as release boundaries so their commits
+# stay folded into [Unreleased] until the real vX.Y.Z release, instead of
+# git-cliff closing out a "## [X.Y.Z-beta.N]" section that would leave the
+# following real release's diff looking empty.
+skip_tags = "-beta\\.[0-9]+"
 ignore_tags = ""
 topo_order = false
 sort_commits = "oldest"

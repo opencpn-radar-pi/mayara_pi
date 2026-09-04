@@ -357,31 +357,22 @@ jobs:
 
           if [ "$REF_TYPE" = "tag" ]; then
             tag="$REF_NAME"
-            # A tag reachable from main/master is prod; a tag pushed from a
-            # release branch before it merges is beta -- mirrors
-            # cloudsmith-upload.sh.in exactly. Branch containment (not just
-            # direct decoration) so this stays correct even after main/master
-            # advances past the tagged commit.
-            # Full history, not --depth=1: a shallow fetch would only reach
-            # each branch's current tip, and merge-base --is-ancestor can't
-            # traverse past that to see an older tagged commit.
-            git fetch --quiet origin main:refs/remotes/origin/main 2>/dev/null || true
-            git fetch --quiet origin master:refs/remotes/origin/master 2>/dev/null || true
-            is_prod=false
-            for b in origin/main origin/master; do
-              if git rev-parse --verify --quiet "$b" > /dev/null \
-                 && git merge-base --is-ancestor "$tag" "$b" 2>/dev/null; then
-                is_prod=true
-                break
-              fi
-            done
-            if [ "$is_prod" = true ]; then
-              channel=prod
-              repo=opencpn-radar-pi/mayara-prod
-            else
-              channel=beta
-              repo=opencpn-radar-pi/mayara-beta
-            fi
+            # A tag containing "-beta." is a beta release; any other tag is
+            # a real release -- mirrors cloudsmith-upload.sh.in exactly.
+            # release.sh tags main's current tip directly for both cases
+            # (see release.sh --release / --beta), so every tag sits "on
+            # main" and a branch/ancestry check can no longer tell them
+            # apart.
+            case "$tag" in
+              *-beta.*)
+                channel=beta
+                repo=opencpn-radar-pi/mayara-beta
+                ;;
+              *)
+                channel=prod
+                repo=opencpn-radar-pi/mayara-prod
+                ;;
+            esac
             version="$tag"
           else
             channel=alpha
