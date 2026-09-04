@@ -34,6 +34,21 @@ const int kRateCount = static_cast<int>(sizeof(kRates) / sizeof(kRates[0]));
 // ControlsPanel's free-float resize grip: side length, in DIP.
 const int kGripDIP = 14;
 
+// Freezes a window for the scope: Rebuild() destroys and recreates dozens of
+// widgets, and without this the OS can repaint the panel mid-rebuild --
+// widgets visibly popping in one at a time before snapping into their final
+// layout, worst on Windows but not limited to it. RAII rather than bare
+// Freeze()/Thaw() calls so every one of Rebuild()'s several return points
+// still thaws.
+class ScopedFreeze {
+ public:
+  explicit ScopedFreeze(wxWindow* w) : w_(w) { w_->Freeze(); }
+  ~ScopedFreeze() { w_->Thaw(); }
+
+ private:
+  wxWindow* w_;
+};
+
 std::string Num(double v) { return JsonNum(v); }
 
 // How many distinct values a number control can take. A slider is fine for a
@@ -547,6 +562,7 @@ void ControlsBody::ApplyValues() {
 }
 
 void ControlsBody::Rebuild() {
+  ScopedFreeze freeze(this);
   // Destroying a focused text control fires KILL_FOCUS, whose handler would
   // otherwise run against widgets that are already going away.
   m_rebuilding = true;
