@@ -39,6 +39,11 @@ class ThemedButton : public wxControl {
   bool m_pressed = false;
   bool m_has_active = false;
   wxColour m_active;
+  // Without capture, wx delivers LEFT_UP to whichever window is under the
+  // pointer at release, not necessarily the one that got the matching
+  // LEFT_DOWN -- so OnClick (bound to LEFT_UP, see the .cpp) only fires when
+  // this button itself saw the press.
+  bool m_pressed_here = false;
 };
 
 class ThemedSlider : public wxControl {

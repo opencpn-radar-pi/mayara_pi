@@ -1729,9 +1729,11 @@ ControlsPanel::ControlsPanel(wxWindow* parent, MayaraClient* client,
   // not inside m_body -- it has to sit above screen area that m_body's own
   // EXPAND would otherwise claim right down to this panel's own corner, and
   // this shell (unlike m_body) has no scrollable content of its own to give
-  // that space to instead. Empty and undrawn (see GripRect()) unless the host
-  // wired SetFreeFloatHandlers.
-  outer->AddSpacer(FromDIP(kGripDIP));
+  // that space to instead. Zero-height until SetFreeFloatHandlers actually
+  // wires a resize handler (the PPI window never does): most instances of
+  // this panel have no grip at all, and reserving DIP for one they'll never
+  // draw would just shrink their body for nothing.
+  m_grip_spacer = outer->AddSpacer(0);
   SetSizer(outer);
 
   Bind(wxEVT_PAINT, &ControlsPanel::OnPaint, this);
@@ -1976,5 +1978,14 @@ void ControlsPanel::SetFreeFloatHandlers(
   if (m_title)
     m_title->SetCursor(m_on_drag ? wxCursor(wxCURSOR_SIZING)
                                  : wxCursor(*wxSTANDARD_CURSOR));
+  // Reserve the grip's strip only once there is a grip: most instances of
+  // this panel (the PPI window's) never call this at all, and would
+  // otherwise lose DIP off the bottom of the body for a handle they can
+  // never draw or click.
+  if (m_grip_spacer) {
+    const int h = m_on_resize ? FromDIP(kGripDIP) : 0;
+    m_grip_spacer->AssignSpacer(wxSize(h, h));
+    Layout();
+  }
   Refresh(false);  // the grip's presence/absence depends on m_on_resize
 }

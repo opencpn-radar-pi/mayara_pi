@@ -126,6 +126,10 @@ class ControlsPanel : public wxWindow {
   bool m_dragging_title = false;
   bool m_resizing = false;
   wxPoint m_drag_last;  // screen coords, valid while dragging or resizing
+  // The reserved strip GripRect() draws into; zero height until
+  // SetFreeFloatHandlers wires an on_resize, so instances that never do (the
+  // PPI window's) don't lose body space for a grip they can never show.
+  wxSizerItem* m_grip_spacer = nullptr;
 };
 
 #endif  // MAYARA_CONTROLS_PANEL_H_
