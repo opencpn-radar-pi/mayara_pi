@@ -83,11 +83,18 @@ commit_parsers = [
 filter_commits = false
 tag_pattern = "v[0-9].*"
 # Beta tags (vX.Y.Z-beta.N, see release.sh --beta) are snapshots, not
-# changelog milestones: skip them as release boundaries so their commits
-# stay folded into [Unreleased] until the real vX.Y.Z release, instead of
+# changelog milestones: ignored as release boundaries so their commits stay
+# folded into [Unreleased] until the real vX.Y.Z release, instead of
 # git-cliff closing out a "## [X.Y.Z-beta.N]" section that would leave the
 # following real release's diff looking empty.
-skip_tags = "-beta\\.[0-9]+"
-ignore_tags = ""
+#
+# ignore_tags, not skip_tags: skip_tags recognizes the tag as a boundary and
+# then discards that release's content outright -- verified locally, it
+# does NOT fold the commits into [Unreleased] or the next release, it just
+# deletes them from the changelog entirely. ignore_tags treats the tag as
+# if it never existed, so its commits fall through to wherever the next
+# real boundary (or Unreleased) is, which is what we actually want.
+skip_tags = ""
+ignore_tags = "-beta\\.[0-9]+"
 topo_order = false
 sort_commits = "oldest"
