@@ -444,6 +444,7 @@ int mayara_pi::Init() {
     // is why they are all hidden right now.
     if (!m_ocpn_fullscreen && !m_windows.empty() && m_windows_visible)
       CaptureWindowState();
+    SyncWatchedRadars();
 
     if (m_client && m_diag.log_level > 0)
       for (const auto& line : m_client->TakeLog())
@@ -835,6 +836,21 @@ bool mayara_pi::RadarInOverlay(int radar_index) const {
     if (!radars.empty() && radars.front() == radar_index) return true;
   }
   return false;
+}
+
+// The radars with a picture on screen: composited on a chart canvas, or in a
+// PPI window that is shown. Only those hold a spoke stream, so a hidden
+// picture does not keep the radar transmitting (see MayaraClient::SetWatched).
+void mayara_pi::SyncWatchedRadars() {
+  if (!m_client) return;
+  std::vector<int> watched;
+  const int n = GetCanvasCount();
+  for (int c = 0; c < (n > 0 ? n : 1); ++c)
+    for (int i : OverlayRadars(c)) watched.push_back(i);
+  for (MayaraPpiWindow* w : m_windows)
+    if (w && w->IsWindowShown())
+      for (int i : w->RadarIndices()) watched.push_back(i);
+  m_client->SetWatched(watched);
 }
 
 // Snapshot geometry + visibility while the windows are definitely alive. wx may

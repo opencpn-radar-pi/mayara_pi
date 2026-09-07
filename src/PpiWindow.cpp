@@ -47,6 +47,13 @@ wxBEGIN_EVENT_TABLE(MayaraPpiWindow, wxPanel)
     EVT_TIMER(kIdleTimerId, MayaraPpiWindow::OnIdleTimer)
 wxEND_EVENT_TABLE()
 
+std::vector<int> MayaraPpiWindow::RadarIndices() const {
+  std::vector<int> out;
+  for (RadarDisplayPanel* p : m_radars)
+    if (p) out.push_back(p->RadarIndex());
+  return out;
+}
+
 MayaraPpiWindow::MayaraPpiWindow(wxWindow* parent, MayaraClient* client,
                                  std::vector<int> radar_indices)
     : wxPanel(parent, wxID_ANY), m_idle_timer(this, kIdleTimerId) {

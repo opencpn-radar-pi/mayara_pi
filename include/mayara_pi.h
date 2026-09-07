@@ -132,6 +132,7 @@ class mayara_pi : public opencpn_plugin_121 {
   // count does not match the freshly built windows.
   bool RestoreWindowShown();
   void CaptureWindowState();       // snapshot geometry while windows are alive
+  void SyncWatchedRadars();        // tell the client which pictures are on screen
   wxString SavedPaneInfo(int index) const;  // saved AUI pane layout, or empty
   int OrientationFor(const std::string& radar_id) const;   // per-radar mode
   void SetOrientationFor(const std::string& radar_id, int mode);

@@ -286,7 +286,7 @@ void RadarDisplayPanel::OnPaint(wxPaintEvent&) {
     dc.DrawText(l1, cx - w1 / 2, cy - h1);
     dc.DrawText(l2, cx - w2 / 2, cy + 2);
   } else if (!m_client || !m_client->ControlsAt(m_index)) {
-    // Connection status only until a radar is up (no "streaming N radar(s)").
+    // Connection status only until a radar is up (no "N radar(s)").
     const wxString status =
         m_client ? wxString::FromUTF8(m_client->StatusLine().c_str())
                  : wxString(L"no client");

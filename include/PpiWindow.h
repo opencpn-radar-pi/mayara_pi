@@ -31,6 +31,8 @@ class MayaraPpiWindow : public wxPanel {
                   std::vector<int> radar_indices);
 
   const wxString& Title() const { return m_title; }
+  // The radars whose picture this window shows.
+  std::vector<int> RadarIndices() const;
 
   // Host wiring: exactly one of these is called right after construction.
   void SetFloatingHost(wxFrame* frame) { m_frame = frame; m_docked = false; }
