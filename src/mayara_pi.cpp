@@ -23,6 +23,7 @@
 #include <wx/frame.h>
 #include <wx/graphics.h>
 #include <wx/hyperlink.h>
+#include <wx/process.h>
 #include <wx/radiobox.h>
 #include <wx/settings.h>
 #include <wx/spinctrl.h>
@@ -2751,27 +2752,46 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
   });
   // The server's own --help, verbatim, in a read-only monospace box: clap
   // lines its options up in columns, which a proportional font would undo.
+  // Nothing waits for the server: the dialog opens at once, and a timer on
+  // its own event loop notices when the child has gone and reads what it
+  // wrote. A binary that never returns just leaves the placeholder text in
+  // place until the dialog is closed, which kills it.
   ehelp->Bind(wxEVT_BUTTON, [this, &dlg](wxCommandEvent&) {
-    wxString text;
-    if (!m_server || !m_server->HelpText(&text)) {
-      wxMessageBox(text.IsEmpty()
-                       ? wxString(_("mayara-server did not answer --help."))
-                       : text,
-                   _("Mayara"), wxOK | wxICON_WARNING, &dlg);
+    wxString file;
+    const long pid = m_server ? m_server->StartHelp(&file) : 0;
+    if (!pid) {
+      wxMessageBox(_("Cannot run mayara-server --help."), _("Mayara"),
+                   wxOK | wxICON_WARNING, &dlg);
       return;
     }
     wxDialog hd(&dlg, wxID_ANY, _("mayara-server --help"), wxDefaultPosition,
                 wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
     auto* hbox = new wxBoxSizer(wxVERTICAL);
     auto* help = new wxTextCtrl(
-        &hd, wxID_ANY, text, wxDefaultPosition, hd.FromDIP(wxSize(640, 440)),
+        &hd, wxID_ANY, _("Asking mayara-server..."), wxDefaultPosition,
+        hd.FromDIP(wxSize(640, 440)),
         wxTE_MULTILINE | wxTE_READONLY | wxTE_DONTWRAP | wxHSCROLL);
     help->SetFont(wxFont(wxFontInfo().Family(wxFONTFAMILY_TELETYPE)));
     hbox->Add(help, 1, wxEXPAND | wxALL, 8);
     hbox->Add(hd.CreateStdDialogButtonSizer(wxOK), 0,
               wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
     hd.SetSizerAndFit(hbox);
+    wxTimer poll(&hd);
+    hd.Bind(wxEVT_TIMER, [&](wxTimerEvent&) {
+      if (wxProcess::Exists(pid)) return;
+      poll.Stop();
+      wxString text;
+      wxFFile f(file);
+      if (f.IsOpened()) f.ReadAll(&text);
+      help->SetValue(text.IsEmpty()
+                         ? wxString(_("mayara-server did not answer --help."))
+                         : text);
+    });
+    poll.Start(100);
     hd.ShowModal();
+    poll.Stop();
+    if (wxProcess::Exists(pid)) wxKill(pid, wxSIGKILL, nullptr, wxKILL_CHILDREN);
+    wxRemoveFile(file);
   });
   sync();
 
