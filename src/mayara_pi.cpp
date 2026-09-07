@@ -23,6 +23,7 @@
 #include <wx/frame.h>
 #include <wx/graphics.h>
 #include <wx/hyperlink.h>
+#include <wx/process.h>
 #include <wx/radiobox.h>
 #include <wx/settings.h>
 #include <wx/spinctrl.h>
@@ -2250,6 +2251,12 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
       wxString::FromUTF8(m_server->Options().extra_args.c_str()),
       wxDefaultPosition, spage->FromDIP(wxSize(240, -1)));
   erow->Add(extra_args, 1, wxALIGN_CENTER_VERTICAL);
+  // What can go in that field is whatever the installed server accepts, and
+  // only it knows: show its own --help rather than a copy that would drift.
+  auto* ehelp = new wxButton(spage, wxID_ANY, "?", wxDefaultPosition,
+                             wxDefaultSize, wxBU_EXACTFIT);
+  ehelp->SetToolTip(_("Show what mayara-server --help says"));
+  erow->Add(ehelp, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 4);
   lbox->Add(erow, 0, wxEXPAND | wxTOP, 8);
   auto* ehint = new wxStaticText(
       spage, wxID_ANY,
@@ -2703,6 +2710,7 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
     cb_telemetry->Enable(local && installed);
     brand->Enable(local && installed);
     extra_args->Enable(local && installed);
+    ehelp->Enable(local && installed);
     // Name the file whether or not it is there yet -- knowing where to look is
     // half the point -- but only offer to open one that exists.
     const wxString logfile = have_server ? m_server->LogPath() : wxString();
@@ -2741,6 +2749,49 @@ void mayara_pi::ShowSettings(wxWindow* parent) {
         wxString::Format(_("Cannot open the server log. It is here:\n\n%s"),
                          logfile),
         _("Mayara"), wxOK | wxICON_INFORMATION, &dlg);
+  });
+  // The server's own --help, verbatim, in a read-only monospace box: clap
+  // lines its options up in columns, which a proportional font would undo.
+  // Nothing waits for the server: the dialog opens at once, and a timer on
+  // its own event loop notices when the child has gone and reads what it
+  // wrote. A binary that never returns just leaves the placeholder text in
+  // place until the dialog is closed, which kills it.
+  ehelp->Bind(wxEVT_BUTTON, [this, &dlg](wxCommandEvent&) {
+    wxString file;
+    const long pid = m_server ? m_server->StartHelp(&file) : 0;
+    if (!pid) {
+      wxMessageBox(_("Cannot run mayara-server --help."), _("Mayara"),
+                   wxOK | wxICON_WARNING, &dlg);
+      return;
+    }
+    wxDialog hd(&dlg, wxID_ANY, _("mayara-server --help"), wxDefaultPosition,
+                wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
+    auto* hbox = new wxBoxSizer(wxVERTICAL);
+    auto* help = new wxTextCtrl(
+        &hd, wxID_ANY, _("Asking mayara-server..."), wxDefaultPosition,
+        hd.FromDIP(wxSize(640, 440)),
+        wxTE_MULTILINE | wxTE_READONLY | wxTE_DONTWRAP | wxHSCROLL);
+    help->SetFont(wxFont(wxFontInfo().Family(wxFONTFAMILY_TELETYPE)));
+    hbox->Add(help, 1, wxEXPAND | wxALL, 8);
+    hbox->Add(hd.CreateStdDialogButtonSizer(wxOK), 0,
+              wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
+    hd.SetSizerAndFit(hbox);
+    wxTimer poll(&hd);
+    hd.Bind(wxEVT_TIMER, [&](wxTimerEvent&) {
+      if (wxProcess::Exists(pid)) return;
+      poll.Stop();
+      wxString text;
+      wxFFile f(file);
+      if (f.IsOpened()) f.ReadAll(&text);
+      help->SetValue(text.IsEmpty()
+                         ? wxString(_("mayara-server did not answer --help."))
+                         : text);
+    });
+    poll.Start(100);
+    hd.ShowModal();
+    poll.Stop();
+    if (wxProcess::Exists(pid)) wxKill(pid, wxSIGKILL, nullptr, wxKILL_CHILDREN);
+    wxRemoveFile(file);
   });
   sync();
 

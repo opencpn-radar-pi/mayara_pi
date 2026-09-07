@@ -457,7 +457,6 @@ bool MayaraServer::Start() {
   // arguments (flags, quoted values), not a single opaque token.
   if (!m_opts.extra_args.empty())
     args += " " + wxString::FromUTF8(m_opts.extra_args.c_str());
-  const wxString cmd = "\"" + BinaryPath() + "\"" + args;
   // MAYARA_DEPLOYMENT tells mayara-server's telemetry how it reached the
   // boat, so "nobody runs Garmin radars" can be told apart from "nobody runs
   // Garmin radars *through the OpenCPN plugin*". MAYARA_TELEMETRY answers its
@@ -474,20 +473,33 @@ bool MayaraServer::Start() {
   // child of a plugin has no console for that. Send it to LogPath() instead;
   // Settings shows the path and opens it. Truncated at every start, so the
   // file is this run rather than an ever-growing pile.
-  //
+  long pid = Launch(args, LogPath(), &env);
+  // No shell, or it would not run: a server without a log beats no server.
+  if (pid <= 0) {
+    const wxString cmd = "\"" + BinaryPath() + "\"" + args;
+    pid = wxExecute(cmd, wxEXEC_ASYNC | wxEXEC_HIDE_CONSOLE, nullptr, &env);
+  }
+  if (pid <= 0) return false;
+  m_pid = pid;
+  Notify();
+  return true;
+}
+
+long MayaraServer::Launch(const wxString& args, const wxString& log,
+                          const wxExecuteEnv* env) const {
   // A shell does the redirecting: the alternative is wxProcess, whose vtable
   // lives in this library and which OpenCPN's event loop could call into after
-  // we are unloaded (see above). On POSIX `exec` replaces the shell, so m_pid
-  // stays the server's own; cmd.exe has no such trick and waits for it, which
-  // Running() (it exits when the server does) and Stop() (wxKILL_CHILDREN)
-  // both cope with.
-  const wxString log = LogPath();
+  // we are unloaded (see Start()). On POSIX `exec` replaces the shell, so the
+  // pid stays the server's own; cmd.exe has no such trick and waits for it,
+  // which Running() (it exits when the server does) and Stop()
+  // (wxKILL_CHILDREN) both cope with.
   long pid;
 #ifdef _WIN32
   // cmd.exe takes the whole line in an outer pair of quotes of its own and
   // strips it, so the inner quoting around the paths survives.
-  const wxString launch = "cmd.exe /c \"" + cmd + " > \"" + log + "\" 2>&1\"";
-  pid = wxExecute(launch, wxEXEC_ASYNC | wxEXEC_HIDE_CONSOLE, nullptr, &env);
+  const wxString launch = "cmd.exe /c \"\"" + BinaryPath() + "\"" + args +
+                          " > \"" + log + "\" 2>&1\"";
+  pid = wxExecute(launch, wxEXEC_ASYNC | wxEXEC_HIDE_CONSOLE, nullptr, env);
 #else
   // Handed to sh as an argument of its own rather than as one command string:
   // wxExecute would otherwise split that string itself, and its Unix splitter
@@ -496,15 +508,9 @@ bool MayaraServer::Start() {
                           ShellQuote(log) + " 2>&1";
   const wxScopedCharBuffer script_utf8 = script.utf8_str();
   const char* argv[] = {"/bin/sh", "-c", script_utf8.data(), nullptr};
-  pid = wxExecute(argv, wxEXEC_ASYNC, nullptr, &env);
+  pid = wxExecute(argv, wxEXEC_ASYNC, nullptr, env);
 #endif
-  // No shell, or it would not run: a server without a log beats no server.
-  if (pid <= 0)
-    pid = wxExecute(cmd, wxEXEC_ASYNC | wxEXEC_HIDE_CONSOLE, nullptr, &env);
-  if (pid <= 0) return false;
-  m_pid = pid;
-  Notify();
-  return true;
+  return pid > 0 ? pid : 0;
 }
 
 void MayaraServer::Stop() {
@@ -528,6 +534,21 @@ void MayaraServer::Stop() {
 }
 
 const char* MayaraServer::kEmulatorBrand = "emulator";
+
+long MayaraServer::StartHelp(wxString* file) const {
+  file->Clear();
+  if (!Installed()) return 0;
+  *file = wxFileName::CreateTempFileName("mayara-help");
+  if (file->IsEmpty()) return 0;
+  // Only through the redirecting shell: the direct launch Start() falls back
+  // to would run fine but leave nothing to read, which is no help at all.
+  const long pid = Launch(" --help", *file, nullptr);
+  if (!pid) {
+    wxRemoveFile(*file);
+    file->Clear();
+  }
+  return pid;
+}
 
 const std::vector<std::string>& MayaraServer::Brands() {
   static const std::vector<std::string> kBrands = {
