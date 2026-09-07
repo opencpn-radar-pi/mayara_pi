@@ -114,6 +114,12 @@ class MayaraServer : public wxEvtHandler {
   // recording to play, which there is nowhere to choose here.
   static const std::vector<std::string>& Brands();
   static const char* kEmulatorBrand;  // "emulator"
+  // The installed binary's own `--help` text, for the "Extra arguments"
+  // field: it is the only list of what can go in there that is guaranteed to
+  // match the version actually installed. Synchronous, but --help returns at
+  // once. False (with `out` empty) when nothing is installed or it did not
+  // answer.
+  bool HelpText(wxString* out) const;
 
   bool Enabled() const { return m_enabled; }
   void SetEnabled(bool on);  // persisted; starts or stops the server

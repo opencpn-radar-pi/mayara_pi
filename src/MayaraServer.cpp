@@ -529,6 +529,26 @@ void MayaraServer::Stop() {
 
 const char* MayaraServer::kEmulatorBrand = "emulator";
 
+bool MayaraServer::HelpText(wxString* out) const {
+  out->Clear();
+  if (!Installed()) return false;
+  // Same quoting as Start()'s fallback launch: wxExecute's own splitter copes
+  // with a quoted path, and unlike the launch there is no redirection here
+  // that would need a shell. wxEXEC_NODISABLE because this runs from inside
+  // the modal Settings dialog: the default would disable every window for the
+  // wait and re-enable them afterwards, modal state included.
+  wxArrayString output, errors;
+  const wxString cmd = "\"" + BinaryPath() + "\" --help";
+  const long rc = wxExecute(cmd, output, errors,
+                            wxEXEC_SYNC | wxEXEC_NODISABLE | wxEXEC_HIDE_CONSOLE);
+  // clap writes --help to stdout; anything on stderr instead is still the
+  // best explanation there is of why there is no help.
+  for (const wxString& line : output) *out << line << "\n";
+  if (out->IsEmpty())
+    for (const wxString& line : errors) *out << line << "\n";
+  return rc == 0 && !out->IsEmpty();
+}
+
 const std::vector<std::string>& MayaraServer::Brands() {
   static const std::vector<std::string> kBrands = {
       "navico", "furuno", "garmin", "koden", "raymarine", kEmulatorBrand};
