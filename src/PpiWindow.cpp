@@ -47,8 +47,11 @@ wxBEGIN_EVENT_TABLE(MayaraPpiWindow, wxPanel)
     EVT_TIMER(kIdleTimerId, MayaraPpiWindow::OnIdleTimer)
 wxEND_EVENT_TABLE()
 
+// A picture soloed for an open menu still counts: that hides the others for
+// seconds, not long enough to be worth dropping and re-establishing a stream.
 std::vector<int> MayaraPpiWindow::RadarIndices() const {
   std::vector<int> out;
+  if (!m_pictures_shown) return out;
   for (RadarDisplayPanel* p : m_radars)
     if (p) out.push_back(p->RadarIndex());
   return out;
