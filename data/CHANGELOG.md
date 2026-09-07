@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **server:** point at mayara-server's own GUI when no radar is found (#57) ([PR #57](https://github.com/opencpn-radar-pi/mayara_pi/pull/57))
 - **changelog:** add an in-app changelog viewer (#88) ([PR #88](https://github.com/opencpn-radar-pi/mayara_pi/pull/88))
 - **release:** add release.sh --beta, route channels by tag not branch (#97) ([PR #97](https://github.com/opencpn-radar-pi/mayara_pi/pull/97))
+- **server:** "?" button shows mayara-server --help beside Extra arguments (#103) ([PR #103](https://github.com/opencpn-radar-pi/mayara_pi/pull/103))
 
 ### Changed
 
