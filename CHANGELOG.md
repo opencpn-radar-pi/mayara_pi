@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **release:** beta tags got an empty GitHub Release body (#99) ([PR #99](https://github.com/opencpn-radar-pi/mayara_pi/pull/99))
 - **release:** cliff.toml's skip_tags silently deleted beta commits (#101) ([PR #101](https://github.com/opencpn-radar-pi/mayara_pi/pull/101))
 - **client:** open a radar's spoke stream only while its picture is shown (#105) ([PR #105](https://github.com/opencpn-radar-pi/mayara_pi/pull/105))
+- **client:** radar menu opens on the canvas's overlay radar; "All radars" turns on nesting (#107) ([PR #107](https://github.com/opencpn-radar-pi/mayara_pi/pull/107))
 
 ## [0.1.1] - 2026-08-29
 
