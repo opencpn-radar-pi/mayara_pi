@@ -259,6 +259,11 @@ void MayaraPpiWindow::SetNavProvider(std::function<NavState()> provider) {
   for (RadarDisplayPanel* p : m_radars) p->SetNavProvider(provider);
 }
 
+void MayaraPpiWindow::SetChartCursorProvider(
+    std::function<ChartCursor(int)> provider) {
+  for (RadarDisplayPanel* p : m_radars) p->SetChartCursorProvider(provider);
+}
+
 void MayaraPpiWindow::SetAlarmSoundControl(std::function<bool()> get,
                                           std::function<void()> toggle) {
   for (RadarDisplayPanel* p : m_radars) p->SetAlarmSoundControl(get, toggle);

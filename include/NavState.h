@@ -18,4 +18,16 @@ struct NavState {
   bool has_cog = false;
 };
 
+// The chart's pointer, and the spot last clicked on the chart, as polar from
+// one radar -- so a picture can place them without knowing where that radar
+// is. Filled by the plugin from OpenCPN's cursor callback and mouse hook.
+struct ChartCursor {
+  bool live = false;      // the pointer has been over a chart
+  double live_brg = 0.0;  // true bearing from the radar, degrees
+  double live_m = 0.0;    // distance from the radar, metres
+  bool mark = false;      // a left click on the chart dropped a marker
+  double mark_brg = 0.0;
+  double mark_m = 0.0;
+};
+
 #endif  // MAYARA_NAV_STATE_H_

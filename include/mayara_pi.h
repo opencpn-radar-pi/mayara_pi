@@ -8,6 +8,7 @@
 #ifndef MAYARA_PI_H_
 #define MAYARA_PI_H_
 
+#include <cmath>
 #include <cstdint>
 #include <map>
 #include <set>
@@ -68,6 +69,10 @@ class mayara_pi : public opencpn_plugin_121 {
 
   // --- Own-ship state ------------------------------------------------------
   void SetPositionFixEx(PlugIn_Position_Fix_Ex& pfix) override;
+  // The chart pointer, echoed onto every PPI; a chart click drops a marker
+  // there, and a right click is where the target menu items act.
+  void SetCursorLatLon(double lat, double lon) override;
+  bool MouseEventHook(wxMouseEvent& event) override;
   void SetColorScheme(PI_ColorScheme cs) override;
 
   // --- Preferences ---------------------------------------------------------
@@ -154,12 +159,18 @@ class mayara_pi : public opencpn_plugin_121 {
   int m_mi_overlay = -1;  // canvas context-menu item ids
   int m_mi_ppi = -1;
   int m_mi_menu = -1;          // "Radar menu" context item
+  int m_mi_acquire = -1;       // ARPA: acquire at the right-click position
+  int m_mi_delete = -1;        //       drop the target nearest to it
+  int m_mi_delete_all = -1;    //       drop every target the canvas shows
   int m_mi_ov_none = -1;       // overlay submenu item ids
   int m_mi_ov_all = -1;
   int m_mi_ov_radar[kMaxMenuRadars] = {-1, -1, -1, -1};
   wxMenuItem* m_mi_menu_item = nullptr;
   wxMenuItem* m_mi_overlay_item = nullptr;  // owned by OpenCPN after adding
   wxMenuItem* m_mi_ppi_item = nullptr;
+  wxMenuItem* m_mi_acquire_item = nullptr;
+  wxMenuItem* m_mi_delete_item = nullptr;
+  wxMenuItem* m_mi_delete_all_item = nullptr;
   std::vector<MayaraPpiWindow*> m_windows;
   std::unique_ptr<wxTimer> m_heartbeat;  // 1 Hz: restore + geometry snapshot
   bool m_windows_visible = false;  // user's show/hide intent for the windows
@@ -239,6 +250,7 @@ class mayara_pi : public opencpn_plugin_121 {
   bool m_feed_targets = false;
   std::map<std::string, int> m_ttm_number;  // target key -> TTM target number  // the chart's zoom drives the overlaid radar
   std::map<int, double> m_canvas_radius_m;  // per canvas, what the chart shows
+  std::map<int, double> m_canvas_ppm;       // per canvas, pixels per metre
   // Range Auto: per canvas, the range value it last asked for, so a canvas
   // only touches its radar's range again when its own desired value changes
   // -- not every heartbeat, and not fighting another canvas that shares the
@@ -370,6 +382,30 @@ class mayara_pi : public opencpn_plugin_121 {
   double m_ownship_cog = 0.0;
   double m_heading_true = 0.0;
   NavState m_nav;  // shared with the PPI overlays
+
+  // Chart pointer (OpenCPN's cursor callback), the last chart left click and
+  // the last chart right click. NaN until each has happened.
+  double m_cursor_lat = NAN, m_cursor_lon = NAN;
+  double m_mark_lat = NAN, m_mark_lon = NAN;
+  double m_rclick_lat = NAN, m_rclick_lon = NAN;
+  // The chart pointer and marker as polar from `radar`, for its picture.
+  ChartCursor ChartCursorFor(int radar) const;
+  // True bearing and distance from `radar` to a point; false without a
+  // position for the radar.
+  bool PolarFrom(int radar, double lat, double lon, double* brg_deg,
+                 double* dist_m) const;
+  // Power reported as transmitting, or not reported at all (then the server
+  // gets to say). Standby is the one state known to track nothing.
+  bool RadarTransmitting(int radar) const;
+  // The canvas's transmitting overlay radar to acquire a target at a point
+  // on, with the point as polar from that radar: the shortest-ranged one
+  // that reaches it, else the longest. -1 when none is transmitting.
+  int RadarForTarget(int canvas, double lat, double lon, double* brg_deg,
+                     double* dist_m) const;
+  void AcquireTargetAtRightClick(int canvas);
+  void DeleteTargetAtRightClick(int canvas);
+  void DeleteAllTargets(int canvas);
+  bool CanvasHasTargets(int canvas) const;
 };
 
 #endif  // MAYARA_PI_H_

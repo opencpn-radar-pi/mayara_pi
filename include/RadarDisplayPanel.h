@@ -162,6 +162,11 @@ class RadarDisplayPanel : public wxPanel {
   void SetRadarIndex(int index) { m_index = index; }
   int RadarIndex() const { return m_index; }
   void SetNavProvider(std::function<NavState()> p) { m_nav = std::move(p); }
+  // The chart pointer and the chart's click marker, polar from this radar.
+  // Asked for on every paint; the plugin owns the geography.
+  void SetChartCursorProvider(std::function<ChartCursor(int)> p) {
+    m_chart_cursor = std::move(p);
+  }
   void SetLayers(const PpiLayers& l) { m_layers = l; Refresh(false); }
   const PpiLayers& Layers() const { return m_layers; }
   void SetOrientation(int o) { m_orientation = o; Refresh(false); }
@@ -237,6 +242,14 @@ class RadarDisplayPanel : public wxPanel {
   void DrawVrmEbl(wxDC& dc, const PpiGeometry& g, double geo);
   // Cursor crosshair + a bearing/range readout for the pointer position.
   void DrawCursor(wxDC& dc, const PpiGeometry& g);
+  // The bearing/range chip in the bottom-left corner, in `col`.
+  void DrawCursorChip(wxDC& dc, const PpiGeometry& g, double brg, double dist,
+                      const wxColour& col);
+  // The chart pointer echoed onto this picture, plus the chart click marker.
+  // `own_chip`: the picture's own pointer readout is showing, and keeps the
+  // chip.
+  void DrawChartCursor(wxDC& dc, const PpiGeometry& g, double geo,
+                       bool own_chip);
   // Drag handles for the zone being edited; mirrors the mayara GUI.
   void DrawZoneHandles(wxDC& dc, const PpiGeometry& g, double geo,
                        const ZoneEdit& z);
@@ -276,6 +289,7 @@ class RadarDisplayPanel : public wxPanel {
   std::function<void(const std::string&)> m_on_control;
   std::function<void()> m_on_focus;
   std::function<NavState()> m_nav;  // own-ship nav provider (may be null)
+  std::function<ChartCursor(int)> m_chart_cursor;  // may be null
   PpiLayers m_layers;
   int m_orientation = kHeadUp;
   int m_threshold = 0;          // display echo threshold (0 all/1 weak/2 strong)

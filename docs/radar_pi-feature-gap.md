@@ -1,7 +1,10 @@
 # Feature gap: radar_pi → mayara_pi
 
 What [radar_pi](https://github.com/opencpn-radar-pi/radar_pi) does that mayara_pi
-does not, as of 2026-08-04.
+does not. Baseline radar_pi as of 2026-08-04, re-checked 2026-09-08: the only
+radar_pi commits since are Navico receiver work (HALO 24's 32-byte status
+report, offering only the controls the radar reports), which is
+mayara-server's side of the line.
 
 Compiled from radar_pi's `PersistentSettings` (`include/radar_pi.h`), its
 `ControlType.inc`, and its canvas/overlay code, checked against mayara_pi's
@@ -19,7 +22,7 @@ ones that only look like gaps.
 |---|---|---|
 | **EBL / VRM** | 2 bearing lines + 2 range rings per orientation, set by clicking the PPI, persisted | `m_ebl_on` was an unused placeholder with an icon |
 | **Off-center / "Look Around"** | drag the PPI to pan; `CT_CENTER_VIEW` resets | wheel zoom only, always centred |
-| **Cursor readout** | range/bearing under the pointer | declares `WANTS_CURSOR_LATLON` but never overrode `SetCursorLatLon` |
+| **Cursor readout** | range/bearing under the pointer | the PPI's own pointer only; see [Chart cursor](#chart-cursor) for the chart's |
 | **Guard-zone rendering** | drawn on PPI and optionally the overlay; shading / outline / both, transparency | zones could be *edited* (`ControlsPanel::AddZone`) but were never drawn |
 | **Extreme-range ring** | red ring at max range + centre marker | — |
 | **Refresh rate** | `CT_REFRESHRATE` control | hardcoded 200 ms timer |
@@ -29,6 +32,42 @@ ones that only look like gaps.
 Every row above is addressed by the "PPI display improvements" change; the table
 is left as written so it still reads as the record of what was missing. The
 sections below are the open work.
+
+## Chart cursor
+
+radar_pi does three things with OpenCPN's cursor callback and mouse hook that
+the table above glossed over as "cursor readout", and all three were missing
+until 2026-09-08. Built and checked against the host, not yet against a live
+radar: the acquire and delete requests below are the same client calls the
+PPI's own double-click makes, but nobody has yet watched a target appear from
+a chart click.
+
+- **Chart pointer on the PPI** — done. Every picture draws the chart pointer
+  as a cyan cross at its range and bearing from that radar, with the same
+  bottom-left readout chip the picture's own pointer gets (the picture's own
+  pointer wins the chip while it is over the picture). So a contact seen on
+  the chart can be found among the echoes without measuring. Needs a heading,
+  like every true-referenced layer.
+- **Chart click marker** — done. A left click on the chart leaves a marker on
+  every picture, in the picture's text colour, until the next click. radar_pi
+  does the same with its white "mouse" cursor.
+- **ARPA from the chart** — done. "Acquire Mayara radar target" and "Delete
+  Mayara radar target" on the canvas context menu act at the right-clicked
+  spot, on the radars that canvas overlays; "Delete all Mayara radar targets"
+  drops every target those radars hold, wherever the click was. Acquire goes
+  to the shortest-ranged *transmitting* overlay radar that reaches the point
+  (the nested inner one sees it better), else the longest transmitting one;
+  a radar in standby tracks nothing, so it is never picked and never woken
+  for this. Each candidate measures the point from its own position, since
+  without an OpenCPN fix the radars run on what their own spokes say. Delete
+  drops the target nearest the click within the same 12 px reach the PPI's
+  own double-click uses, across all the canvas's radars. The entries are
+  hidden, not greyed, whenever they could do nothing: no transmitting radar
+  on that canvas, no pointer position yet, no targets.
+
+The plugin declared `WANTS_CURSOR_LATLON` from the first scaffold without ever
+overriding the callback; it now also declares `WANTS_MOUSE_EVENTS` for the
+click and right-click positions, never claiming the event.
 
 ## Alarms
 
@@ -109,7 +148,7 @@ fixed server-side once the two endpoints were compared.
 ## Feeding OpenCPN
 
 - **Radar heading → NMEA HDT** — done, and seen arriving in OpenCPN as `$RAHDT`.
-  Settings → Display → Feed OpenCPN. The radar's own heading, not OpenCPN's fix
+  Settings → Feed OpenCPN. The radar's own heading, not OpenCPN's fix
   fed back to it, at 1 Hz. Off by
   default: on most boats another source already provides heading, and two
   disagreeing sources is worse than one.
