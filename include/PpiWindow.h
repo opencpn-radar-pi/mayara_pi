@@ -31,6 +31,9 @@ class MayaraPpiWindow : public wxPanel {
                   std::vector<int> radar_indices);
 
   const wxString& Title() const { return m_title; }
+  // The radars this window has pictures for; none while its PPI toggle is
+  // off. A picture soloed for an open menu keeps the others counted.
+  std::vector<int> RadarIndices() const;
 
   // Host wiring: exactly one of these is called right after construction.
   void SetFloatingHost(wxFrame* frame) { m_frame = frame; m_docked = false; }

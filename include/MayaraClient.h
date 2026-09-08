@@ -13,6 +13,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <string>
 #include <thread>
 #include <vector>
@@ -177,6 +178,13 @@ class MayaraClient {
   std::vector<int> ShownRadars();
   void SetShown(std::vector<int> indices);
 
+  // The radars whose picture is on screen (overlay or a shown PPI window).
+  // Only these have their spoke stream open: the server counts every spoke
+  // subscriber as someone watching the radar and keeps it transmitting for
+  // them, so a stream held open for a hidden picture would keep the
+  // magnetron up for nobody. Idempotent; the plugin calls it every tick.
+  void SetWatched(const std::vector<int>& indices);
+
   // Set a control value. `json_body` is the BareControlValue JSON
   // (e.g. {"value":75}). Sent via REST PUT. SetControl targets the active
   // radar; SetControlAt targets a specific radar index.
@@ -190,7 +198,7 @@ class MayaraClient {
   enum class Attempt {
     kFailed,     // no answer, or an answer we cannot use
     kNoRadars,   // the radar API answered, but lists nothing
-    kConnected,  // at least one radar is streaming
+    kConnected,  // at least one radar is usable
   };
   Attempt DiscoverAndConnect();
   // Work out HelpUrl() for `base`, probing :6502 when base is not already it.
@@ -203,7 +211,10 @@ class MayaraClient {
   // Surface a JSON error. If the server's API version was seen and differs from
   // kRadarApiVersion, this throws a loud "version mismatch" tantrum instead.
   void JsonError(const std::string& context, const char* what);
-  bool ConnectSpokes(Radar* radar);  // true if it opens
+  // Open or close each radar's spoke stream to match m_watched_ids. Caller
+  // holds m_radars_mutex.
+  void ReconcileSpokes();
+  void OpenSpokes(Radar* radar);
   void ConnectControlStream();
   void SetStatus(const std::string& s);
   // The bearer token to send to `base`, or empty when we hold none for it.
@@ -280,6 +291,8 @@ class MayaraClient {
   std::atomic<int> m_active{0};
   std::atomic<float> m_intensity{1.0f};
   std::vector<int> m_shown;  // <= 2 displayed radar indices (empty = default)
+  // Ids rather than indices: they survive a rediscovery reordering the list.
+  std::set<std::string> m_watched_ids;
 
   std::unique_ptr<ix::WebSocket> m_control_ws;
 };

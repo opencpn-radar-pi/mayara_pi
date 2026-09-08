@@ -384,6 +384,33 @@ void MayaraClient::SetShown(std::vector<int> indices) {
   m_shown = std::move(indices);
 }
 
+void MayaraClient::SetWatched(const std::vector<int>& indices) {
+  std::lock_guard<std::mutex> lock(m_radars_mutex);
+  std::set<std::string> ids;
+  const int n = static_cast<int>(m_radars.size());
+  for (int i : indices)
+    if (i >= 0 && i < n) ids.insert(m_radars[i]->id);
+  if (ids == m_watched_ids) return;
+  m_watched_ids = std::move(ids);
+  ReconcileSpokes();
+}
+
+void MayaraClient::ReconcileSpokes() {
+  if (m_stop) return;
+  for (auto& r : m_radars) {
+    const bool want = m_watched_ids.count(r->id) > 0;
+    if (want && !r->spoke_ws) {
+      LogLine(2, r->id + ": picture on screen, opening spoke stream");
+      OpenSpokes(r.get());
+    } else if (!want && r->spoke_ws) {
+      LogLine(2, r->id + ": picture off screen, closing spoke stream");
+      r->spoke_ws->stop();
+      r->spoke_ws.reset();
+      r->streaming = false;
+    }
+  }
+}
+
 void MayaraClient::SetRememberedUrl(std::string url) {
   StripTrailingSlash(url);
   m_remembered = std::move(url);
@@ -869,17 +896,18 @@ MayaraClient::Attempt MayaraClient::DiscoverAndConnect() {
     return Attempt::kNoRadars;
   }
 
-  // Fetch capabilities + connect the spoke stream for each radar; keep the ones
-  // that actually stream.
+  // Fetch capabilities for each radar; keep the ones that answer. The spoke
+  // stream is opened later, and only for a radar whose picture is on screen
+  // (see SetWatched).
   std::vector<std::unique_ptr<Radar>> live;
   for (auto& r : radars) {
     if (m_stop || r->id.empty()) continue;
     if (!FetchCapabilities(r.get())) continue;
     if (r->spoke_url.empty()) r->spoke_url = WsUrl(m_base_url, r->id);
-    if (ConnectSpokes(r.get())) live.push_back(std::move(r));
+    live.push_back(std::move(r));
   }
   if (live.empty()) {
-    SetStatus("no spoke stream at " + m_base_url);
+    SetStatus("no usable radar at " + m_base_url);
     return Attempt::kFailed;
   }
 
@@ -896,11 +924,12 @@ MayaraClient::Attempt MayaraClient::DiscoverAndConnect() {
              std::back_inserter(m_retired_radars));
     m_radars = std::move(live);
     m_active = 0;
+    ReconcileSpokes();
   }
   ConnectControlStream();
   if (!m_targets_thread.joinable())
     m_targets_thread = std::thread([this] { PollTargets(); });
-  SetStatus("streaming " + std::to_string(RadarCount()) + " radar(s)");
+  SetStatus(std::to_string(RadarCount()) + " radar(s)");
   return Attempt::kConnected;
 }
 
@@ -1026,12 +1055,15 @@ void MayaraClient::FetchControlValues(Radar* radar) {
   }
 }
 
-bool MayaraClient::ConnectSpokes(Radar* radar) {
+void MayaraClient::OpenSpokes(Radar* radar) {
   radar->streaming = false;
   radar->ws_error = false;
   radar->spoke_ws = std::make_unique<ix::WebSocket>();
   radar->spoke_ws->setUrl(radar->spoke_url);
-  radar->spoke_ws->disableAutomaticReconnection();
+  // The stream stays open for as long as the picture is on screen, so a
+  // server restart or a dropped link must bring it back on its own.
+  radar->spoke_ws->enableAutomaticReconnection();
+  radar->spoke_ws->setMaxWaitBetweenReconnectionRetries(5000);
 
   Radar* r = radar;
   radar->spoke_ws->setOnMessageCallback([this, r](
@@ -1069,14 +1101,6 @@ bool MayaraClient::ConnectSpokes(Radar* radar) {
   });
 
   radar->spoke_ws->start();
-  for (int i = 0; i < 50 && !m_stop; ++i) {
-    if (radar->streaming) return true;
-    if (radar->ws_error) break;
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-  }
-  radar->spoke_ws->stop();
-  radar->spoke_ws.reset();
-  return false;
 }
 
 // One target, from either shape the server offers: the delta value under
