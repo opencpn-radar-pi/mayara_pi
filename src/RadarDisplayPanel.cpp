@@ -1119,6 +1119,9 @@ void RadarDisplayPanel::DrawLayers(wxDC& dc, const PpiGeometry& g) {
 
   // EBL/VRM and the cursor readout go on top of everything geographic.
   if (geo > 0) DrawVrmEbl(dc, g, geo);
+  // The chart's pointer needs a heading to be placed, like any true-referenced
+  // layer; the picture's own pointer does not, and wins the readout chip.
+  if (geo > 0 && has_heading) DrawChartCursor(dc, g, geo);
   if (m_cursor_in && !m_dragging) DrawCursor(dc, g);
 
   // Zoom/recentre chip, only while magnified or panned. Clicking it undoes
@@ -1401,6 +1404,12 @@ void RadarDisplayPanel::DrawCursor(wxDC& dc, const PpiGeometry& g) {
   dc.DrawLine(m_cursor.x, m_cursor.y - 7, m_cursor.x, m_cursor.y - 2);
   dc.DrawLine(m_cursor.x, m_cursor.y + 2, m_cursor.x, m_cursor.y + 7);
 
+  DrawCursorChip(dc, g, brg, dist, m_theme.text);
+}
+
+void RadarDisplayPanel::DrawCursorChip(wxDC& dc, const PpiGeometry& g,
+                                       double brg, double dist,
+                                       const wxColour& col) {
   wxFont f = GetFont();
   f.SetPointSize(std::max(7, f.GetPointSize() - 1));
   dc.SetFont(f);
@@ -1420,8 +1429,47 @@ void RadarDisplayPanel::DrawCursor(wxDC& dc, const PpiGeometry& g) {
   // echoes being measured.
   const wxRect chip(8, GetClientSize().y - th - 12, tw + 12, th + 6);
   LozengeBg(dc, this, chip, (th + 6) / 2, m_theme);
-  dc.SetTextForeground(m_theme.text);
+  dc.SetTextForeground(col);
   dc.DrawText(txt, chip.x + 6, chip.y + 3);
+}
+
+// A crosshair with a clear middle, so the echo under it stays visible.
+static void DrawCrosshair(wxDC& dc, const wxPoint& p, int arm,
+                          const wxColour& col, int width) {
+  dc.SetPen(wxPen(col, width));
+  dc.DrawLine(p.x - arm, p.y, p.x - 3, p.y);
+  dc.DrawLine(p.x + 3, p.y, p.x + arm, p.y);
+  dc.DrawLine(p.x, p.y - arm, p.x, p.y - 3);
+  dc.DrawLine(p.x, p.y + 3, p.x, p.y + arm);
+}
+
+// What radar_pi does with OpenCPN's cursor callback: the chart pointer shows
+// on every picture as a cyan cross, so a contact on the chart can be found
+// among the echoes without measuring; a click on the chart leaves a marker
+// in the picture's own text colour that stays until the next click.
+void RadarDisplayPanel::DrawChartCursor(wxDC& dc, const PpiGeometry& g,
+                                        double geo) {
+  if (!m_chart_cursor) return;
+  const ChartCursor cc = m_chart_cursor(m_index);
+  const double limit = g.radius * 1.45;  // same reach as the pointer readout
+  dc.SetBrush(*wxTRANSPARENT_BRUSH);
+
+  if (cc.mark && cc.mark_m > 0 && cc.mark_m * geo <= limit) {
+    const wxPoint p = PolarPoint(g.center, cc.mark_m * geo, cc.mark_brg,
+                                 g.up_bearing);
+    DrawCrosshair(dc, p, 9, m_theme.text, 2);
+    dc.DrawCircle(p.x, p.y, 3);
+  }
+
+  if (cc.live && cc.live_m > 0 && cc.live_m * geo <= limit) {
+    const wxColour cyan(0, 255, 255);
+    const wxPoint p = PolarPoint(g.center, cc.live_m * geo, cc.live_brg,
+                                 g.up_bearing);
+    DrawCrosshair(dc, p, 9, cyan, 1);
+    // The picture's own pointer owns the chip while it is over the picture:
+    // whichever pointer is moving is the one being read.
+    if (!m_cursor_in) DrawCursorChip(dc, g, cc.live_brg, cc.live_m, cyan);
+  }
 }
 
 // A press only arms a possible drag; the action is decided on release, so

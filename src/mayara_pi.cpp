@@ -380,6 +380,21 @@ int mayara_pi::Init() {
                                    wxEmptyString, wxITEM_NORMAL);
     m_mi_ppi = AddCanvasContextMenuItem(m_mi_ppi_item, this);
 
+    // ARPA from the chart, at the right-clicked spot, as radar_pi offers.
+    // Shown only while they can do something (see RefreshContextMenu).
+    m_mi_acquire_item = new wxMenuItem(nullptr, wxID_ANY,
+                                       _("Acquire Mayara radar target"),
+                                       wxEmptyString, wxITEM_NORMAL);
+    m_mi_acquire = AddCanvasContextMenuItem(m_mi_acquire_item, this);
+    m_mi_delete_item = new wxMenuItem(nullptr, wxID_ANY,
+                                      _("Delete Mayara radar target"),
+                                      wxEmptyString, wxITEM_NORMAL);
+    m_mi_delete = AddCanvasContextMenuItem(m_mi_delete_item, this);
+    m_mi_delete_all_item = new wxMenuItem(
+        nullptr, wxID_ANY, _("Delete all Mayara radar targets"),
+        wxEmptyString, wxITEM_NORMAL);
+    m_mi_delete_all = AddCanvasContextMenuItem(m_mi_delete_all_item, this);
+
     m_mi_ov_none = wxWindow::NewControlId();
     m_mi_ov_all = wxWindow::NewControlId();
     for (int k = 0; k < kMaxMenuRadars; ++k)
@@ -544,6 +559,7 @@ int mayara_pi::Init() {
   return WANTS_OPENGL_OVERLAY_CALLBACK | WANTS_OVERLAY_CALLBACK |
          WANTS_TOOLBAR_CALLBACK | INSTALLS_TOOLBAR_TOOL | WANTS_CURSOR_LATLON |
          WANTS_NMEA_EVENTS | INSTALLS_CONTEXTMENU_ITEMS | WANTS_PREFERENCES |
+         WANTS_MOUSE_EVENTS |
          USES_AUI_MANAGER;
 }
 
@@ -573,6 +589,9 @@ bool mayara_pi::DeInit() {
   }
   if (m_mi_overlay != -1) RemoveCanvasContextMenuItem(m_mi_overlay);
   if (m_mi_ppi != -1) RemoveCanvasContextMenuItem(m_mi_ppi);
+  if (m_mi_acquire != -1) RemoveCanvasContextMenuItem(m_mi_acquire);
+  if (m_mi_delete != -1) RemoveCanvasContextMenuItem(m_mi_delete);
+  if (m_mi_delete_all != -1) RemoveCanvasContextMenuItem(m_mi_delete_all);
   m_mi_overlay = m_mi_ppi = -1;
   if (m_client) {
     m_client->Stop();
@@ -2985,6 +3004,12 @@ void mayara_pi::OnContextMenuItemCallback(int id) {
       m_parent_window->CallAfter([this, canvas]() { ShowOverlayMenu(canvas); });
   } else if (id == m_mi_menu) {
     ShowRadarMenu(canvas);
+  } else if (id == m_mi_acquire) {
+    AcquireTargetAtRightClick(canvas);
+  } else if (id == m_mi_delete) {
+    DeleteTargetAtRightClick(canvas);
+  } else if (id == m_mi_delete_all) {
+    DeleteAllTargets(canvas);
   } else if (id == m_mi_ppi) {
     // Right-clicking the canvas to get here always makes the OpenCPN main
     // frame the active window first, so a floating PPI window could never be
@@ -3026,6 +3051,18 @@ void mayara_pi::RefreshContextMenu(int canvas) {
   if (m_mi_ppi_item)
     m_mi_ppi_item->SetItemLabel(AnyWindowShown() ? _("Hide Mayara PPI")
                                                  : _("Show Mayara PPI"));
+  // The target entries only while they could do something: a radar on this
+  // canvas and a pointer position to acquire at; targets to delete. Hidden
+  // rather than greyed, so a canvas with no radar does not carry three dead
+  // lines about one.
+  const bool overlaid = !OverlayRadars(canvas).empty();
+  const bool pointed = !std::isnan(m_cursor_lat) && !std::isnan(m_cursor_lon);
+  const bool targets = overlaid && CanvasHasTargets(canvas);
+  if (m_mi_acquire != -1)
+    SetCanvasContextMenuItemViz(m_mi_acquire, overlaid && pointed);
+  if (m_mi_delete != -1)
+    SetCanvasContextMenuItemViz(m_mi_delete, targets && pointed);
+  if (m_mi_delete_all != -1) SetCanvasContextMenuItemViz(m_mi_delete_all, targets);
 }
 
 // What this canvas is currently set to, for the menu entry.
@@ -3274,6 +3311,8 @@ void mayara_pi::RebuildWindows() {
                                 [this]() { RebuildWindows(); });
                         });
     win->SetNavProvider([this]() { return m_nav; });
+    win->SetChartCursorProvider(
+        [this](int radar) { return ChartCursorFor(radar); });
     win->SetAlarmSoundControl(
         [this]() { return m_guard_alarm_sound; },
         [this]() {
@@ -3457,9 +3496,11 @@ void mayara_pi::TogglePpiWindow() {
 void mayara_pi::RecordCanvasRadius(PlugIn_ViewPort* vp, int canvasIndex) {
   const double coslat = std::max(0.02, std::cos(vp->clat * M_PI / 180.0));
   const double ppm = vp->view_scale_ppm / coslat;
-  if (ppm > 0)
+  if (ppm > 0) {
     m_canvas_radius_m[canvasIndex] =
         0.5 * std::min(vp->pix_width, vp->pix_height) / ppm;
+    m_canvas_ppm[canvasIndex] = ppm;
+  }
 }
 
 // The radars this canvas draws, longest range first, so each is drawn as an
@@ -3895,6 +3936,157 @@ void mayara_pi::SetPositionFixEx(PlugIn_Position_Fix_Ex& pfix) {
                m_nav.has_hdt ? "yes" : "no", m_nav.lat, m_nav.lon, m_nav.cog,
                m_nav.sog, m_nav.hdt));
   }
+}
+
+// --- Chart cursor ----------------------------------------------------------
+
+void mayara_pi::SetCursorLatLon(double lat, double lon) {
+  m_cursor_lat = lat;
+  m_cursor_lon = lon;
+}
+
+// Never claims the event: the chart keeps doing what it does with the click,
+// this only remembers where it was. Left drops the PPI marker, right is where
+// the context menu's target entries act -- taken here rather than when the
+// menu opens, since the pointer has moved onto the menu by then.
+bool mayara_pi::MouseEventHook(wxMouseEvent& event) {
+  if (std::isnan(m_cursor_lat) || std::isnan(m_cursor_lon)) return false;
+  if (event.LeftDown()) {
+    m_mark_lat = m_cursor_lat;
+    m_mark_lon = m_cursor_lon;
+  } else if (event.RightDown()) {
+    m_rclick_lat = m_cursor_lat;
+    m_rclick_lon = m_cursor_lon;
+  }
+  return false;
+}
+
+bool mayara_pi::PolarFrom(int radar, double lat, double lon, double* brg_deg,
+                          double* dist_m) const {
+  if (std::isnan(lat) || std::isnan(lon)) return false;
+  double rlat = 0, rlon = 0;
+  if (!ResolvePosition(radar, &rlat, &rlon, nullptr)) return false;
+  double brg = 0, dist_nm = 0;
+  // Destination first: the API header documents the first pair as the start,
+  // but georef.cpp computes the bearing from the second pair to the first,
+  // and every plugin in the OpenCPN tree calls it that way round.
+  DistanceBearingMercator_Plugin(lat, lon, rlat, rlon, &brg, &dist_nm);
+  if (std::isnan(brg) || std::isnan(dist_nm)) return false;
+  *brg_deg = brg;
+  *dist_m = dist_nm * 1852.0;
+  return true;
+}
+
+ChartCursor mayara_pi::ChartCursorFor(int radar) const {
+  ChartCursor cc;
+  cc.live = PolarFrom(radar, m_cursor_lat, m_cursor_lon, &cc.live_brg,
+                      &cc.live_m);
+  cc.mark = PolarFrom(radar, m_mark_lat, m_mark_lon, &cc.mark_brg, &cc.mark_m);
+  return cc;
+}
+
+bool mayara_pi::CanvasHasTargets(int canvas) const {
+  if (!m_client) return false;
+  for (int i : OverlayRadars(canvas))
+    for (const RadarTarget& t : m_client->TargetsAt(i))
+      if (t.status != RadarTarget::kLost) return true;
+  return false;
+}
+
+// With two radars nested, the inner one has the finer picture of anything it
+// reaches, so prefer it; a point beyond every radar's range goes to the
+// longest, which is the one that might still see it once ranged out.
+int mayara_pi::RadarForTarget(int canvas, double dist_m) const {
+  int best = -1;
+  double best_range = 0;
+  int longest = -1;
+  double longest_range = -1;
+  for (int i : OverlayRadars(canvas)) {
+    RadarState* st = m_client->StateAt(i);
+    const double range = st ? st->RangeMeters() : 0;
+    if (range > longest_range) {
+      longest_range = range;
+      longest = i;
+    }
+    if (range >= dist_m && (best < 0 || range < best_range)) {
+      best = i;
+      best_range = range;
+    }
+  }
+  return best >= 0 ? best : longest;
+}
+
+void mayara_pi::AcquireTargetAtRightClick(int canvas) {
+  if (!m_client) return;
+  // A right click that reached the menu always set this; the pointer
+  // position is the fallback for a host that never called the mouse hook.
+  const double lat = std::isnan(m_rclick_lat) ? m_cursor_lat : m_rclick_lat;
+  const double lon = std::isnan(m_rclick_lon) ? m_cursor_lon : m_rclick_lon;
+  // Distance is nearly the same from any of the canvas's radars; pick the
+  // radar off the first, then ask it for its own exact polar.
+  const std::vector<int> radars = OverlayRadars(canvas);
+  if (radars.empty()) return;
+  double brg = 0, dist = 0;
+  if (!PolarFrom(radars.front(), lat, lon, &brg, &dist)) return;
+  const int radar = RadarForTarget(canvas, dist);
+  if (radar < 0 || !PolarFrom(radar, lat, lon, &brg, &dist)) return;
+  // A radar in standby tracks nothing, and the server would only refuse.
+  RadarControls* c = m_client->ControlsAt(radar);
+  const ControlValue pw = c ? c->Value("power") : ControlValue();
+  if (pw.has_value && pw.value < 2.0) {
+    Log(1, wxString::Format("Acquire target: radar %d is not transmitting",
+                            radar));
+    return;
+  }
+  Log(2, wxString::Format("Acquire target on radar %d at %.1f deg, %.0f m",
+                          radar, brg, dist));
+  m_client->AcquireTargetAt(radar, brg, dist);
+}
+
+// The target nearest the right click, across every radar the canvas shows,
+// within the same on-screen reach the PPI uses for a double click on one.
+void mayara_pi::DeleteTargetAtRightClick(int canvas) {
+  if (!m_client) return;
+  const double lat = std::isnan(m_rclick_lat) ? m_cursor_lat : m_rclick_lat;
+  const double lon = std::isnan(m_rclick_lon) ? m_cursor_lon : m_rclick_lon;
+  const auto ppm = m_canvas_ppm.find(canvas);
+  const double reach_m = ppm != m_canvas_ppm.end() && ppm->second > 0
+                             ? 12.0 / ppm->second
+                             : 0.0;
+  if (reach_m <= 0) return;
+
+  int best_radar = -1;
+  uint64_t best_id = 0;
+  double best_d = reach_m;
+  for (int i : OverlayRadars(canvas)) {
+    double brg = 0, dist = 0;
+    if (!PolarFrom(i, lat, lon, &brg, &dist)) continue;
+    const double cx = dist * std::sin(brg * M_PI / 180.0);
+    const double cy = dist * std::cos(brg * M_PI / 180.0);
+    for (const RadarTarget& t : m_client->TargetsAt(i)) {
+      if (t.status == RadarTarget::kLost || t.distance_m <= 0) continue;
+      const double tx = t.distance_m * std::sin(t.bearing_deg * M_PI / 180.0);
+      const double ty = t.distance_m * std::cos(t.bearing_deg * M_PI / 180.0);
+      const double d = std::hypot(tx - cx, ty - cy);
+      if (d <= best_d) {
+        best_d = d;
+        best_radar = i;
+        best_id = t.id;
+      }
+    }
+  }
+  if (best_radar < 0) {
+    Log(2, "Delete target: nothing within reach of the click");
+    return;
+  }
+  m_client->CancelTargetAt(best_radar, best_id);
+}
+
+void mayara_pi::DeleteAllTargets(int canvas) {
+  if (!m_client) return;
+  for (int i : OverlayRadars(canvas))
+    for (const RadarTarget& t : m_client->TargetsAt(i))
+      if (t.status != RadarTarget::kLost) m_client->CancelTargetAt(i, t.id);
 }
 
 void mayara_pi::SetColorScheme(PI_ColorScheme cs) {
