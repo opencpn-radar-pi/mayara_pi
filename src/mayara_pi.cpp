@@ -3055,11 +3055,14 @@ void mayara_pi::RefreshContextMenu(int canvas) {
   // canvas and a pointer position to acquire at; targets to delete. Hidden
   // rather than greyed, so a canvas with no radar does not carry three dead
   // lines about one.
-  const bool overlaid = !OverlayRadars(canvas).empty();
+  const std::vector<int> overlaid = OverlayRadars(canvas);
+  bool transmitting = false;
+  for (int i : overlaid)
+    if (RadarTransmitting(i)) transmitting = true;
   const bool pointed = !std::isnan(m_cursor_lat) && !std::isnan(m_cursor_lon);
-  const bool targets = overlaid && CanvasHasTargets(canvas);
+  const bool targets = !overlaid.empty() && CanvasHasTargets(canvas);
   if (m_mi_acquire != -1)
-    SetCanvasContextMenuItemViz(m_mi_acquire, overlaid && pointed);
+    SetCanvasContextMenuItemViz(m_mi_acquire, transmitting && pointed);
   if (m_mi_delete != -1)
     SetCanvasContextMenuItemViz(m_mi_delete, targets && pointed);
   if (m_mi_delete_all != -1) SetCanvasContextMenuItemViz(m_mi_delete_all, targets);
@@ -3993,27 +3996,49 @@ bool mayara_pi::CanvasHasTargets(int canvas) const {
   return false;
 }
 
+bool mayara_pi::RadarTransmitting(int radar) const {
+  RadarControls* c = m_client ? m_client->ControlsAt(radar) : nullptr;
+  const ControlValue pw = c ? c->Value("power") : ControlValue();
+  return !(pw.has_value && pw.value < 2.0);
+}
+
 // With two radars nested, the inner one has the finer picture of anything it
 // reaches, so prefer it; a point beyond every radar's range goes to the
-// longest, which is the one that might still see it once ranged out.
-int mayara_pi::RadarForTarget(int canvas, double dist_m) const {
-  int best = -1;
-  double best_range = 0;
-  int longest = -1;
-  double longest_range = -1;
+// longest, which is the one that might still see it once ranged out. Each
+// radar measures the point from its own position: without an OpenCPN fix
+// they run on what their own spokes say, which need not agree.
+int mayara_pi::RadarForTarget(int canvas, double lat, double lon,
+                              double* brg_deg, double* dist_m) const {
+  int best = -1, longest = -1;
+  double best_range = 0, longest_range = -1;
+  double best_brg = 0, best_dist = 0, longest_brg = 0, longest_dist = 0;
   for (int i : OverlayRadars(canvas)) {
+    if (!RadarTransmitting(i)) continue;
+    double brg = 0, dist = 0;
+    if (!PolarFrom(i, lat, lon, &brg, &dist)) continue;
     RadarState* st = m_client->StateAt(i);
     const double range = st ? st->RangeMeters() : 0;
     if (range > longest_range) {
       longest_range = range;
       longest = i;
+      longest_brg = brg;
+      longest_dist = dist;
     }
-    if (range >= dist_m && (best < 0 || range < best_range)) {
+    if (range >= dist && (best < 0 || range < best_range)) {
       best = i;
       best_range = range;
+      best_brg = brg;
+      best_dist = dist;
     }
   }
-  return best >= 0 ? best : longest;
+  if (best >= 0) {
+    *brg_deg = best_brg;
+    *dist_m = best_dist;
+    return best;
+  }
+  *brg_deg = longest_brg;
+  *dist_m = longest_dist;
+  return longest;
 }
 
 void mayara_pi::AcquireTargetAtRightClick(int canvas) {
@@ -4022,20 +4047,11 @@ void mayara_pi::AcquireTargetAtRightClick(int canvas) {
   // position is the fallback for a host that never called the mouse hook.
   const double lat = std::isnan(m_rclick_lat) ? m_cursor_lat : m_rclick_lat;
   const double lon = std::isnan(m_rclick_lon) ? m_cursor_lon : m_rclick_lon;
-  // Distance is nearly the same from any of the canvas's radars; pick the
-  // radar off the first, then ask it for its own exact polar.
-  const std::vector<int> radars = OverlayRadars(canvas);
-  if (radars.empty()) return;
   double brg = 0, dist = 0;
-  if (!PolarFrom(radars.front(), lat, lon, &brg, &dist)) return;
-  const int radar = RadarForTarget(canvas, dist);
-  if (radar < 0 || !PolarFrom(radar, lat, lon, &brg, &dist)) return;
-  // A radar in standby tracks nothing, and the server would only refuse.
-  RadarControls* c = m_client->ControlsAt(radar);
-  const ControlValue pw = c ? c->Value("power") : ControlValue();
-  if (pw.has_value && pw.value < 2.0) {
-    Log(1, wxString::Format("Acquire target: radar %d is not transmitting",
-                            radar));
+  const int radar = RadarForTarget(canvas, lat, lon, &brg, &dist);
+  if (radar < 0) {
+    // A radar in standby tracks nothing, and the server would only refuse.
+    Log(1, "Acquire target: no transmitting radar on this chart");
     return;
   }
   Log(2, wxString::Format("Acquire target on radar %d at %.1f deg, %.0f m",

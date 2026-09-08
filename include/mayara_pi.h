@@ -394,9 +394,14 @@ class mayara_pi : public opencpn_plugin_121 {
   // position for the radar.
   bool PolarFrom(int radar, double lat, double lon, double* brg_deg,
                  double* dist_m) const;
-  // The canvas's overlay radar to acquire a target at `dist_m` on: the
-  // shortest-ranged one that reaches it, else the longest.
-  int RadarForTarget(int canvas, double dist_m) const;
+  // Power reported as transmitting, or not reported at all (then the server
+  // gets to say). Standby is the one state known to track nothing.
+  bool RadarTransmitting(int radar) const;
+  // The canvas's transmitting overlay radar to acquire a target at a point
+  // on, with the point as polar from that radar: the shortest-ranged one
+  // that reaches it, else the longest. -1 when none is transmitting.
+  int RadarForTarget(int canvas, double lat, double lon, double* brg_deg,
+                     double* dist_m) const;
   void AcquireTargetAtRightClick(int canvas);
   void DeleteTargetAtRightClick(int canvas);
   void DeleteAllTargets(int canvas);

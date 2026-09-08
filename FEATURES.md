@@ -48,8 +48,12 @@ decides what belongs here.
   without it.
 - Optional, and off by default because they write to the hardware:
   **chart scale sets range** (the chart's zoom drives the radar) and
-  **nest second radar at 1/4**.
+  **nest second radar at 1/4** — though picking "All radars" for a canvas
+  turns nesting on, since that is the ask for it.
 - Choosing a radar to overlay takes it out of standby.
+- **The chart pointer shows on every PPI** as a cyan cross at its range and
+  bearing, with the readout chip; a **click on the chart leaves a marker** on
+  every picture until the next click. Not yet checked against a live radar.
 
 ## Radar control
 
@@ -66,7 +70,10 @@ decides what belongs here.
 ## Targets and zones
 
 - **ARPA targets** tracked by the server, drawn with vector, CPA/TCPA and
-  danger state. Click to acquire, click to cancel.
+  danger state. Click to acquire, click to cancel. Also from the chart's
+  context menu at the right-clicked spot: acquire on the transmitting overlay
+  radar that sees it best, delete the nearest, delete all. Not yet checked
+  against a live radar.
 - **AIS** targets as a layer on the picture.
 - **Guard zones**, drawn as the mayara GUI draws them, editable by dragging
   handles on the picture or by typing the numbers, and **alarms** raised as

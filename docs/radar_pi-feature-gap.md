@@ -35,8 +35,12 @@ sections below are the open work.
 
 ## Chart cursor
 
-radar_pi does three things with OpenCPN's cursor callback that the table above
-glossed over as "cursor readout", and all three were missing until 2026-09-08:
+radar_pi does three things with OpenCPN's cursor callback and mouse hook that
+the table above glossed over as "cursor readout", and all three were missing
+until 2026-09-08. Built and checked against the host, not yet against a live
+radar: the acquire and delete requests below are the same client calls the
+PPI's own double-click makes, but nobody has yet watched a target appear from
+a chart click.
 
 - **Chart pointer on the PPI** — done. Every picture draws the chart pointer
   as a cyan cross at its range and bearing from that radar, with the same
@@ -47,16 +51,19 @@ glossed over as "cursor readout", and all three were missing until 2026-09-08:
 - **Chart click marker** — done. A left click on the chart leaves a marker on
   every picture, in the picture's text colour, until the next click. radar_pi
   does the same with its white "mouse" cursor.
-- **ARPA from the chart** — done. "Acquire Mayara radar target", "Delete
-  Mayara radar target" and "Delete all Mayara radar targets" on the canvas
-  context menu act at the right-clicked spot, on the radars that canvas
-  overlays. Acquire goes to the shortest-ranged overlay radar that reaches
-  the point (the nested inner one sees it better), else the longest; a radar
-  in standby is refused with a log line rather than a request the server would
-  reject. Delete drops the target nearest the click within the same 12 px
-  reach the PPI's own double-click uses, across all the canvas's radars. The
-  entries are hidden, not greyed, whenever they could do nothing: no radar on
-  that canvas, no pointer position yet, no targets.
+- **ARPA from the chart** — done. "Acquire Mayara radar target" and "Delete
+  Mayara radar target" on the canvas context menu act at the right-clicked
+  spot, on the radars that canvas overlays; "Delete all Mayara radar targets"
+  drops every target those radars hold, wherever the click was. Acquire goes
+  to the shortest-ranged *transmitting* overlay radar that reaches the point
+  (the nested inner one sees it better), else the longest transmitting one;
+  a radar in standby tracks nothing, so it is never picked and never woken
+  for this. Each candidate measures the point from its own position, since
+  without an OpenCPN fix the radars run on what their own spokes say. Delete
+  drops the target nearest the click within the same 12 px reach the PPI's
+  own double-click uses, across all the canvas's radars. The entries are
+  hidden, not greyed, whenever they could do nothing: no transmitting radar
+  on that canvas, no pointer position yet, no targets.
 
 The plugin declared `WANTS_CURSOR_LATLON` from the first scaffold without ever
 overriding the callback; it now also declares `WANTS_MOUSE_EVENTS` for the

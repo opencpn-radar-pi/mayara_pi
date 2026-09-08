@@ -246,7 +246,10 @@ class RadarDisplayPanel : public wxPanel {
   void DrawCursorChip(wxDC& dc, const PpiGeometry& g, double brg, double dist,
                       const wxColour& col);
   // The chart pointer echoed onto this picture, plus the chart click marker.
-  void DrawChartCursor(wxDC& dc, const PpiGeometry& g, double geo);
+  // `own_chip`: the picture's own pointer readout is showing, and keeps the
+  // chip.
+  void DrawChartCursor(wxDC& dc, const PpiGeometry& g, double geo,
+                       bool own_chip);
   // Drag handles for the zone being edited; mirrors the mayara GUI.
   void DrawZoneHandles(wxDC& dc, const PpiGeometry& g, double geo,
                        const ZoneEdit& z);
