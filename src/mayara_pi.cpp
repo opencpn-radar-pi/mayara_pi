@@ -3075,6 +3075,15 @@ void mayara_pi::ShowOverlayMenu(int canvas) {
       if (got == m_mi_ov_radar[i]) now = i;
   }
   m_overlay_sel[canvas] = now;
+  // Nesting only makes sense with both on one canvas, and picking "All" is
+  // the ask for it: turn it on here rather than leave the operator to find
+  // the preference by hand. Turning it back off stays theirs, as does the
+  // preference when a single radar is picked instead.
+  if (now == kOverlayAll && !m_prefs.nest_range) {
+    m_prefs.nest_range = true;
+    for (MayaraPpiWindow* w : m_windows)
+      if (w) w->ApplyPrefs();
+  }
   // The radar just put on this canvas has never had Range Auto act on it --
   // forget what the previous one last asked for, or a coincidentally equal
   // value would wrongly look like "already done".

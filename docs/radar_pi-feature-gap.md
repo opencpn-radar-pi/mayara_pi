@@ -74,9 +74,11 @@ fixed server-side once the two endpoints were compared.
   overlays (None / each radar by name / All), so two charts can carry one radar
   each, the same one, or both nested. The View toggle still acts on every
   canvas, since a panel button has no canvas of its own.
-- **Nest the second radar** — done, off by default. With a canvas set to
-  "All", the second radar is held at the settable range nearest a quarter of
-  the first's, so the inner picture stays worth looking at. Each radar is drawn
+- **Nest the second radar** — done. Off by default, but picking "All" for a
+  canvas turns it on, since that is the ask for it; switching it off again is
+  the operator's call. With a canvas set to "All", the second radar is held at
+  the settable range nearest a quarter of the first's, so the inner picture
+  stays worth looking at. Each radar is drawn
   as an annulus from the next-shorter radar's range out to its own, so the
   shorter radar owns the inner circle outright rather than blending with the
   longer one there.
