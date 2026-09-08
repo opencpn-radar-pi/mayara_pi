@@ -1579,8 +1579,21 @@ void mayara_pi::ShowRadarMenu(int canvas) {
   if (!cw) cw = GetOCPNCanvasWindow();
   if (!cw) return;
 
-  auto* p = new ControlsPanel(cw, m_client.get(), m_client->ActiveIndex(),
-                              _("Radar"));
+  // The menu is for the radar this canvas overlays. With both nested, the
+  // inner one is held at a quarter of the outer's range by SyncAutoRange, so
+  // the outer (longest range) is the one the operator is actually driving.
+  // Menu order is the outer first, the same contract SyncAutoRange uses;
+  // spoke range decides only once every overlay radar has reported one,
+  // since OverlayItems leaves out those that have not and a lone inner
+  // radar with spokes would otherwise pass for the outer.
+  int radar = m_client->ActiveIndex();
+  const std::vector<int> radars = OverlayRadars(canvas);
+  if (!radars.empty()) {
+    radar = radars.front();
+    const std::vector<OverlayItem> items = OverlayItems(canvas);
+    if (items.size() == radars.size()) radar = items.front().idx;
+  }
+  auto* p = new ControlsPanel(cw, m_client.get(), radar, _("Radar"));
   m_chart_menu = p;
   m_chart_menu_canvas = canvas;
   // Where this canvas's menu was last left, if anywhere -- otherwise the
@@ -3063,6 +3076,15 @@ void mayara_pi::ShowOverlayMenu(int canvas) {
       if (got == m_mi_ov_radar[i]) now = i;
   }
   m_overlay_sel[canvas] = now;
+  // Nesting only makes sense with both on one canvas, and picking "All" is
+  // the ask for it: turn it on here rather than leave the operator to find
+  // the preference by hand. Turning it back off stays theirs, as does the
+  // preference when a single radar is picked instead.
+  if (now == kOverlayAll && !m_prefs.nest_range) {
+    m_prefs.nest_range = true;
+    for (MayaraPpiWindow* w : m_windows)
+      if (w) w->ApplyPrefs();
+  }
   // The radar just put on this canvas has never had Range Auto act on it --
   // forget what the previous one last asked for, or a coincidentally equal
   // value would wrongly look like "already done".
