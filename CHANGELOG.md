@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GTK Controls-panel corruption, pinned title row, close-button race (#93) ([PR #93](https://github.com/opencpn-radar-pi/mayara_pi/pull/93))
 - **release:** beta tags got an empty GitHub Release body (#99) ([PR #99](https://github.com/opencpn-radar-pi/mayara_pi/pull/99))
 - **release:** cliff.toml's skip_tags silently deleted beta commits (#101) ([PR #101](https://github.com/opencpn-radar-pi/mayara_pi/pull/101))
+- **client:** open a radar's spoke stream only while its picture is shown (#105) ([PR #105](https://github.com/opencpn-radar-pi/mayara_pi/pull/105))
 
 ## [0.1.1] - 2026-08-29
 
