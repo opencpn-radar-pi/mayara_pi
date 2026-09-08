@@ -1582,15 +1582,16 @@ void mayara_pi::ShowRadarMenu(int canvas) {
   // The menu is for the radar this canvas overlays. With both nested, the
   // inner one is held at a quarter of the outer's range by SyncAutoRange, so
   // the outer (longest range) is the one the operator is actually driving.
-  // OverlayItems is longest-first but needs a spoke range; before any spoke
-  // has arrived fall back to the menu order, where the first is the outer.
+  // Menu order is the outer first, the same contract SyncAutoRange uses;
+  // spoke range decides only once every overlay radar has reported one,
+  // since OverlayItems leaves out those that have not and a lone inner
+  // radar with spokes would otherwise pass for the outer.
   int radar = m_client->ActiveIndex();
-  const std::vector<OverlayItem> items = OverlayItems(canvas);
-  if (!items.empty()) {
-    radar = items.front().idx;
-  } else {
-    const std::vector<int> radars = OverlayRadars(canvas);
-    if (!radars.empty()) radar = radars.front();
+  const std::vector<int> radars = OverlayRadars(canvas);
+  if (!radars.empty()) {
+    radar = radars.front();
+    const std::vector<OverlayItem> items = OverlayItems(canvas);
+    if (items.size() == radars.size()) radar = items.front().idx;
   }
   auto* p = new ControlsPanel(cw, m_client.get(), radar, _("Radar"));
   m_chart_menu = p;
