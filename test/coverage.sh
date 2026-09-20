@@ -69,6 +69,10 @@ case "$COMPILER_ID" in
     fi
     ;;
   GNU)
+    # gcov *accumulates* into existing .gcda files rather than replacing them,
+    # so a second run would still count the lines the first one hit -- a test
+    # deleted since would go on showing as covered.
+    find "$BUILD_DIR" -name '*.gcda' -delete
     "$BIN" --force-colors=false
     if ! command -v gcovr >/dev/null 2>&1; then
       echo "coverage: gcovr not found (pip install gcovr)" >&2

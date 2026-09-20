@@ -14,16 +14,19 @@ make coverage-html  # ...with an HTML report
 make clean-test
 ```
 
-There is nothing to install first. `test/` is its own CMake project, not a
-subdirectory of the plugin's `CMakeLists.txt` (which is OpenCPN's FE2 template
-and needs wx and the plugin API before it will even configure), so:
+A C++17 compiler, CMake 3.15 and Make are the whole list — no wxWidgets, no
+OpenCPN, no submodules. (`make coverage` additionally wants `llvm-cov` and
+`llvm-profdata` under Clang, or `gcovr` under GCC.) `test/` is its own CMake
+project, not a subdirectory of the plugin's `CMakeLists.txt` (which is
+OpenCPN's FE2 template and needs wx and the plugin API before it will even
+configure), so:
 
 ```
 cmake -B build-test -S test && cmake --build build-test
 ctest --test-dir build-test --output-on-failure
 ```
 
-works with nothing but a C++17 compiler. `ctest -R RadarState` runs one suite;
+works on its own, without the Makefile. `ctest -R RadarState` runs one suite;
 the test binary takes doctest's own flags too, e.g.
 `./build-test/mayara_tests --test-case='*clockwise*' -s`.
 
