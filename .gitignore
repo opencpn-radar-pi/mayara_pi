@@ -2,6 +2,11 @@ build/
 .DS_Store
 compile_commands.json
 .drafts/
-build-test/
-build-test-asan/
-build-coverage/
+
+# Out-of-tree build directories: build-test/, build-test-asan/,
+# build-coverage/, and whatever a cross build gets called (build-fu24/ for
+# the Ubuntu arm64 VM). The trailing slash keeps this to directories, so a
+# file that merely starts with "build-" is still seen.
+build-*/
+# ...except build-deps/, which is checked in.
+!build-deps/
