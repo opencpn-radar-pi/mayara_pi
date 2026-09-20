@@ -12,6 +12,8 @@
 #include <doctest/doctest.h>
 
 #include <clocale>
+#include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -60,8 +62,26 @@ TEST_CASE("JsonNum writes a full stop whatever the process locale says") {
   // the field. OpenCPN adopts the user's locale, so this is the common case in
   // half of Europe, not an exotic one.
   const std::string locale = SetCommaLocale();
-  if (locale.empty()) {
-    MESSAGE("no comma-decimal locale installed; skipping the locale check");
+
+  // Selecting the locale is not enough to know the check means anything: if
+  // this build's libc ignores it, %g still writes a full stop and the
+  // assertions below would pass on a JsonNum that does nothing at all. Ask
+  // printf directly whether the decimal separator really moved.
+  char raw[32];
+  std::snprintf(raw, sizeof(raw), "%g", 1.5);
+  const bool comma_decimal = std::string(raw).find(',') != std::string::npos;
+
+  if (locale.empty() || !comma_decimal) {
+    std::setlocale(LC_NUMERIC, "C");
+    // On CI the workflow installs de_DE.UTF-8 precisely so this runs. If it
+    // is missing there, the guard silently stopped being tested -- which is
+    // the failure worth hearing about, so fail rather than skip.
+    if (std::getenv("CI") != nullptr) {
+      FAIL("no comma-decimal locale on CI: JsonNum's locale guard went "
+           "untested (locale='" << locale << "', %g wrote '" << raw << "')");
+    }
+    MESSAGE("no comma-decimal locale on this host; JsonNum's locale guard is "
+            "not exercised here");
   } else {
     CAPTURE(locale);
     CHECK(JsonNum(1.5) == "1.5");
