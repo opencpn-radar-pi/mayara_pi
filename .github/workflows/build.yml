@@ -30,6 +30,46 @@ env:
   CMAKE_BUILD_PARALLEL_LEVEL: '3'
 
 jobs:
+  # ----------------------------------------------------------- Unit tests ----
+  # The wx-free core (src/RadarMessage, RadarState, RadarPalette,
+  # RadarControls) under test/. No wxWidgets, no OpenCPN plugin API, no
+  # submodules -- just a compiler and CMake, so this finishes long before any
+  # of the packaging jobs below and says which part broke.
+  unit-tests:
+    runs-on: ubuntu-latest
+    # This job builds and runs code from the pull request, and needs no token
+    # to do it: read-only, and don't leave credentials in .git/config for the
+    # PR's own CMake and test binary to find. (The packaging jobs below check
+    # out the same way; build.yml uses no GITHUB_TOKEN at all, so a workflow-
+    # level permissions block would suit them too -- left alone here because
+    # that is not this change's business.)
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
+      - name: Install a comma-decimal locale
+        # So the JsonNum locale test actually runs instead of skipping: the
+        # bug it guards only shows under a locale like de_DE, and GitHub's
+        # runners ship with C/POSIX and en_US only.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y locales
+          sudo locale-gen de_DE.UTF-8
+      - name: Build and run the unit tests
+        run: |
+          cmake -B build-test -S test -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build-test -j3
+          ctest --test-dir build-test --output-on-failure
+      - name: Re-run under AddressSanitizer and UBSan
+        # The spoke decoder parses straight off a socket; its bounds checks
+        # are only really proven with a sanitizer watching.
+        run: |
+          cmake -B build-asan -S test -DCMAKE_BUILD_TYPE=Debug \
+                -DMAYARA_SANITIZE=ON
+          cmake --build build-asan -j3
+          ctest --test-dir build-asan --output-on-failure
+
   # --------------------------------------------------------------- macOS ----
   macos-universal:
     runs-on: macos-14

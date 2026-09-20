@@ -37,6 +37,24 @@ feat(diagnostics): show which heading source is currently active
 ci: install redhat-lsb-core so the fedora tarball name gets a version
 ```
 
+## Tests
+
+The wx-free core has unit tests under `test/`; see `test/README.md`.
+
+```
+make test       # build + run them
+make test-asan  # the same, under AddressSanitizer + UBSan
+make coverage   # line coverage for the tested sources
+```
+
+They need a C++17 compiler, CMake 3.15 and Make — no wxWidgets and no OpenCPN.
+`make coverage` also wants `llvm-cov`/`llvm-profdata` (Clang) or `gcovr` (GCC).
+
+They also run in CI on every pull request, as the `unit-tests` job, before
+any of the packaging builds. A change to `src/RadarMessage.cpp`,
+`src/RadarState.cpp`, `src/RadarPalette.cpp` or `src/RadarControls.cpp`
+should come with a test.
+
 ## Releasing
 
 `./release.sh` manages the plugin version (`VERSION_MAJOR`/`VERSION_MINOR`/
