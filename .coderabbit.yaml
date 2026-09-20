@@ -16,11 +16,16 @@ reviews:
 
   # `opencpn-libs/` is vendored verbatim from OpenCPN (the plugin API headers
   # and shared cmake); it is upstream's code and must not be reviewed as ours.
-  # `build/` is CMake output. Binary assets and translation catalogues are not
-  # reviewable as code.
+  # `third_party/` is the same story for IXWebSocket, nlohmann/json, mdns and
+  # doctest. `build/` is CMake output. Binary assets and translation
+  # catalogues are not reviewable as code.
   path_filters:
     - '!opencpn-libs/**'
+    - '!third_party/**'
     - '!build/**'
+    - '!build-test/**'
+    - '!build-test-asan/**'
+    - '!build-coverage/**'
     - '!**/*.png'
     - '!**/*.ico'
     - '!**/*.icns'

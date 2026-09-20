@@ -2,3 +2,6 @@ build/
 .DS_Store
 compile_commands.json
 .drafts/
+build-test/
+build-test-asan/
+build-coverage/

@@ -251,6 +251,22 @@ which is mayara-server's side of the line. **Radar description text** is already
 there — name, model, firmware and serial are in the Info section, with the
 server URL.
 
+### Automated tests
+
+Not a radar_pi gap — radar_pi has none either — but the same problem the
+Diagnostics page addresses from the other end. The wx-free core (the spoke
+decoder, the polar raster and CPU renderer, the palettes, the control schema)
+has unit tests under `test/`, run by `make test` and by CI on every pull
+request; see `test/README.md`. They pin the things a user cannot report
+usefully: that spoke 0 points at the bow and angles run clockwise, that an
+echo's distance follows the cell count of the spoke it arrived in, and that a
+truncated frame off the socket is refused rather than read past.
+
+Still untested from this side: everything that needs wx or a running OpenCPN,
+and agreement with mayara-server's actual wire format. The latter is better
+checked end to end against `mayara-server --replay` over one of its recorded
+pcaps than guessed at here.
+
 ## PPI orientation
 
 Already per radar before this work (`m_orient`, keyed by radar id): Head up,
