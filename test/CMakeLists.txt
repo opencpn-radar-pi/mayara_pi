@@ -35,6 +35,7 @@ set(MAYARA_UNIT_SRCS
     ${MAYARA_ROOT}/src/RadarState.cpp
     ${MAYARA_ROOT}/src/RadarPalette.cpp
     ${MAYARA_ROOT}/src/RadarControls.cpp
+    ${MAYARA_ROOT}/src/MayaraProtocol.cpp
 )
 
 set(MAYARA_TEST_SRCS
@@ -43,6 +44,7 @@ set(MAYARA_TEST_SRCS
     test_radar_state.cpp
     test_radar_palette.cpp
     test_radar_controls.cpp
+    test_mayara_protocol.cpp
 )
 
 add_executable(mayara_tests ${MAYARA_TEST_SRCS} ${MAYARA_UNIT_SRCS})
@@ -97,7 +99,7 @@ enable_testing()
 
 # One ctest entry per doctest suite, so `ctest -R RadarState` works and a
 # failure names the area rather than just "the tests".
-foreach(suite RadarMessage RadarState RadarPalette RadarControls)
+foreach(suite RadarMessage RadarState RadarPalette RadarControls MayaraProtocol)
   add_test(NAME ${suite} COMMAND mayara_tests --test-suite=${suite}
                                  --no-intro=true --force-colors=false)
 endforeach()

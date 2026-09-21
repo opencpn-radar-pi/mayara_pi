@@ -255,17 +255,29 @@ server URL.
 
 Not a radar_pi gap — radar_pi has none either — but the same problem the
 Diagnostics page addresses from the other end. The wx-free core (the spoke
-decoder, the polar raster and CPU renderer, the palettes, the control schema)
-has unit tests under `test/`, run by `make test` and by CI on every pull
-request; see `test/README.md`. They pin the things a user cannot report
-usefully: that spoke 0 points at the bow and angles run clockwise, that an
-echo's distance follows the cell count of the spoke it arrived in, and that a
-truncated frame off the socket is refused rather than read past.
+decoder, the polar raster and CPU renderer, the palettes, the control schema
+and the wire protocol) has unit tests under `test/`, run by `make test` and by
+CI on every pull request; see `test/README.md`. They pin the things a user
+cannot report usefully: that spoke 0 points at the bow and angles run
+clockwise, that an echo's distance follows the cell count of the spoke it
+arrived in, that a truncated frame off the socket is refused rather than read
+past, and that a control or target arrives from the server meaning what the
+plugin thinks it means.
+
+The last of those needs stating carefully. The fixtures were written by
+reading mayara-server's own serialisation — `ControlDefinition` and
+`AutomaticValue` in its `src/lib/radar/settings.rs`, `ArpaTargetApi` in
+`src/lib/radar/target/mod.rs` — but they are copies of that shape, checked in
+here. Nothing reads the server at test time, so a field renamed over there
+goes on passing here. What the fixtures pin is the contract this plugin
+believes in: they catch the parser drifting away from it, not the server
+drifting away from the parser. Catching that needs the replay test below.
 
 Still untested from this side: everything that needs wx or a running OpenCPN,
-and agreement with mayara-server's actual wire format. The latter is better
-checked end to end against `mayara-server --replay` over one of its recorded
-pcaps than guessed at here.
+and the connection itself — sockets, reconnection, discovery. The latter wants
+an end-to-end test against `mayara-server --replay` over one of its recorded
+pcaps, which would give a deterministic radar to run a headless client
+against.
 
 ## PPI orientation
 

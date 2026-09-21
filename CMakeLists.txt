@@ -169,6 +169,7 @@ set(SRCS
     src/mayara_pi.cpp
     src/PpiWindow.cpp
     src/MayaraClient.cpp
+    src/MayaraProtocol.cpp
     src/RadarPalette.cpp
     src/RadarState.cpp
     src/RadarMessage.cpp
@@ -185,6 +186,7 @@ set(HDRS
     include/mayara_pi.h
     include/PpiWindow.h
     include/MayaraClient.h
+    include/MayaraProtocol.h
     include/RadarState.h
     include/RadarMessage.h
     include/MayaraDiscovery.h

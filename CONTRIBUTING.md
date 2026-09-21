@@ -52,8 +52,8 @@ They need a C++17 compiler, CMake 3.15 and Make — no wxWidgets and no OpenCPN.
 
 They also run in CI on every pull request, as the `unit-tests` job, before
 any of the packaging builds. A change to `src/RadarMessage.cpp`,
-`src/RadarState.cpp`, `src/RadarPalette.cpp` or `src/RadarControls.cpp`
-should come with a test.
+`src/RadarState.cpp`, `src/RadarPalette.cpp`, `src/RadarControls.cpp` or
+`src/MayaraProtocol.cpp` should come with a test.
 
 ## Releasing
 

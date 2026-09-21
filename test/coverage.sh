@@ -31,6 +31,7 @@ SOURCES=(
   "$ROOT/src/RadarState.cpp"
   "$ROOT/src/RadarPalette.cpp"
   "$ROOT/src/RadarControls.cpp"
+  "$ROOT/src/MayaraProtocol.cpp"
 )
 
 # Written by test/CMakeLists.txt when MAYARA_COVERAGE is on.
