@@ -2,9 +2,10 @@
 
 Tests for the part of mayara_pi that has no wxWidgets and no OpenCPN plugin
 API in it: the spoke decoder, the polar raster and CPU renderer, the palettes,
-and the control schema. That is deliberate — those four files are the ones
-where a mistake is *silent*. A broken widget is visible the moment you open
-the panel; a spoke drawn at the wrong distance just looks like a radar echo.
+the control schema, and the wire protocol. That is deliberate — those are the
+files where a mistake is *silent*. A broken widget is visible the moment you
+open the panel; a spoke drawn at the wrong distance just looks like a radar
+echo, and a misparsed control just looks like a radar that hasn't got one.
 
 ```
 make test           # build + run (ctest)
@@ -38,6 +39,7 @@ the test binary takes doctest's own flags too, e.g.
 | `test_radar_state.cpp` | `src/RadarState.cpp` — raster, disc, PPI and overlay |
 | `test_radar_palette.cpp` | `src/RadarPalette.cpp` — built-ins, config round trip |
 | `test_radar_controls.cpp` | `src/RadarControls.cpp` + `JsonNum` |
+| `test_mayara_protocol.cpp` | `src/MayaraProtocol.cpp` — server JSON in, plugin structs out |
 | `proto_builder.h` | A proto3 *encoder*, so the decoder has something to read |
 
 `proto_builder.h` is written from the wire-format spec rather than by reusing
@@ -67,9 +69,12 @@ Two things the existing tests lean on, both worth copying:
 ## Where this does not reach
 
 `mayara_pi.cpp`, the panels and the windows need wx (and, for most of it, a
-running OpenCPN) and are not tested here. Neither is `MayaraClient.cpp`: its
-JSON parsing is pure, but it lives in anonymous namespaces that nothing can
-link against — lifting those into their own translation unit is the next step
-that would pay for itself. Protocol agreement with mayara-server is better
-checked end to end against `mayara-server --replay` over one of its recorded
-pcaps than guessed at from this side.
+running OpenCPN) and are not tested here.
+
+Nor is the rest of `MayaraClient.cpp` — what remains of it after
+`MayaraProtocol.cpp` was lifted out is sockets, threads and reconnection
+logic, which needs a server to talk to rather than a table of inputs. That is
+the next step: mayara-server can replay a recorded pcap
+(`mayara-server --replay testdata/pcap/navico-halo24.pcap.gz`), which makes a
+deterministic radar to run a headless client against, and it is the only way
+to catch the two repositories drifting apart on the wire.
