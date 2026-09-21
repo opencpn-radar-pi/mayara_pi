@@ -25,7 +25,6 @@
 
 using json = nlohmann::json;
 
-// The wire-protocol helpers this file used to define itself.
 using namespace MayaraProtocol;
 
 Radar::Radar() = default;

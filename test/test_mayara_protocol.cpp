@@ -14,7 +14,7 @@
  *****************************************************************************/
 #include <doctest/doctest.h>
 
-#include <cmath>
+#include <cstdio>
 #include <string>
 
 #include <nlohmann/json.hpp>
@@ -23,6 +23,12 @@
 
 using nlohmann::json;
 using namespace MayaraProtocol;
+
+namespace {
+// Not the POSIX macro: it is absent from standard C++ and needs a define
+// before <cmath> on MSVC. test_radar_state.cpp carries the same constant.
+constexpr double kPi = 3.14159265358979323846;
+}  // namespace
 
 TEST_SUITE("MayaraProtocol") {
 
@@ -357,7 +363,7 @@ TEST_CASE("a negative TCPA is a CPA already passed, not a bad number") {
 TEST_CASE("bearings stay within a circle's worth of degrees") {
   // Signal K bearings are [0, 2pi); nothing should come out above 360.
   for (int i = 0; i < 36; ++i) {
-    const double rad = i * 2.0 * M_PI / 36.0;
+    const double rad = i * 2.0 * kPi / 36.0;
     json t = json::parse(R"({"status":"tracking","acquisition":"auto"})");
     t["position"] = {{"bearing", rad}, {"distance", 500}};
     const double deg = ParseTarget(1, t).bearing_deg;
