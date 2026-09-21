@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **changelog:** backfill 0.1.4-to-present, lost to the commit filter (#91) ([PR #91](https://github.com/opencpn-radar-pi/mayara_pi/pull/91))
+- **client:** lift the wire protocol out of MayaraClient and test it (#113) ([PR #113](https://github.com/opencpn-radar-pi/mayara_pi/pull/113))
 
 ### Fixed
 
