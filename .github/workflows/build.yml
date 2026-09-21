@@ -16,6 +16,23 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Nothing in this workflow writes with GITHUB_TOKEN. It uploads to Cloudsmith
+# with an API key, and publish-catalog pushes to opencpn-radar-pi/plugins from
+# a throwaway clone using RELEASE_PAT -- neither goes through the token
+# actions/checkout leaves in .git/config. Every job here checks out and then
+# runs build scripts from the branch under test, so read-only is all any of
+# them needs, and a read-only token cannot be made to write whatever gets hold
+# of it. (release.yml, changelog.yml and pr-title.yml do use GITHUB_TOKEN and
+# are separate files, unaffected by this.)
+#
+# persist-credentials:false is set only on unit-tests, which touches git no
+# further. The packaging jobs run `git submodule update --init` from the FE2
+# ci/ scripts after checkout; the submodules are public so it would very
+# likely survive, but "very likely" is not worth six broken release builds for
+# a token that is already read-only.
+permissions:
+  contents: read
+
 env:
   # Set these as repository secrets to enable Cloudsmith publishing. Publishing
   # is skipped for pull requests: those builds are unreviewed, and upstream's
@@ -37,14 +54,6 @@ jobs:
   # of the packaging jobs below and says which part broke.
   unit-tests:
     runs-on: ubuntu-latest
-    # This job builds and runs code from the pull request, and needs no token
-    # to do it: read-only, and don't leave credentials in .git/config for the
-    # PR's own CMake and test binary to find. (The packaging jobs below check
-    # out the same way; build.yml uses no GITHUB_TOKEN at all, so a workflow-
-    # level permissions block would suit them too -- left alone here because
-    # that is not this change's business.)
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v7
         with: { persist-credentials: false }
