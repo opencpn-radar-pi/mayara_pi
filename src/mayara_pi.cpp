@@ -3270,8 +3270,12 @@ void mayara_pi::RebuildWindows() {
       // off by default for a long time (see m_ppi_stay_on_top). This style
       // ties it to the specific parent it was created with; a frame's style
       // cannot be changed later, so toggling it rebuilds the window.
-      const long style = wxDEFAULT_FRAME_STYLE |
-                        (m_ppi_stay_on_top ? wxFRAME_FLOAT_ON_PARENT : 0);
+      // No minimize box: this is a transient of the OpenCPN window, and a
+      // window manager that groups transients with their parent (GNOME's
+      // mutter does) iconifies all of OpenCPN when it is minimized. Seen on
+      // Debian trixie with the PPI unticked, leaving just the controls.
+      const long style = (wxDEFAULT_FRAME_STYLE & ~wxMINIMIZE_BOX) |
+                         (m_ppi_stay_on_top ? wxFRAME_FLOAT_ON_PARENT : 0);
       const wxSize initial = m_parent_window->FromDIP(wxSize(880, 560));
       auto* frame = new wxFrame(m_parent_window, wxID_ANY, wxEmptyString,
                                 wxDefaultPosition, initial, style);
