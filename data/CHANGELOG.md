@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **release:** add release.sh --beta, route channels by tag not branch (#97) ([PR #97](https://github.com/opencpn-radar-pi/mayara_pi/pull/97))
 - **server:** "?" button shows mayara-server --help beside Extra arguments (#103) ([PR #103](https://github.com/opencpn-radar-pi/mayara_pi/pull/103))
 - **client:** chart cursor on the PPI, chart click marker, ARPA from the chart menu (#109) ([PR #109](https://github.com/opencpn-radar-pi/mayara_pi/pull/109))
+- **i18n:** translate the control schema text the server sends (#117) ([PR #117](https://github.com/opencpn-radar-pi/mayara_pi/pull/117))
 
 ### Changed
 
