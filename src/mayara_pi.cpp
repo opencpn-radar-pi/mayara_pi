@@ -354,6 +354,9 @@ mayara_pi::~mayara_pi() = default;
 int mayara_pi::Init() {
   m_parent_window = GetOCPNCanvasWindow();
   m_aui = GetFrameAuiManager();  // may be null in some builds
+  // Before the first _(): our strings and the server's control text both come
+  // from this catalog (po/*.po, installed as opencpn-mayara_pi.mo).
+  AddLocaleCatalog(_T("opencpn-mayara_pi"));
   LoadConfig();
 
   m_tool_id = InsertPlugInTool(

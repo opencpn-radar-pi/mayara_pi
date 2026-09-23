@@ -21,6 +21,7 @@
 #include "MayaraClient.h"
 #include "RadarControls.h"
 #include "RadarState.h"
+#include "ServerText.h"
 #include "ocpn_plugin.h"
 
 enum { kRadarTimerId = wxID_HIGHEST + 10 };
@@ -30,11 +31,7 @@ namespace {
 wxString PowerLabel(RadarControls* controls, int value) {
   if (controls)
     for (const auto& d : controls->Schema())
-      if (d.id == "power") {
-        auto it = d.descriptions.find(value);
-        if (it != d.descriptions.end())
-          return wxString::FromUTF8(it->second.c_str());
-      }
+      if (d.id == "power") return ServerEnumLabel(d, value);
   return wxString::Format("%d", value);
 }
 

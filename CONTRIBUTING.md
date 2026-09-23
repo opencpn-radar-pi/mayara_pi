@@ -55,6 +55,31 @@ any of the packaging builds. A change to `src/RadarMessage.cpp`,
 `src/RadarState.cpp`, `src/RadarPalette.cpp`, `src/RadarControls.cpp` or
 `src/MayaraProtocol.cpp` should come with a test.
 
+## Translations
+
+Our own strings are marked with `_()` and collected by the `mayara-pot-update`
+target into `po/mayara_pi.pot`.
+
+The control panel also shows text the server sends: control names and enum
+labels ("Gain", "Harbor", "Off"). These are English literals in mayara-server,
+which publishes them as `docs/ui-strings.json`. `tools/gen-server-strings.py`
+turns that file into `po/server_strings.h` (never compiled, read only by
+xgettext), so these strings land in the same `.pot`. Enum labels carry the
+control id as msgctxt, so a language can word "Auto" differently per control;
+`include/ServerText.h` looks the text up at run time and shows the English when
+there is no translation.
+
+The server version is pinned in `po/server-strings.ref`. To pick up new or
+changed server text, bump that ref, then:
+
+```
+tools/gen-server-strings.py
+cmake --build build --target mayara-pot-update
+```
+
+CI fails the `unit-tests` job when `po/server_strings.h` does not match the
+pinned ref.
+
 ## Releasing
 
 `./release.sh` manages the plugin version (`VERSION_MAJOR`/`VERSION_MINOR`/

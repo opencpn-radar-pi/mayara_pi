@@ -12,6 +12,7 @@ src/RadarDisplayPanel.cpp
 src/ControlsPanel.cpp
 src/RadarControls.cpp
 src/ThemedControls.cpp
+src/ServerText.cpp
 include/mayara_pi.h
 include/PpiWindow.h
 include/MayaraClient.h
@@ -22,3 +23,5 @@ include/MayaraDiscovery.h
 include/MayaraServer.h
 include/RadarDisplayPanel.h
 include/ControlsPanel.h
+include/ServerText.h
+po/server_strings.h
