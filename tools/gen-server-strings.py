@@ -58,23 +58,23 @@ def main():
                     help="do not write; fail if the header is out of date")
     args = ap.parse_args()
 
-    ref = REF_FILE.read_text().strip()
+    ref = REF_FILE.read_text(encoding="utf-8").strip()
     if args.json:
-        data = json.loads(pathlib.Path(args.json).read_text())
+        data = json.loads(pathlib.Path(args.json).read_text(encoding="utf-8"))
     else:
         with urllib.request.urlopen(URL.format(ref=ref), timeout=30) as r:
             data = json.load(r)
 
     text = render(data, ref)
     if args.check:
-        current = OUT_FILE.read_text() if OUT_FILE.exists() else ""
+        current = OUT_FILE.read_text(encoding="utf-8") if OUT_FILE.exists() else ""
         if current != text:
             print(f"{OUT_FILE.relative_to(ROOT)} is out of date for "
                   f"mayara-server {ref}; run tools/gen-server-strings.py",
                   file=sys.stderr)
             return 1
         return 0
-    OUT_FILE.write_text(text)
+    OUT_FILE.write_text(text, encoding="utf-8", newline="\n")
     print(f"wrote {OUT_FILE.relative_to(ROOT)}")
     return 0
 
