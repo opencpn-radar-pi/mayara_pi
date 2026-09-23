@@ -60,8 +60,8 @@ any of the packaging builds. A change to `src/RadarMessage.cpp`,
 Our own strings are marked with `_()` and collected by the `mayara-pot-update`
 target into `po/mayara_pi.pot`.
 
-The control panel also shows text the server sends: control names and enum
-labels ("Gain", "Harbor", "Off"). These are English literals in mayara-server,
+The control panel also shows text the server sends: control names, their
+descriptions (as tooltips) and enum labels ("Gain", "Harbor", "Off"). These are English literals in mayara-server,
 which publishes them as `docs/ui-strings.json`. `tools/gen-server-strings.py`
 turns that file into `po/server_strings.h` (never compiled, read only by
 xgettext), so these strings land in the same `.pot`. Enum labels carry the

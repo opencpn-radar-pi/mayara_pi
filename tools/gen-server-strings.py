@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate po/server_strings.h from mayara-server's docs/ui-strings.json.
 
-The control names and enum labels in the radar schema are English literals in
+The control names, descriptions and enum labels in the radar schema are English literals in
 mayara-server. That repo publishes them as docs/ui-strings.json; this script
 turns the file into wxTRANSLATE markers so xgettext puts them in our .pot and
 ServerText.cpp can look them up at run time. The header is never compiled.
@@ -43,6 +43,10 @@ def render(data, ref):
     ]
     for name in sorted({c["name"] for c in data["controls"] if c["name"]}):
         lines.append(f"wxTRANSLATE({c_string(name)})")
+    lines += ["", "// Control descriptions, shown as tooltips."]
+    for desc in sorted({c["description"] for c in data["controls"]
+                        if c["description"]}):
+        lines.append(f"wxTRANSLATE({c_string(desc)})")
     lines += ["", "// Enum labels, in the context of the control they belong to."]
     for e in sorted(data["enums"], key=lambda e: e["control"]):
         for label in sorted(set(e["labels"])):

@@ -30,6 +30,10 @@ wxString ServerControlName(const ControlDef& def) {
   return Translate(def.name, std::string());
 }
 
+wxString ServerControlDescription(const ControlDef& def) {
+  return Translate(def.description, std::string());
+}
+
 wxString ServerEnumLabel(const ControlDef& def, int value) {
   auto it = def.descriptions.find(value);
   if (it == def.descriptions.end()) return wxString::Format("%d", value);

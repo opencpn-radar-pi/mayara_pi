@@ -268,6 +268,9 @@ class ControlsBody : public wxScrolledWindow {
                              const std::string& key,
                              std::function<void(wxSizer*)> fill);
   void AddControl(wxSizer* content, const ControlDef& def);
+  // Runs build, then gives the windows it made the control's description as
+  // their tooltip.
+  void Described(const ControlDef& def, const std::function<void()>& build);
   void AddServerRow(wxSizer* content);  // active server URL, in Info
   void FillVrmEblSection(wxSizer* content);  // the two local markers
   void FillViewSection(wxSizer* content);
@@ -631,10 +634,17 @@ void ControlsBody::Rebuild() {
   }
 
   // --- Quick controls: prominent, fixed placement ---
-  if (by_id.count("power")) AddEnum(root, *by_id["power"], /*buttons=*/true);
-  if (by_id.count("range")) AddRange(root, *by_id["range"], ranges);
+  if (by_id.count("power"))
+    Described(*by_id["power"], [&]() {
+      AddEnum(root, *by_id["power"], /*buttons=*/true);
+    });
+  if (by_id.count("range"))
+    Described(*by_id["range"],
+              [&]() { AddRange(root, *by_id["range"], ranges); });
   if (by_id.count("rangeUnits"))
-    AddEnum(root, *by_id["rangeUnits"], /*buttons=*/true);
+    Described(*by_id["rangeUnits"], [&]() {
+      AddEnum(root, *by_id["rangeUnits"], /*buttons=*/true);
+    });
   root->Add(new wxStaticLine(this), 0, wxEXPAND | wxALL, 4);
 
   const std::set<std::string> quick = {"power", "range", "rangeUnits"};
@@ -731,22 +741,38 @@ void ControlsBody::AddCollapsibleSection(wxSizer* root, const wxString& title,
 }
 
 void ControlsBody::AddControl(wxSizer* content, const ControlDef& d) {
-  if (d.isReadOnly)
-    AddReadonly(content, d);
-  else if (d.dataType == "number")
-    AddNumber(content, d);
-  else if (d.dataType == "enum")
-    AddEnum(content, d, /*buttons=*/false);
-  else if (d.dataType == "button")
-    AddButton(content, d);
-  else if (d.dataType == "string")
-    AddReadonly(content, d);
-  else if (d.dataType == "sector")
-    AddSector(content, d);
-  else if (d.dataType == "zone")
-    AddZone(content, d);
-  else
-    AddPlaceholder(content, d);  // rect: editor later
+  Described(d, [&]() {
+    if (d.isReadOnly)
+      AddReadonly(content, d);
+    else if (d.dataType == "number")
+      AddNumber(content, d);
+    else if (d.dataType == "enum")
+      AddEnum(content, d, /*buttons=*/false);
+    else if (d.dataType == "button")
+      AddButton(content, d);
+    else if (d.dataType == "string")
+      AddReadonly(content, d);
+    else if (d.dataType == "sector")
+      AddSector(content, d);
+    else if (d.dataType == "zone")
+      AddZone(content, d);
+    else
+      AddPlaceholder(content, d);  // rect: editor later
+  });
+}
+
+// The server's description of a control, as the tooltip of every window built
+// for it: the label, and whatever is actually operated, since that is where
+// the pointer rests. A window that already has a tooltip of its own keeps it.
+void ControlsBody::Described(const ControlDef& def,
+                             const std::function<void()>& build) {
+  const size_t before = GetChildren().size();
+  build();
+  const wxString tip = ServerControlDescription(def);
+  if (tip.empty()) return;
+  size_t i = 0;
+  for (wxWindow* w : GetChildren())
+    if (i++ >= before && !w->GetToolTip()) w->SetToolTip(tip);
 }
 
 void ControlsBody::FillViewSection(wxSizer* content) {

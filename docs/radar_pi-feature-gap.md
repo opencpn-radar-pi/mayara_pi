@@ -301,9 +301,9 @@ from the schema mayara-server sends, in English, so wrapping our own strings in
 
 Server text is now translated on the client: the server publishes its UI
 strings as `docs/ui-strings.json`, the plugin turns them into `.pot` entries and
-looks them up at run time (see CONTRIBUTING.md, Translations). Still open: no
-`.po` files exist yet for any language; the control descriptions are not shown
-anywhere, so they are not in the catalog; and error text in control values
+looks them up at run time (see CONTRIBUTING.md, Translations). Each control
+also shows the server's description of it as a tooltip. Still open: no
+`.po` files exist yet for any language, and error text in control values
 (`ControlValue.error`) is a free-form English sentence, which needs the server
 to send a code before it can be translated.
 
