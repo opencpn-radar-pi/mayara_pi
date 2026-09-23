@@ -1,8 +1,8 @@
 /******************************************************************************
  * mayara_pi - translating the text the server sends.
  *
- * The control schema arrives in English: control names, categories and enum
- * labels are string literals in mayara-server. We translate them here, on the
+ * The control schema arrives in English: control names, descriptions,
+ * categories and enum labels are string literals in mayara-server. We translate them here, on the
  * client, with the same gettext catalog as our own strings. The msgids come
  * from mayara-server's docs/ui-strings.json, turned into po/server_strings.h by
  * tools/gen-server-strings.py so xgettext picks them up.
@@ -24,6 +24,10 @@
 
 // A control's display name.
 wxString ServerControlName(const ControlDef& def);
+
+// A control's one-line description, for its tooltip. Empty when the server
+// sends none.
+wxString ServerControlDescription(const ControlDef& def);
 
 // The label for one value of an enum control, or the number itself when the
 // schema has no label for it. Looked up in the control's own context first, so

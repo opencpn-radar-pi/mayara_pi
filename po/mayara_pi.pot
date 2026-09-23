@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: mayara_pi 0.1.5.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-23 10:38+0900\n"
+"POT-Creation-Date: 2026-09-23 11:04+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -73,7 +73,7 @@ msgstr ""
 msgid "Device temperature"
 msgstr ""
 
-#: po/server_strings.h:21
+#: po/server_strings.h:21 po/server_strings.h:105
 msgid "Display timing"
 msgstr ""
 
@@ -133,7 +133,7 @@ msgstr ""
 msgid "Exclusion zone (4)"
 msgstr ""
 
-#: po/server_strings.h:36
+#: po/server_strings.h:36 po/server_strings.h:108
 msgid "FTC"
 msgstr ""
 
@@ -173,7 +173,7 @@ msgstr ""
 msgid "Magnetron current"
 msgstr ""
 
-#: po/server_strings.h:46
+#: po/server_strings.h:46 po/server_strings.h:138
 msgid "Main bang suppression"
 msgstr ""
 
@@ -233,7 +233,7 @@ msgstr ""
 msgid "Rain clutter"
 msgstr ""
 
-#: po/server_strings.h:61 src/ControlsPanel.cpp:1212
+#: po/server_strings.h:61 src/ControlsPanel.cpp:1238
 msgid "Range"
 msgstr ""
 
@@ -265,7 +265,7 @@ msgstr ""
 msgid "Sea clutter"
 msgstr ""
 
-#: po/server_strings.h:69
+#: po/server_strings.h:69 po/server_strings.h:152
 msgid "Sea clutter curve"
 msgstr ""
 
@@ -346,765 +346,1080 @@ msgid "Warmup time"
 msgstr ""
 
 #: po/server_strings.h:91
+msgid "Adjust the color curve relative to gain"
+msgstr ""
+
+#: po/server_strings.h:92
+msgid "Alignment of the antenna relative to the vessel's bow"
+msgstr ""
+
+#: po/server_strings.h:93
+msgid "Antenna offset forward of GPS position"
+msgstr ""
+
+#: po/server_strings.h:94
+msgid "Antenna offset starboard of GPS position"
+msgstr ""
+
+#: po/server_strings.h:95
+msgid "Antenna park position when entering standby"
+msgstr ""
+
+#: po/server_strings.h:96
+msgid ""
+"Anti-jamming filter reduces interference from other radars on the same "
+"frequency"
+msgstr ""
+
+#: po/server_strings.h:97
+msgid "Choice of radar mode tuning to certain conditions, or custom"
+msgstr ""
+
+#: po/server_strings.h:98
+msgid "Clear all ARPA targets"
+msgstr ""
+
+#: po/server_strings.h:99
+msgid "Clear target trails"
+msgstr ""
+
+#: po/server_strings.h:100
+msgid "Convert all Doppler targets to ARPA targets automatically"
+msgstr ""
+
+#: po/server_strings.h:101
+msgid "Convert only Doppler targets to target trails"
+msgstr ""
+
+#: po/server_strings.h:102
+msgid "Current transmit pulse width selected by the radar"
+msgstr ""
+
+#: po/server_strings.h:103
+msgid "DC supply voltage at the radar"
+msgstr ""
+
+#: po/server_strings.h:104
+msgid "Desired rotation speed of the radar antenna"
+msgstr ""
+
+#: po/server_strings.h:106
+msgid "Distance boundary between STC range bands"
+msgstr ""
+
+#: po/server_strings.h:107
+msgid "Experimental echo format request (NXT only: IMO or Tile)"
+msgstr ""
+
+#: po/server_strings.h:109
+msgid "Far-range STC suppression curve"
+msgstr ""
+
+#: po/server_strings.h:110
+msgid "Filters out noise"
+msgstr ""
+
+#: po/server_strings.h:111
+msgid "Fine adjustment of the radar receiver tuning"
+msgstr ""
+
+#: po/server_strings.h:112
+msgid "First exclusion zone (stationary only)"
+msgstr ""
+
+#: po/server_strings.h:113
+msgid "First guard zone for target detection"
+msgstr ""
+
+#: po/server_strings.h:114
+msgid "First no-transmit sector"
+msgstr ""
+
+#: po/server_strings.h:115
+msgid "First rectangular exclusion zone (stationary only)"
+msgstr ""
+
+#: po/server_strings.h:116
+msgid "For what type of targets Doppler is used"
+msgstr ""
+
+#: po/server_strings.h:117
+msgid "Fourth exclusion zone (stationary only)"
+msgstr ""
+
+#: po/server_strings.h:118
+msgid "Fourth no-transmit sector"
+msgstr ""
+
+#: po/server_strings.h:119
+msgid "Fourth rectangular exclusion zone (stationary only)"
+msgstr ""
+
+#: po/server_strings.h:120
+msgid "Height of the antenna above waterline"
+msgstr ""
+
+#: po/server_strings.h:121
+msgid "How long the radar has been operating over its lifetime"
+msgstr ""
+
+#: po/server_strings.h:122
+msgid "How long the radar has been transmitting over its lifetime"
+msgstr ""
+
+#: po/server_strings.h:123
+msgid "How long the radar still needs to warm up before transmitting"
+msgstr ""
+
+#: po/server_strings.h:124
+msgid "How long the radar transmits during timed idle"
+msgstr ""
+
+#: po/server_strings.h:125
+msgid "How long the spokes are that the radar transmitted last rotation"
+msgstr ""
+
+#: po/server_strings.h:126
+msgid "How many spokes the radar transmitted last rotation"
+msgstr ""
+
+#: po/server_strings.h:127
+msgid "How much local interference rejection is applied"
+msgstr ""
+
+#: po/server_strings.h:128
+msgid "How quickly the radar antenna rotates"
+msgstr ""
+
+#: po/server_strings.h:129
+msgid "How sensitive the radar is to returning echoes"
+msgstr ""
+
+#: po/server_strings.h:130
+msgid "How target trails behave"
+msgstr ""
+
+#: po/server_strings.h:131
+msgid "How to process spoke data for display"
+msgstr ""
+
+#: po/server_strings.h:132
+msgid "Increases target length for small targets"
+msgstr ""
+
+#: po/server_strings.h:133
+msgid "Internal temperature of the radar"
+msgstr ""
+
+#: po/server_strings.h:134
+msgid "Let the radar stand down when nobody has watched it for this long"
+msgstr ""
+
+#: po/server_strings.h:135
+msgid "Level of how much small targets are boosted"
+msgstr ""
+
+#: po/server_strings.h:136
+msgid "Level of optimization for bird targets"
+msgstr ""
+
+#: po/server_strings.h:137
+msgid "Level of side lobe suppression"
+msgstr ""
+
+#: po/server_strings.h:139
+msgid "Makes separation between targets more prominent"
+msgstr ""
+
+#: po/server_strings.h:140
+msgid "Manufacturer model name of the radar"
+msgstr ""
+
+#: po/server_strings.h:141
+msgid "Manufacturer serial number of the radar"
+msgstr ""
+
+#: po/server_strings.h:142
+msgid "Maximum distance the radar is looking at"
+msgstr ""
+
+#: po/server_strings.h:143
+msgid "Maximum target speed: Normal (25kn), Medium (40kn), Fast (50kn)"
+msgstr ""
+
+#: po/server_strings.h:144
+msgid "Method to finely tune the radar receiver"
+msgstr ""
+
+#: po/server_strings.h:145
+msgid "Middle-range STC suppression curve"
+msgstr ""
+
+#: po/server_strings.h:146
+msgid "Near-range STC suppression curve"
+msgstr ""
+
+#: po/server_strings.h:147
+msgid "Periodically switch between transmit and standby"
+msgstr ""
+
+#: po/server_strings.h:148
+msgid "Radar operational state"
+msgstr ""
+
+#: po/server_strings.h:149
+msgid "Rain clutter suppression"
+msgstr ""
+
+#: po/server_strings.h:150
+msgid "Reduces interference from other radars"
+msgstr ""
+
+#: po/server_strings.h:151
+msgid "Scan-to-scan averaging reduces noise by comparing successive sweeps"
+msgstr ""
+
+#: po/server_strings.h:153
+msgid "Sea clutter suppression"
+msgstr ""
+
+#: po/server_strings.h:154
+msgid "Sea state for sea clutter suppression"
+msgstr ""
+
+#: po/server_strings.h:155
+msgid "Second exclusion zone (stationary only)"
+msgstr ""
+
+#: po/server_strings.h:156
+msgid "Second guard zone for target detection"
+msgstr ""
+
+#: po/server_strings.h:157
+msgid "Second no-transmit sector"
+msgstr ""
+
+#: po/server_strings.h:158
+msgid "Second rectangular exclusion zone (stationary only)"
+msgstr ""
+
+#: po/server_strings.h:159
+msgid "Signal strength of the radar"
+msgstr ""
+
+#: po/server_strings.h:160
+msgid "Strength of the accent light"
+msgstr ""
+
+#: po/server_strings.h:161
+msgid ""
+"Targets coming towards or going away from own ship shown in different colors"
+msgstr ""
+
+#: po/server_strings.h:162
+msgid "The current supplied to the magnetron"
+msgstr ""
+
+#: po/server_strings.h:163
+msgid "Third exclusion zone (stationary only)"
+msgstr ""
+
+#: po/server_strings.h:164
+msgid "Third no-transmit sector"
+msgstr ""
+
+#: po/server_strings.h:165
+msgid "Third rectangular exclusion zone (stationary only)"
+msgstr ""
+
+#: po/server_strings.h:166
+msgid "Threshold for scan averaging filter"
+msgstr ""
+
+#: po/server_strings.h:167
+msgid "Threshold speed above which Doppler is applied"
+msgstr ""
+
+#: po/server_strings.h:168
+msgid "Transmit frequency channel selection (auto or manual)"
+msgstr ""
+
+#: po/server_strings.h:169
+msgid "User defined name for the radar"
+msgstr ""
+
+#: po/server_strings.h:170
+msgid "Version of the radar firmware"
+msgstr ""
+
+#: po/server_strings.h:171
+msgid "Whether target trails are shown"
+msgstr ""
+
+#: po/server_strings.h:172
+msgid "Which unit system to use for range values"
+msgstr ""
+
+#: po/server_strings.h:175
 msgctxt "accentLight"
 msgid "High"
 msgstr ""
 
-#: po/server_strings.h:92
+#: po/server_strings.h:176
 msgctxt "accentLight"
 msgid "Low"
 msgstr ""
 
-#: po/server_strings.h:93
+#: po/server_strings.h:177
 msgctxt "accentLight"
 msgid "Medium"
 msgstr ""
 
-#: po/server_strings.h:94
+#: po/server_strings.h:178
 msgctxt "accentLight"
 msgid "Off"
 msgstr ""
 
-#: po/server_strings.h:95
+#: po/server_strings.h:179
 msgctxt "antiJamming"
 msgid "Off"
 msgstr ""
 
-#: po/server_strings.h:96
+#: po/server_strings.h:180
 msgctxt "antiJamming"
 msgid "On"
 msgstr ""
 
-#: po/server_strings.h:97
+#: po/server_strings.h:181
 msgctxt "arpaDetectMaxSpeed"
 msgid "Fast"
 msgstr ""
 
-#: po/server_strings.h:98
+#: po/server_strings.h:182
 msgctxt "arpaDetectMaxSpeed"
 msgid "Medium"
 msgstr ""
 
-#: po/server_strings.h:99
+#: po/server_strings.h:183
 msgctxt "arpaDetectMaxSpeed"
 msgid "Normal"
 msgstr ""
 
-#: po/server_strings.h:100
+#: po/server_strings.h:184
 msgctxt "autoStandby"
 msgid "1 min"
 msgstr ""
 
-#: po/server_strings.h:101
+#: po/server_strings.h:185
 msgctxt "autoStandby"
 msgid "15 min"
 msgstr ""
 
-#: po/server_strings.h:102
+#: po/server_strings.h:186
 msgctxt "autoStandby"
 msgid "30 min"
 msgstr ""
 
-#: po/server_strings.h:103
+#: po/server_strings.h:187
 msgctxt "autoStandby"
 msgid "5 min"
 msgstr ""
 
-#: po/server_strings.h:104
+#: po/server_strings.h:188
 msgctxt "autoStandby"
 msgid "Off"
 msgstr ""
 
-#: po/server_strings.h:105
+#: po/server_strings.h:189
 msgctxt "birdMode"
 msgid "High"
 msgstr ""
 
-#: po/server_strings.h:106
+#: po/server_strings.h:190
 msgctxt "birdMode"
 msgid "Low"
 msgstr ""
 
-#: po/server_strings.h:107
+#: po/server_strings.h:191
 msgctxt "birdMode"
 msgid "Medium"
 msgstr ""
 
-#: po/server_strings.h:108
+#: po/server_strings.h:192
 msgctxt "birdMode"
 msgid "Off"
 msgstr ""
 
-#: po/server_strings.h:109
+#: po/server_strings.h:193
 msgctxt "doppler"
 msgid "Approaching"
 msgstr ""
 
-#: po/server_strings.h:110
+#: po/server_strings.h:194
 msgctxt "doppler"
 msgid "Normal"
 msgstr ""
 
-#: po/server_strings.h:111
+#: po/server_strings.h:195
 msgctxt "doppler"
 msgid "Off"
 msgstr ""
 
-#: po/server_strings.h:112
+#: po/server_strings.h:196
 msgctxt "doppler"
 msgid "On"
 msgstr ""
 
-#: po/server_strings.h:113
+#: po/server_strings.h:197
 msgctxt "doppler"
 msgid "Rain"
 msgstr ""
 
-#: po/server_strings.h:114
+#: po/server_strings.h:198
 msgctxt "doppler"
 msgid "Target"
 msgstr ""
 
-#: po/server_strings.h:115
-msgctxt "dopplerAutoTrack"
-msgid "Off"
-msgstr ""
-
-#: po/server_strings.h:116
-msgctxt "dopplerAutoTrack"
-msgid "On"
-msgstr ""
-
-#: po/server_strings.h:117
-msgctxt "dopplerTrailsOnly"
-msgid "Off"
-msgstr ""
-
-#: po/server_strings.h:118
-msgctxt "dopplerTrailsOnly"
-msgid "On"
-msgstr ""
-
-#: po/server_strings.h:119
-msgctxt "echoFormat"
-msgid "IMO"
-msgstr ""
-
-#: po/server_strings.h:120
-msgctxt "echoFormat"
-msgid "Tile"
-msgstr ""
-
-#: po/server_strings.h:121
-msgctxt "interferenceRejection"
-msgid "High"
-msgstr ""
-
-#: po/server_strings.h:122
-msgctxt "interferenceRejection"
-msgid "Level 1"
-msgstr ""
-
-#: po/server_strings.h:123
-msgctxt "interferenceRejection"
-msgid "Level 2"
-msgstr ""
-
-#: po/server_strings.h:124
-msgctxt "interferenceRejection"
-msgid "Level 3"
-msgstr ""
-
-#: po/server_strings.h:125
-msgctxt "interferenceRejection"
-msgid "Level 4"
-msgstr ""
-
-#: po/server_strings.h:126
-msgctxt "interferenceRejection"
-msgid "Level 5"
-msgstr ""
-
-#: po/server_strings.h:127
-msgctxt "interferenceRejection"
-msgid "Low"
-msgstr ""
-
-#: po/server_strings.h:128
-msgctxt "interferenceRejection"
-msgid "Medium"
-msgstr ""
-
-#: po/server_strings.h:129
-msgctxt "interferenceRejection"
-msgid "Off"
-msgstr ""
-
-#: po/server_strings.h:130
-msgctxt "interferenceRejection"
-msgid "On"
-msgstr ""
-
-#: po/server_strings.h:131
-msgctxt "localInterferenceRejection"
-msgid "High"
-msgstr ""
-
-#: po/server_strings.h:132
-msgctxt "localInterferenceRejection"
-msgid "Low"
-msgstr ""
-
-#: po/server_strings.h:133
-msgctxt "localInterferenceRejection"
-msgid "Medium"
-msgstr ""
-
-#: po/server_strings.h:134
-msgctxt "localInterferenceRejection"
-msgid "Off"
-msgstr ""
-
-#: po/server_strings.h:135
-msgctxt "mainBangSuppression"
-msgid "Off"
-msgstr ""
-
-#: po/server_strings.h:136
-msgctxt "mainBangSuppression"
-msgid "On"
-msgstr ""
-
-#: po/server_strings.h:137
-msgctxt "mode"
-msgid "Bird"
-msgstr ""
-
-#: po/server_strings.h:138
-msgctxt "mode"
-msgid "Bird+"
-msgstr ""
-
-#: po/server_strings.h:139
-msgctxt "mode"
-msgid "Buoy"
-msgstr ""
-
-#: po/server_strings.h:140
-msgctxt "mode"
-msgid "Coastal"
-msgstr ""
-
-#: po/server_strings.h:141
-msgctxt "mode"
-msgid "Custom"
-msgstr ""
-
-#: po/server_strings.h:142
-msgctxt "mode"
-msgid "Harbor"
-msgstr ""
-
-#: po/server_strings.h:143
-msgctxt "mode"
-msgid "Offshore"
-msgstr ""
-
-#: po/server_strings.h:144
-msgctxt "mode"
-msgid "Weather"
-msgstr ""
-
-#: po/server_strings.h:145
-msgctxt "noiseRejection"
-msgid "High"
-msgstr ""
-
-#: po/server_strings.h:146
-msgctxt "noiseRejection"
-msgid "Low"
-msgstr ""
-
-#: po/server_strings.h:147
-msgctxt "noiseRejection"
-msgid "Medium"
-msgstr ""
-
-#: po/server_strings.h:148
-msgctxt "noiseRejection"
-msgid "Off"
-msgstr ""
-
-#: po/server_strings.h:149
-msgctxt "noiseRejection"
-msgid "On"
-msgstr ""
-
-#: po/server_strings.h:150
-msgctxt "power"
-msgid "Fault"
-msgstr ""
-
-#: po/server_strings.h:151
-msgctxt "power"
-msgid "Off"
-msgstr ""
-
-#: po/server_strings.h:152
-msgctxt "power"
-msgid "Preparing"
-msgstr ""
-
-#: po/server_strings.h:153
-msgctxt "power"
-msgid "Standby"
-msgstr ""
-
-#: po/server_strings.h:154
-msgctxt "power"
-msgid "Transmit"
-msgstr ""
-
-#: po/server_strings.h:155
-msgctxt "pulseWidth"
-msgid "Long"
-msgstr ""
-
-#: po/server_strings.h:156
-msgctxt "pulseWidth"
-msgid "Short"
-msgstr ""
-
-#: po/server_strings.h:157
-msgctxt "rangeUnits"
-msgid "Metric"
-msgstr ""
-
-#: po/server_strings.h:158
-msgctxt "rangeUnits"
-msgid "Mixed"
-msgstr ""
-
-#: po/server_strings.h:159
-msgctxt "rangeUnits"
-msgid "Nautical"
-msgstr ""
-
-#: po/server_strings.h:160
-msgctxt "scanAverageMode"
-msgid "High"
-msgstr ""
-
-#: po/server_strings.h:161
-msgctxt "scanAverageMode"
-msgid "Low"
-msgstr ""
-
-#: po/server_strings.h:162
-msgctxt "scanAverageMode"
-msgid "Medium"
-msgstr ""
-
-#: po/server_strings.h:163
-msgctxt "scanAverageMode"
-msgid "Medium High"
-msgstr ""
-
-#: po/server_strings.h:164
-msgctxt "scanAverageMode"
-msgid "Off"
-msgstr ""
-
-#: po/server_strings.h:165
-msgctxt "scanAverageMode"
-msgid "Very High"
-msgstr ""
-
-#: po/server_strings.h:166
-msgctxt "scanSpeed"
-msgid "Auto"
-msgstr ""
-
-#: po/server_strings.h:167
-msgctxt "scanSpeed"
-msgid "Fast"
-msgstr ""
-
-#: po/server_strings.h:168
-msgctxt "scanSpeed"
-msgid "Medium"
-msgstr ""
-
-#: po/server_strings.h:169
-msgctxt "scanSpeed"
-msgid "Medium Plus"
-msgstr ""
-
-#: po/server_strings.h:170
-msgctxt "scanSpeed"
-msgid "Medium-High"
-msgstr ""
-
-#: po/server_strings.h:171
-msgctxt "scanSpeed"
-msgid "Normal"
-msgstr ""
-
-#: po/server_strings.h:172
-msgctxt "seaState"
-msgid "Auto"
-msgstr ""
-
-#: po/server_strings.h:173
-msgctxt "seaState"
-msgid "Calm"
-msgstr ""
-
-#: po/server_strings.h:174
-msgctxt "seaState"
-msgid "Harbor"
-msgstr ""
-
-#: po/server_strings.h:175
-msgctxt "seaState"
-msgid "Manual"
-msgstr ""
-
-#: po/server_strings.h:176
-msgctxt "seaState"
-msgid "Moderate"
-msgstr ""
-
-#: po/server_strings.h:177
-msgctxt "seaState"
-msgid "Rough"
-msgstr ""
-
-#: po/server_strings.h:178
-msgctxt "spokeProcessing"
-msgid "Clean"
-msgstr ""
-
-#: po/server_strings.h:179
-msgctxt "spokeProcessing"
-msgid "Fill"
-msgstr ""
-
-#: po/server_strings.h:180
-msgctxt "spokeProcessing"
-msgid "Reduce"
-msgstr ""
-
-#: po/server_strings.h:181
-msgctxt "spokeProcessing"
-msgid "Smooth"
-msgstr ""
-
-#: po/server_strings.h:182
-msgctxt "targetBoost"
-msgid "High"
-msgstr ""
-
-#: po/server_strings.h:183
-msgctxt "targetBoost"
-msgid "Low"
-msgstr ""
-
-#: po/server_strings.h:184
-msgctxt "targetBoost"
-msgid "Off"
-msgstr ""
-
-#: po/server_strings.h:185
-msgctxt "targetBoost"
-msgid "On"
-msgstr ""
-
-#: po/server_strings.h:186
-msgctxt "targetExpansion"
-msgid "High"
-msgstr ""
-
-#: po/server_strings.h:187
-msgctxt "targetExpansion"
-msgid "Low"
-msgstr ""
-
-#: po/server_strings.h:188
-msgctxt "targetExpansion"
-msgid "Medium"
-msgstr ""
-
-#: po/server_strings.h:189
-msgctxt "targetExpansion"
-msgid "Off"
-msgstr ""
-
-#: po/server_strings.h:190
-msgctxt "targetExpansion"
-msgid "On"
-msgstr ""
-
-#: po/server_strings.h:191
-msgctxt "targetSeparation"
-msgid "High"
-msgstr ""
-
-#: po/server_strings.h:192
-msgctxt "targetSeparation"
-msgid "Low"
-msgstr ""
-
-#: po/server_strings.h:193
-msgctxt "targetSeparation"
-msgid "Medium"
-msgstr ""
-
-#: po/server_strings.h:194
-msgctxt "targetSeparation"
-msgid "Off"
-msgstr ""
-
-#: po/server_strings.h:195
-msgctxt "targetTrails"
-msgid "1 min"
-msgstr ""
-
-#: po/server_strings.h:196
-msgctxt "targetTrails"
-msgid "10 min"
-msgstr ""
-
-#: po/server_strings.h:197
-msgctxt "targetTrails"
-msgid "15s"
-msgstr ""
-
-#: po/server_strings.h:198
-msgctxt "targetTrails"
-msgid "3 min"
-msgstr ""
-
 #: po/server_strings.h:199
-msgctxt "targetTrails"
-msgid "30s"
+msgctxt "dopplerAutoTrack"
+msgid "Off"
 msgstr ""
 
 #: po/server_strings.h:200
-msgctxt "targetTrails"
-msgid "5 min"
+msgctxt "dopplerAutoTrack"
+msgid "On"
 msgstr ""
 
 #: po/server_strings.h:201
-msgctxt "targetTrails"
+msgctxt "dopplerTrailsOnly"
 msgid "Off"
 msgstr ""
 
 #: po/server_strings.h:202
+msgctxt "dopplerTrailsOnly"
+msgid "On"
+msgstr ""
+
+#: po/server_strings.h:203
+msgctxt "echoFormat"
+msgid "IMO"
+msgstr ""
+
+#: po/server_strings.h:204
+msgctxt "echoFormat"
+msgid "Tile"
+msgstr ""
+
+#: po/server_strings.h:205
+msgctxt "interferenceRejection"
+msgid "High"
+msgstr ""
+
+#: po/server_strings.h:206
+msgctxt "interferenceRejection"
+msgid "Level 1"
+msgstr ""
+
+#: po/server_strings.h:207
+msgctxt "interferenceRejection"
+msgid "Level 2"
+msgstr ""
+
+#: po/server_strings.h:208
+msgctxt "interferenceRejection"
+msgid "Level 3"
+msgstr ""
+
+#: po/server_strings.h:209
+msgctxt "interferenceRejection"
+msgid "Level 4"
+msgstr ""
+
+#: po/server_strings.h:210
+msgctxt "interferenceRejection"
+msgid "Level 5"
+msgstr ""
+
+#: po/server_strings.h:211
+msgctxt "interferenceRejection"
+msgid "Low"
+msgstr ""
+
+#: po/server_strings.h:212
+msgctxt "interferenceRejection"
+msgid "Medium"
+msgstr ""
+
+#: po/server_strings.h:213
+msgctxt "interferenceRejection"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:214
+msgctxt "interferenceRejection"
+msgid "On"
+msgstr ""
+
+#: po/server_strings.h:215
+msgctxt "localInterferenceRejection"
+msgid "High"
+msgstr ""
+
+#: po/server_strings.h:216
+msgctxt "localInterferenceRejection"
+msgid "Low"
+msgstr ""
+
+#: po/server_strings.h:217
+msgctxt "localInterferenceRejection"
+msgid "Medium"
+msgstr ""
+
+#: po/server_strings.h:218
+msgctxt "localInterferenceRejection"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:219
+msgctxt "mainBangSuppression"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:220
+msgctxt "mainBangSuppression"
+msgid "On"
+msgstr ""
+
+#: po/server_strings.h:221
+msgctxt "mode"
+msgid "Bird"
+msgstr ""
+
+#: po/server_strings.h:222
+msgctxt "mode"
+msgid "Bird+"
+msgstr ""
+
+#: po/server_strings.h:223
+msgctxt "mode"
+msgid "Buoy"
+msgstr ""
+
+#: po/server_strings.h:224
+msgctxt "mode"
+msgid "Coastal"
+msgstr ""
+
+#: po/server_strings.h:225
+msgctxt "mode"
+msgid "Custom"
+msgstr ""
+
+#: po/server_strings.h:226
+msgctxt "mode"
+msgid "Harbor"
+msgstr ""
+
+#: po/server_strings.h:227
+msgctxt "mode"
+msgid "Offshore"
+msgstr ""
+
+#: po/server_strings.h:228
+msgctxt "mode"
+msgid "Weather"
+msgstr ""
+
+#: po/server_strings.h:229
+msgctxt "noiseRejection"
+msgid "High"
+msgstr ""
+
+#: po/server_strings.h:230
+msgctxt "noiseRejection"
+msgid "Low"
+msgstr ""
+
+#: po/server_strings.h:231
+msgctxt "noiseRejection"
+msgid "Medium"
+msgstr ""
+
+#: po/server_strings.h:232
+msgctxt "noiseRejection"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:233
+msgctxt "noiseRejection"
+msgid "On"
+msgstr ""
+
+#: po/server_strings.h:234
+msgctxt "power"
+msgid "Fault"
+msgstr ""
+
+#: po/server_strings.h:235
+msgctxt "power"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:236
+msgctxt "power"
+msgid "Preparing"
+msgstr ""
+
+#: po/server_strings.h:237
+msgctxt "power"
+msgid "Standby"
+msgstr ""
+
+#: po/server_strings.h:238
+msgctxt "power"
+msgid "Transmit"
+msgstr ""
+
+#: po/server_strings.h:239
+msgctxt "pulseWidth"
+msgid "Long"
+msgstr ""
+
+#: po/server_strings.h:240
+msgctxt "pulseWidth"
+msgid "Short"
+msgstr ""
+
+#: po/server_strings.h:241
+msgctxt "rangeUnits"
+msgid "Metric"
+msgstr ""
+
+#: po/server_strings.h:242
+msgctxt "rangeUnits"
+msgid "Mixed"
+msgstr ""
+
+#: po/server_strings.h:243
+msgctxt "rangeUnits"
+msgid "Nautical"
+msgstr ""
+
+#: po/server_strings.h:244
+msgctxt "scanAverageMode"
+msgid "High"
+msgstr ""
+
+#: po/server_strings.h:245
+msgctxt "scanAverageMode"
+msgid "Low"
+msgstr ""
+
+#: po/server_strings.h:246
+msgctxt "scanAverageMode"
+msgid "Medium"
+msgstr ""
+
+#: po/server_strings.h:247
+msgctxt "scanAverageMode"
+msgid "Medium High"
+msgstr ""
+
+#: po/server_strings.h:248
+msgctxt "scanAverageMode"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:249
+msgctxt "scanAverageMode"
+msgid "Very High"
+msgstr ""
+
+#: po/server_strings.h:250
+msgctxt "scanSpeed"
+msgid "Auto"
+msgstr ""
+
+#: po/server_strings.h:251
+msgctxt "scanSpeed"
+msgid "Fast"
+msgstr ""
+
+#: po/server_strings.h:252
+msgctxt "scanSpeed"
+msgid "Medium"
+msgstr ""
+
+#: po/server_strings.h:253
+msgctxt "scanSpeed"
+msgid "Medium Plus"
+msgstr ""
+
+#: po/server_strings.h:254
+msgctxt "scanSpeed"
+msgid "Medium-High"
+msgstr ""
+
+#: po/server_strings.h:255
+msgctxt "scanSpeed"
+msgid "Normal"
+msgstr ""
+
+#: po/server_strings.h:256
+msgctxt "seaState"
+msgid "Auto"
+msgstr ""
+
+#: po/server_strings.h:257
+msgctxt "seaState"
+msgid "Calm"
+msgstr ""
+
+#: po/server_strings.h:258
+msgctxt "seaState"
+msgid "Harbor"
+msgstr ""
+
+#: po/server_strings.h:259
+msgctxt "seaState"
+msgid "Manual"
+msgstr ""
+
+#: po/server_strings.h:260
+msgctxt "seaState"
+msgid "Moderate"
+msgstr ""
+
+#: po/server_strings.h:261
+msgctxt "seaState"
+msgid "Rough"
+msgstr ""
+
+#: po/server_strings.h:262
+msgctxt "spokeProcessing"
+msgid "Clean"
+msgstr ""
+
+#: po/server_strings.h:263
+msgctxt "spokeProcessing"
+msgid "Fill"
+msgstr ""
+
+#: po/server_strings.h:264
+msgctxt "spokeProcessing"
+msgid "Reduce"
+msgstr ""
+
+#: po/server_strings.h:265
+msgctxt "spokeProcessing"
+msgid "Smooth"
+msgstr ""
+
+#: po/server_strings.h:266
+msgctxt "targetBoost"
+msgid "High"
+msgstr ""
+
+#: po/server_strings.h:267
+msgctxt "targetBoost"
+msgid "Low"
+msgstr ""
+
+#: po/server_strings.h:268
+msgctxt "targetBoost"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:269
+msgctxt "targetBoost"
+msgid "On"
+msgstr ""
+
+#: po/server_strings.h:270
+msgctxt "targetExpansion"
+msgid "High"
+msgstr ""
+
+#: po/server_strings.h:271
+msgctxt "targetExpansion"
+msgid "Low"
+msgstr ""
+
+#: po/server_strings.h:272
+msgctxt "targetExpansion"
+msgid "Medium"
+msgstr ""
+
+#: po/server_strings.h:273
+msgctxt "targetExpansion"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:274
+msgctxt "targetExpansion"
+msgid "On"
+msgstr ""
+
+#: po/server_strings.h:275
+msgctxt "targetSeparation"
+msgid "High"
+msgstr ""
+
+#: po/server_strings.h:276
+msgctxt "targetSeparation"
+msgid "Low"
+msgstr ""
+
+#: po/server_strings.h:277
+msgctxt "targetSeparation"
+msgid "Medium"
+msgstr ""
+
+#: po/server_strings.h:278
+msgctxt "targetSeparation"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:279
+msgctxt "targetTrails"
+msgid "1 min"
+msgstr ""
+
+#: po/server_strings.h:280
+msgctxt "targetTrails"
+msgid "10 min"
+msgstr ""
+
+#: po/server_strings.h:281
+msgctxt "targetTrails"
+msgid "15s"
+msgstr ""
+
+#: po/server_strings.h:282
+msgctxt "targetTrails"
+msgid "3 min"
+msgstr ""
+
+#: po/server_strings.h:283
+msgctxt "targetTrails"
+msgid "30s"
+msgstr ""
+
+#: po/server_strings.h:284
+msgctxt "targetTrails"
+msgid "5 min"
+msgstr ""
+
+#: po/server_strings.h:285
+msgctxt "targetTrails"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:286
 msgctxt "timedIdle"
 msgid "Off"
 msgstr ""
 
-#: po/server_strings.h:203
+#: po/server_strings.h:287
 msgctxt "timedIdle"
 msgid "On"
 msgstr ""
 
-#: po/server_strings.h:204
+#: po/server_strings.h:288
 msgctxt "trailsMotion"
 msgid "Relative"
 msgstr ""
 
-#: po/server_strings.h:205
+#: po/server_strings.h:289
 msgctxt "trailsMotion"
 msgid "True"
 msgstr ""
 
-#: src/ControlsPanel.cpp:371 src/ControlsPanel.cpp:580
+#: src/ControlsPanel.cpp:374 src/ControlsPanel.cpp:583
 msgid "Waiting for radar..."
 msgstr ""
 
-#: src/ControlsPanel.cpp:650
+#: src/ControlsPanel.cpp:660
 msgid "View"
 msgstr ""
 
-#: src/ControlsPanel.cpp:652
+#: src/ControlsPanel.cpp:662
 msgid "EBL/VRM"
 msgstr ""
 
-#: src/ControlsPanel.cpp:757
+#: src/ControlsPanel.cpp:783
 msgid "Views"
 msgstr ""
 
-#: src/ControlsPanel.cpp:767
+#: src/ControlsPanel.cpp:793
 msgid "Overlay"
 msgstr ""
 
-#: src/ControlsPanel.cpp:769
+#: src/ControlsPanel.cpp:795
 msgid "PPI"
 msgstr ""
 
-#: src/ControlsPanel.cpp:770
+#: src/ControlsPanel.cpp:796
 msgid "Docked"
 msgstr ""
 
-#: src/ControlsPanel.cpp:793
+#: src/ControlsPanel.cpp:819
 msgid "Orientation"
 msgstr ""
 
-#: src/ControlsPanel.cpp:794
+#: src/ControlsPanel.cpp:820
 #, c-format
 msgid "Orientation (%s)"
 msgstr ""
 
-#: src/ControlsPanel.cpp:795 src/RadarDisplayPanel.cpp:523
+#: src/ControlsPanel.cpp:821 src/RadarDisplayPanel.cpp:523
 msgid "Course up"
 msgstr ""
 
-#: src/ControlsPanel.cpp:795 src/RadarDisplayPanel.cpp:524
+#: src/ControlsPanel.cpp:821 src/RadarDisplayPanel.cpp:524
 msgid "Head up"
 msgstr ""
 
-#: src/ControlsPanel.cpp:795 src/RadarDisplayPanel.cpp:522
+#: src/ControlsPanel.cpp:821 src/RadarDisplayPanel.cpp:522
 msgid "North up"
 msgstr ""
 
-#: src/ControlsPanel.cpp:800
+#: src/ControlsPanel.cpp:826
 msgid "Echo threshold"
 msgstr ""
 
-#: src/ControlsPanel.cpp:801
+#: src/ControlsPanel.cpp:827
 #, c-format
 msgid "Echo threshold (%s)"
 msgstr ""
 
-#: src/ControlsPanel.cpp:802
+#: src/ControlsPanel.cpp:828
 msgid "All"
 msgstr ""
 
-#: src/ControlsPanel.cpp:802
+#: src/ControlsPanel.cpp:828
 msgid "Medium"
 msgstr ""
 
-#: src/ControlsPanel.cpp:802
+#: src/ControlsPanel.cpp:828
 msgid "Strong"
 msgstr ""
 
-#: src/ControlsPanel.cpp:808
+#: src/ControlsPanel.cpp:834
 msgid "Refresh rate"
 msgstr ""
 
-#: src/ControlsPanel.cpp:822
+#: src/ControlsPanel.cpp:848
 msgid "Menu auto-hide"
 msgstr ""
 
-#: src/ControlsPanel.cpp:822
+#: src/ControlsPanel.cpp:848
 msgid "Never"
 msgstr ""
 
-#: src/ControlsPanel.cpp:832
+#: src/ControlsPanel.cpp:858
 msgid "Overlay opacity"
 msgstr ""
 
-#: src/ControlsPanel.cpp:842
+#: src/ControlsPanel.cpp:868
 msgid "Guard zones on chart"
 msgstr ""
 
-#: src/ControlsPanel.cpp:856
+#: src/ControlsPanel.cpp:882
 msgid "Nest second radar at 1/4"
 msgstr ""
 
-#: src/ControlsPanel.cpp:867
+#: src/ControlsPanel.cpp:893
 msgid "Reverse zoom wheel"
 msgstr ""
 
-#: src/ControlsPanel.cpp:878
+#: src/ControlsPanel.cpp:904
 msgid "Auto layout windows"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1009 src/ControlsPanel.cpp:1232
+#: src/ControlsPanel.cpp:1035 src/ControlsPanel.cpp:1258
 msgid "Auto"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1306
+#: src/ControlsPanel.cpp:1332
 #, c-format
 msgid "# %d"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1316
+#: src/ControlsPanel.cpp:1342
 msgid "Clear"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1331
+#: src/ControlsPanel.cpp:1357
 msgid "not set"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1345
+#: src/ControlsPanel.cpp:1371
 msgid "Server:"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1351 src/mayara_pi.cpp:2991
+#: src/ControlsPanel.cpp:1377 src/mayara_pi.cpp:2991
 msgid "not connected"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1357
+#: src/ControlsPanel.cpp:1383
 msgid "Plugin version:"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1370
+#: src/ControlsPanel.cpp:1396
 msgid "Server version:"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1377
+#: src/ControlsPanel.cpp:1403
 msgid "unknown"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1444
+#: src/ControlsPanel.cpp:1470
 msgid "Start deg"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1445
+#: src/ControlsPanel.cpp:1471
 msgid "End deg"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1448 src/ControlsPanel.cpp:1544
+#: src/ControlsPanel.cpp:1474 src/ControlsPanel.cpp:1570
 msgid "Enabled"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1453 src/ControlsPanel.cpp:1548
-#: src/ControlsPanel.cpp:1572
+#: src/ControlsPanel.cpp:1479 src/ControlsPanel.cpp:1574
+#: src/ControlsPanel.cpp:1598
 msgid "Edit"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1455 src/ControlsPanel.cpp:1550
+#: src/ControlsPanel.cpp:1481 src/ControlsPanel.cpp:1576
 msgid "Save"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1521
+#: src/ControlsPanel.cpp:1547
 msgid "Angles:"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1522
+#: src/ControlsPanel.cpp:1548
 msgid "Range:"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1522
+#: src/ControlsPanel.cpp:1548
 msgid "m"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1572
+#: src/ControlsPanel.cpp:1598
 msgid "Cancel"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1728
+#: src/ControlsPanel.cpp:1754
 msgid "Controls"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1851
+#: src/ControlsPanel.cpp:1877
 msgid "Settings"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1857
+#: src/ControlsPanel.cpp:1883
 msgid "Hide controls"
 msgstr ""
 
@@ -1242,27 +1557,27 @@ msgstr ""
 msgid "VRM/EBL %d"
 msgstr ""
 
-#: src/ServerText.cpp:40
+#: src/ServerText.cpp:44
 msgid "Base"
 msgstr ""
 
-#: src/ServerText.cpp:41
+#: src/ServerText.cpp:45
 msgid "Targets"
 msgstr ""
 
-#: src/ServerText.cpp:42
+#: src/ServerText.cpp:46
 msgid "Trails"
 msgstr ""
 
-#: src/ServerText.cpp:43
+#: src/ServerText.cpp:47
 msgid "Advanced"
 msgstr ""
 
-#: src/ServerText.cpp:44
+#: src/ServerText.cpp:48
 msgid "Installation"
 msgstr ""
 
-#: src/ServerText.cpp:45
+#: src/ServerText.cpp:49
 msgid "Info"
 msgstr ""
 
