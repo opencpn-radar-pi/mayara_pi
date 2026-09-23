@@ -269,7 +269,8 @@ class ControlsBody : public wxScrolledWindow {
                              std::function<void(wxSizer*)> fill);
   void AddControl(wxSizer* content, const ControlDef& def);
   // Runs build, then gives the windows it made the control's description as
-  // their tooltip.
+  // their tooltip. It finds them as our direct children added during build, so
+  // a builder must parent its widgets to this, not to a panel of its own.
   void Described(const ControlDef& def, const std::function<void()>& build);
   void AddServerRow(wxSizer* content);  // active server URL, in Info
   void FillVrmEblSection(wxSizer* content);  // the two local markers
@@ -764,6 +765,10 @@ void ControlsBody::AddControl(wxSizer* content, const ControlDef& d) {
 // The server's description of a control, as the tooltip of every window built
 // for it: the label, and whatever is actually operated, since that is where
 // the pointer rests. A window that already has a tooltip of its own keeps it.
+// The builders take no handle to report what they made, so the new windows are
+// told apart by position: wx appends children in creation order, and every
+// builder parents its widgets to this. A widget inside an intermediate panel
+// would be missed -- only the panel would get the tooltip.
 void ControlsBody::Described(const ControlDef& def,
                              const std::function<void()>& build) {
   const size_t before = GetChildren().size();
