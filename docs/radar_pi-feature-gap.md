@@ -292,6 +292,21 @@ on ("Orientation (Halo A)"). The lozenge dims and says "no heading" when the
 picture is head-up because nothing reports a heading — course-up also needs a
 course, and claiming "CU" without one would be a lie.
 
+## Translations
+
+radar_pi's control names live in its own source (`ControlType.inc`) and go
+through `_()`, so its catalog covers them. mayara_pi's control panel is built
+from the schema mayara-server sends, in English, so wrapping our own strings in
+`_()` left every control name and enum label untranslated.
+
+Server text is now translated on the client: the server publishes its UI
+strings as `docs/ui-strings.json`, the plugin turns them into `.pot` entries and
+looks them up at run time (see CONTRIBUTING.md, Translations). Still open: no
+`.po` files exist yet for any language; the control descriptions are not shown
+anywhere, so they are not in the catalog; and error text in control values
+(`ControlValue.error`) is a free-form English sentence, which needs the server
+to send a code before it can be translated.
+
 ## Rendering: measured, not assumed
 
 Whether the PPI should be duplicated in OpenGL was asked and answered with

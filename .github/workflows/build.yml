@@ -65,6 +65,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y locales
           sudo locale-gen de_DE.UTF-8
+      - name: Server strings match the pinned mayara-server
+        # po/server_strings.h feeds the .pot with the schema text the server
+        # sends; it must be what po/server-strings.ref says it is.
+        run: python3 tools/gen-server-strings.py --check
       - name: Build and run the unit tests
         run: |
           cmake -B build-test -S test -DCMAKE_BUILD_TYPE=Debug

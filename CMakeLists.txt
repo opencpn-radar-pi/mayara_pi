@@ -180,6 +180,7 @@ set(SRCS
     src/ControlsPanel.cpp
     src/RadarControls.cpp
     src/ThemedControls.cpp
+    src/ServerText.cpp
 )
 
 set(HDRS
@@ -193,6 +194,7 @@ set(HDRS
     include/MayaraServer.h
     include/RadarDisplayPanel.h
     include/ControlsPanel.h
+    include/ServerText.h
 )
 
 if(PLUGIN_USE_SVG)
