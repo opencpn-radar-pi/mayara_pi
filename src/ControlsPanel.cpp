@@ -904,6 +904,19 @@ void ControlsBody::FillViewSection(wxSizer* content) {
     });
     m_updaters.push_back(
         [this, rz]() { rz->SetValue(m_get_prefs().reverse_zoom); });
+
+    // Mostly for touch screens, where a tap on the picture that slides a
+    // little would otherwise move it off centre.
+    auto* lp = new ThemedButton(this, _("Lock picture position"), m_theme,
+                                true);
+    content->Add(lp, 0, wxEXPAND | wxALL, 4);
+    lp->Bind(wxEVT_TOGGLEBUTTON, [this, lp](wxCommandEvent&) {
+      PpiPrefs p = m_get_prefs();
+      p.lock_pan = lp->GetValue();
+      m_set_prefs(p);
+    });
+    m_updaters.push_back(
+        [this, lp]() { lp->SetValue(m_get_prefs().lock_pan); });
   }
   if (m_on_autolayout) {
     auto* b = new ThemedButton(this, _("Auto layout windows"), m_theme,

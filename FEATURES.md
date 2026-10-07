@@ -17,7 +17,8 @@ decides what belongs here.
   names the missing input when north-up or course-up cannot be honoured
   (north-up needs a heading; course-up needs a course as well).
 - **Free display zoom** independent of the radar's own range, **off-centre
-  ("look around")** by dragging, and a **cursor readout** of range and bearing.
+  ("look around")** by dragging (which can be locked, for touch screens),
+  and a **cursor readout** of range and bearing.
 - **Range rings**, an **extreme-range ring**, and a **centre marker**.
 - **Refresh rate** (1/2/5/10 Hz) and **reverse zoom wheel**.
 - **Echo threshold** — show all returns, hide weak, or only strong — per radar.
