@@ -3428,8 +3428,9 @@ void mayara_pi::AutoLayoutWindows(bool reflow_ocpn) {
 void mayara_pi::SyncRadarFullScreen(bool on) {
   if (m_docked) return;  // docked panes ride OpenCPN's own full screen
   if (!on) {
+    // A window the operator put in full screen themselves stays there.
     for (MayaraPpiWindow* w : m_windows)
-      if (w) w->LeaveFullScreen();
+      if (w && !w->IsUserFullScreen()) w->LeaveFullScreen();
     return;
   }
   wxWindow* frame =
@@ -3438,16 +3439,21 @@ void mayara_pi::SyncRadarFullScreen(bool on) {
   const unsigned nd = wxDisplay::GetCount();
   for (unsigned d = 0; d < nd; ++d) {
     if (static_cast<int>(d) == ocpn_disp) continue;  // leave OpenCPN's screen
-    // Which shown radar windows currently live on display d.
+    // Which shown radar windows currently live on display d. A display one
+    // of them already fills at the operator's request is theirs; leave it.
     std::vector<MayaraPpiWindow*> on_d;
+    bool taken = false;
     for (MayaraPpiWindow* w : m_windows) {
       if (!w || !w->IsWindowShown()) continue;
       const wxRect r = w->WindowRect();
       const wxPoint mid(r.x + r.width / 2, r.y + r.height / 2);
-      if (static_cast<unsigned>(wxDisplay::GetFromPoint(mid)) == d)
+      if (static_cast<unsigned>(wxDisplay::GetFromPoint(mid)) != d) continue;
+      if (w->IsUserFullScreen())
+        taken = true;
+      else
         on_d.push_back(w);
     }
-    if (on_d.empty()) continue;
+    if (taken || on_d.empty()) continue;
     const wxRect area = wxDisplay(d).GetGeometry();  // whole screen
     const int k = static_cast<int>(on_d.size());
     if (k == 1) {

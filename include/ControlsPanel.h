@@ -66,6 +66,10 @@ class ControlsPanel : public wxWindow {
   // "Dock in OpenCPN" toggle for the View section.
   void SetDockControl(std::function<bool()> get, std::function<void(bool)> set);
 
+  // "Full screen" toggle for the View section; floating windows only.
+  void SetFullScreenControl(std::function<bool()> get,
+                            std::function<void(bool)> set);
+
   // "Auto" button next to Range: whether the chart's zoom drives this
   // radar's range. get_relevant says whether this radar is on any canvas's
   // overlay right now -- the button is hidden entirely when it is not,
