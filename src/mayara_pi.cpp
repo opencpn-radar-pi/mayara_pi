@@ -887,9 +887,23 @@ void mayara_pi::CaptureWindowState() {
     if (m_aui)
       for (MayaraPpiWindow* w : m_windows) {
         if (!w) continue;
-        wxAuiPaneInfo& pane = m_aui->GetPane(w);
-        m_persp_cache.push_back(pane.IsOk() ? m_aui->SavePaneInfo(pane)
-                                            : wxString());
+        wxAuiPaneInfo pane = m_aui->GetPane(w);
+        if (!pane.IsOk()) {
+          m_persp_cache.push_back(wxString());
+          continue;
+        }
+        // Dragging a dock's sash resizes the dock, not the pane: wxAUI keeps
+        // that width in the dock itself, which SavePaneInfo does not record,
+        // and a dock rebuilt next launch sizes itself from the pane's best
+        // size instead -- so the user's width was lost on every restart
+        // (#122). Store the current docked size as the best size, on this
+        // copy only so the live layout is untouched. A hidden pane's window
+        // size is stale, so it keeps the best size it was restored with.
+        if (pane.IsDocked() && pane.IsShown()) {
+          const wxSize sz = w->GetSize();
+          if (sz.x > 0 && sz.y > 0) pane.BestSize(sz);
+        }
+        m_persp_cache.push_back(m_aui->SavePaneInfo(pane));
       }
     return;
   }
