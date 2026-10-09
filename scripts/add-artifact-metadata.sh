@@ -35,23 +35,34 @@ xmls=(*.xml)
 tarball=${tarballs[0]}
 xml=${xmls[0]}
 
-if tar -tzf "$tarball" | grep -qx 'metadata.xml'; then
+# grep without -q, so it reads the whole listing: with -q it can exit at the
+# first match while tar is still writing, and pipefail then turns tar's
+# SIGPIPE into a "no match".
+has_metadata() {
+  tar -tzf "$1" | grep -x 'metadata.xml' > /dev/null
+}
+
+if has_metadata "$tarball"; then
   echo "$tarball already has metadata.xml"
   exit 0
 fi
 
+# Build the new tarball in a scratch directory and only then replace the
+# original, so a failure part way leaves the build's tarball as it was.
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+cp "$xml" "$work/metadata.xml"
+gzip -dc "$tarball" > "$work/plugin.tar" ||
+  warn "could not unpack $tarball"
+(cd "$work" && tar -rf plugin.tar metadata.xml && gzip -n plugin.tar) ||
+  warn "could not add metadata.xml to $tarball"
+has_metadata "$work/plugin.tar.gz" ||
+  warn "metadata.xml still missing from the rebuilt $tarball"
+
 # Some builds (armhf, flatpak) leave build/ owned by root.
 sudo=""
-if [ ! -w . ] || [ ! -w "$tarball" ]; then
+if [ ! -w "$tarball" ]; then
   if [ "$(id -u)" != 0 ] && command -v sudo > /dev/null; then sudo=sudo; fi
 fi
-
-$sudo cp -f "$xml" metadata.xml
-$sudo gunzip -f "$tarball"
-$sudo tar -rf "${tarball%.gz}" metadata.xml
-$sudo gzip -f "${tarball%.gz}"
-$sudo rm -f metadata.xml
-
-tar -tzf "$tarball" | grep -qx 'metadata.xml' ||
-  warn "metadata.xml still missing from $tarball"
+$sudo cp -f "$work/plugin.tar.gz" "$tarball"
 echo "Added $xml to $tarball as metadata.xml"
