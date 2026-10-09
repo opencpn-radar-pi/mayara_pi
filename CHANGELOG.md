@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **client:** open a radar's spoke stream only while its picture is shown (#105) ([PR #105](https://github.com/opencpn-radar-pi/mayara_pi/pull/105))
 - **client:** radar menu opens on the canvas's overlay radar; "All radars" turns on nesting (#107) ([PR #107](https://github.com/opencpn-radar-pi/mayara_pi/pull/107))
 - **ppi:** drop the minimize box from the floating PPI frame (#115) ([PR #115](https://github.com/opencpn-radar-pi/mayara_pi/pull/115))
+- **ppi:** keep the docked PPI pane's width across restarts (#127) ([PR #127](https://github.com/opencpn-radar-pi/mayara_pi/pull/127))
 
 ## [0.1.1] - 2026-08-29
 
