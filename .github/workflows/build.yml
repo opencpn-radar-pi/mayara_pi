@@ -119,6 +119,11 @@ jobs:
           export PATH="$HOME/cs-venv/bin:$PATH"
           cloudsmith --version
           bash ci/cloudsmith-upload.sh
+      - name: Make the artifact importable
+        # Publishing (above) already put metadata.xml into the tarball; a run
+        # that skips it -- every pull request -- has not. Without it OpenCPN's
+        # Import plugin... refuses the artifact. A no-op when it is there.
+        run: bash scripts/add-artifact-metadata.sh
       - uses: actions/upload-artifact@v7
         with:
           name: mayara_pi-macos-universal
@@ -169,11 +174,20 @@ jobs:
           export PATH="$HOME/cs-venv/Scripts:$PATH"
           cloudsmith --version
           bash ci/cloudsmith-upload.sh
+      - name: Make the artifact importable
+        # Publishing (above) already put metadata.xml into the tarball; a run
+        # that skips it -- every pull request -- has not. Without it OpenCPN's
+        # Import plugin... refuses the artifact. A no-op when it is there.
+        shell: bash
+        run: bash scripts/add-artifact-metadata.sh
       - uses: actions/upload-artifact@v7
         with:
           name: mayara_pi-windows-msvc
+          # The NSIS installer the build script downloads lands in build/ too;
+          # it is a build tool, not part of the plugin.
           path: |
             build/*.exe
+            !build/nsis-*-setup.exe
             build/*.tar.gz
           if-no-files-found: warn
 
@@ -297,6 +311,11 @@ jobs:
           export PATH="$CS_BIN:$PATH"
           cloudsmith --version
           bash ci/cloudsmith-upload.sh
+      - name: Make the artifact importable
+        # Publishing (above) already put metadata.xml into the tarball; a run
+        # that skips it -- every pull request -- has not. Without it OpenCPN's
+        # Import plugin... refuses the artifact. A no-op when it is there.
+        run: bash scripts/add-artifact-metadata.sh
       - uses: actions/upload-artifact@v7
         with:
           name: mayara_pi-${{ matrix.name }}
@@ -368,6 +387,11 @@ jobs:
           export PATH="$HOME/cs-venv/bin:$PATH"
           cloudsmith --version
           bash ci/cloudsmith-upload.sh
+      - name: Make the artifact importable
+        # Publishing (above) already put metadata.xml into the tarball; a run
+        # that skips it -- every pull request -- has not. Without it OpenCPN's
+        # Import plugin... refuses the artifact. A no-op when it is there.
+        run: bash scripts/add-artifact-metadata.sh
       - uses: actions/upload-artifact@v7
         with:
           name: mayara_pi-${{ matrix.name }}
