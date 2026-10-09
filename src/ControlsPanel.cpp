@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdio>
 #include <functional>
+#include <initializer_list>
 #include <map>
 #include <memory>
 #include <set>
@@ -1141,6 +1142,38 @@ void ControlsBody::AddNumber(wxSizer* outer, const ControlDef& def) {
   if (minus)
     minus->Bind(wxEVT_BUTTON, [nudge](wxCommandEvent&) { nudge(-1); });
   if (plus) plus->Bind(wxEVT_BUTTON, [nudge](wxCommandEvent&) { nudge(+1); });
+
+  // In the popup a gauge icon opens (one control, nothing to scroll) the
+  // wheel adjusts the value. Not in the full panel: there the wheel scrolls
+  // the list, and a scroll passing over a slider would change the setting.
+  // Roughly fifty notches end to end, in whole schema steps, and a
+  // trackpad's fractional rotation is gathered up into whole notches.
+  if (slider && !m_single_id.empty()) {
+    auto spun = std::make_shared<int>(0);
+    auto wheel = [this, id, def, mn, mx, stepv, send_value,
+                  spun](wxMouseEvent& e) {
+      if (e.GetWheelAxis() != wxMOUSE_WHEEL_VERTICAL || !controls()) {
+        e.Skip();
+        return;
+      }
+      const int delta = e.GetWheelDelta() > 0 ? e.GetWheelDelta() : 120;
+      *spun += e.GetWheelRotation();
+      const int notches = *spun / delta;
+      if (notches == 0) return;
+      *spun -= notches * delta;
+      ControlValue v = controls()->Value(id);
+      const bool adj = def.hasAutoAdjustable && v.auto_;
+      if (v.auto_ && !adj) return;  // the slider is disabled in auto, too
+      const double lo = adj ? def.autoAdjustMin : mn;
+      const double hi = adj ? def.autoAdjustMax : mx;
+      const double per =
+          stepv * std::max(1L, std::lround((hi - lo) / stepv / 50.0));
+      send_value((adj ? v.autoValue : v.value) + notches * per);
+    };
+    for (wxWindow* w :
+         std::initializer_list<wxWindow*>{slider, valtext, minus, plus})
+      if (w) w->Bind(wxEVT_MOUSEWHEEL, wheel);
+  }
 
   if (entry) {
     // Typing holds off the updater until the value is committed or the field
