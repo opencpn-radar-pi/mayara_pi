@@ -3286,11 +3286,14 @@ void mayara_pi::RebuildWindows() {
       // middle of a rebuild, when m_windows is not the final set yet, and a
       // window deleted before it runs (DeInit) takes the call with it.
       // OpenCPN calls DeInit before it lays out or tears down its panes at
-      // exit, so no shutdown size gets captured this way.
+      // exit, so no shutdown size gets captured this way. Full screen is read
+      // live as well: m_ocpn_fullscreen only catches up on the heartbeat, and
+      // going full screen is itself one of the resizes that lands here.
       win->Bind(wxEVT_SIZE, [this, win](wxSizeEvent& e) {
         e.Skip();
         win->CallAfter([this]() {
-          if (!m_ocpn_fullscreen && m_windows_visible && !m_windows.empty())
+          if (!m_ocpn_fullscreen && !GetFullScreen() && m_windows_visible &&
+              !m_windows.empty())
             CaptureWindowState();
         });
       });
