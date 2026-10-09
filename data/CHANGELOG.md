@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **client:** chart cursor on the PPI, chart click marker, ARPA from the chart menu (#109) ([PR #109](https://github.com/opencpn-radar-pi/mayara_pi/pull/109))
 - **i18n:** translate the control schema text the server sends (#117) ([PR #117](https://github.com/opencpn-radar-pi/mayara_pi/pull/117))
 - **controls:** show each control's description as its tooltip (#119) ([PR #119](https://github.com/opencpn-radar-pi/mayara_pi/pull/119))
+- **ppi:** full-screen toggle for a floating PPI window (#128) ([PR #128](https://github.com/opencpn-radar-pi/mayara_pi/pull/128))
 
 ### Changed
 
