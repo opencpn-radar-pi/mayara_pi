@@ -3280,6 +3280,20 @@ void mayara_pi::RebuildWindows() {
       // value so it has something to lay out from.
       pane.Hide();
       m_aui->AddPane(win, pane);
+      // A dock resized by its sash is snapshotted right away instead of at
+      // the next heartbeat tick, which a quit within that second would miss.
+      // Deferred to the window's own queue: a size event can arrive in the
+      // middle of a rebuild, when m_windows is not the final set yet, and a
+      // window deleted before it runs (DeInit) takes the call with it.
+      // OpenCPN calls DeInit before it lays out or tears down its panes at
+      // exit, so no shutdown size gets captured this way.
+      win->Bind(wxEVT_SIZE, [this, win](wxSizeEvent& e) {
+        e.Skip();
+        win->CallAfter([this]() {
+          if (!m_ocpn_fullscreen && m_windows_visible && !m_windows.empty())
+            CaptureWindowState();
+        });
+      });
       ++pane_no;
     } else {
       // wxFRAME_FLOAT_ON_PARENT, not wxSTAY_ON_TOP: the latter floats above
