@@ -889,9 +889,23 @@ void mayara_pi::CaptureWindowState() {
     if (m_aui)
       for (MayaraPpiWindow* w : m_windows) {
         if (!w) continue;
-        wxAuiPaneInfo& pane = m_aui->GetPane(w);
-        m_persp_cache.push_back(pane.IsOk() ? m_aui->SavePaneInfo(pane)
-                                            : wxString());
+        wxAuiPaneInfo pane = m_aui->GetPane(w);
+        if (!pane.IsOk()) {
+          m_persp_cache.push_back(wxString());
+          continue;
+        }
+        // Dragging a dock's sash resizes the dock, not the pane: wxAUI keeps
+        // that width in the dock itself, which SavePaneInfo does not record,
+        // and a dock rebuilt next launch sizes itself from the pane's best
+        // size instead -- so the user's width was lost on every restart
+        // (#122). Store the current docked size as the best size, on this
+        // copy only so the live layout is untouched. A hidden pane's window
+        // size is stale, so it keeps the best size it was restored with.
+        if (pane.IsDocked() && pane.IsShown()) {
+          const wxSize sz = w->GetSize();
+          if (sz.x > 0 && sz.y > 0) pane.BestSize(sz);
+        }
+        m_persp_cache.push_back(m_aui->SavePaneInfo(pane));
       }
     return;
   }
@@ -3269,6 +3283,23 @@ void mayara_pi::RebuildWindows() {
       // value so it has something to lay out from.
       pane.Hide();
       m_aui->AddPane(win, pane);
+      // A dock resized by its sash is snapshotted right away instead of at
+      // the next heartbeat tick, which a quit within that second would miss.
+      // Deferred to the window's own queue: a size event can arrive in the
+      // middle of a rebuild, when m_windows is not the final set yet, and a
+      // window deleted before it runs (DeInit) takes the call with it.
+      // OpenCPN calls DeInit before it lays out or tears down its panes at
+      // exit, so no shutdown size gets captured this way. Full screen is read
+      // live as well: m_ocpn_fullscreen only catches up on the heartbeat, and
+      // going full screen is itself one of the resizes that lands here.
+      win->Bind(wxEVT_SIZE, [this, win](wxSizeEvent& e) {
+        e.Skip();
+        win->CallAfter([this]() {
+          if (!m_ocpn_fullscreen && !GetFullScreen() && m_windows_visible &&
+              !m_windows.empty())
+            CaptureWindowState();
+        });
+      });
       ++pane_no;
     } else {
       // wxFRAME_FLOAT_ON_PARENT, not wxSTAY_ON_TOP: the latter floats above
@@ -3431,8 +3462,9 @@ void mayara_pi::AutoLayoutWindows(bool reflow_ocpn) {
 void mayara_pi::SyncRadarFullScreen(bool on) {
   if (m_docked) return;  // docked panes ride OpenCPN's own full screen
   if (!on) {
+    // A window the operator put in full screen themselves stays there.
     for (MayaraPpiWindow* w : m_windows)
-      if (w) w->LeaveFullScreen();
+      if (w && !w->IsUserFullScreen()) w->LeaveFullScreen();
     return;
   }
   wxWindow* frame =
@@ -3441,16 +3473,21 @@ void mayara_pi::SyncRadarFullScreen(bool on) {
   const unsigned nd = wxDisplay::GetCount();
   for (unsigned d = 0; d < nd; ++d) {
     if (static_cast<int>(d) == ocpn_disp) continue;  // leave OpenCPN's screen
-    // Which shown radar windows currently live on display d.
+    // Which shown radar windows currently live on display d. A display one
+    // of them already fills at the operator's request is theirs; leave it.
     std::vector<MayaraPpiWindow*> on_d;
+    bool taken = false;
     for (MayaraPpiWindow* w : m_windows) {
       if (!w || !w->IsWindowShown()) continue;
       const wxRect r = w->WindowRect();
       const wxPoint mid(r.x + r.width / 2, r.y + r.height / 2);
-      if (static_cast<unsigned>(wxDisplay::GetFromPoint(mid)) == d)
+      if (static_cast<unsigned>(wxDisplay::GetFromPoint(mid)) != d) continue;
+      if (w->IsUserFullScreen())
+        taken = true;
+      else
         on_d.push_back(w);
     }
-    if (on_d.empty()) continue;
+    if (taken || on_d.empty()) continue;
     const wxRect area = wxDisplay(d).GetGeometry();  // whole screen
     const int k = static_cast<int>(on_d.size());
     if (k == 1) {

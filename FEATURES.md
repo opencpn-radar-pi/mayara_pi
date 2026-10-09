@@ -11,7 +11,9 @@ decides what belongs here.
 ## The picture
 
 - **PPI windows**, one or several, each showing one or more radars. Floating,
-  or docked into OpenCPN as an AUI pane.
+  or docked into OpenCPN as an AUI pane. A floating window can go **full
+  screen** on its own display (View section; Esc leaves), and follows
+  OpenCPN into full screen when it is on another display.
 - **Orientation per radar** — head-up, north-up, course-up — with a lozenge on
   the picture that says which is in force and cycles it on click. It dims and
   names the missing input when north-up or course-up cannot be honoured

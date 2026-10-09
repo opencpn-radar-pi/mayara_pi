@@ -208,6 +208,11 @@ include_directories(BEFORE ${PROJECT_SOURCE_DIR}/ocpninclude)
 
 target_sources(${PACKAGE_NAME} PUBLIC ${SRC})
 
+if(WIN32)
+  # SetWindowTheme(), for the controls panel's dark scrollbar.
+  target_link_libraries(${PACKAGE_NAME} uxtheme)
+endif()
+
 if(NOT OCPN_FLATPAK_CONFIG)
   if(WIN32)
     add_subdirectory(opencpn-libs/WindowsHeaders)

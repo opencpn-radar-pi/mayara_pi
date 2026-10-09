@@ -20,6 +20,11 @@
 #include <wx/tglbtn.h>
 #include <wx/wupdlock.h>
 
+#ifdef __WXMSW__
+#include <windows.h>
+#include <uxtheme.h>
+#endif
+
 #include "MayaraClient.h"
 #include "ServerText.h"
 #include "ThemedControls.h"
@@ -229,6 +234,8 @@ class ControlsBody : public wxScrolledWindow {
   void SetThresholdControl(std::function<int()> get,
                            std::function<void(int)> set);
   void SetDockControl(std::function<bool()> get, std::function<void(bool)> set);
+  void SetFullScreenControl(std::function<bool()> get,
+                            std::function<void(bool)> set);
   void SetRangeAutoControl(std::function<bool()> get_relevant,
                            std::function<bool()> get,
                            std::function<void(bool)> set);
@@ -261,6 +268,8 @@ class ControlsBody : public wxScrolledWindow {
   wxRect ThumbRect() const;
   void OnPaint(wxPaintEvent& event);
   void OnBarMouse(wxMouseEvent& event);  // the drawn scrollbar's thumb only
+  void OnPanMouse(wxMouseEvent& event);  // drag the content to scroll it
+  void HookPanToLabels();
   void OnCaptureLost(wxMouseCaptureLostEvent& event);
   void ThemeChildren();
   void ScrollSectionIntoView(wxWindow* header, wxSizer* content);
@@ -324,11 +333,17 @@ class ControlsBody : public wxScrolledWindow {
   std::function<void(int)> m_set_threshold;
   std::function<bool()> m_get_dock;
   std::function<void(bool)> m_set_dock;
+  std::function<bool()> m_get_fullscreen;
+  std::function<void(bool)> m_set_fullscreen;
   std::function<bool()> m_range_auto_relevant;
   std::function<bool()> m_get_range_auto;
   std::function<void(bool)> m_set_range_auto;
   bool m_rebuilding = false;     // true while widgets are being destroyed
   bool m_dragging_bar = false;   // the drawn scrollbar's thumb
+  bool m_panning = false;        // left button held on the content
+  bool m_pan_moved = false;      // ...and moved far enough to be a drag
+  int m_pan_y0 = 0;              // screen y where the press started
+  int m_pan_view0 = 0;           // scroll offset (pixels) at that press
   std::function<VrmEbl(int)> m_vrm_get;
   std::function<void(int, const VrmEbl&)> m_vrm_set;
   std::function<BearingRef()> m_bearing_ref;
@@ -459,7 +474,7 @@ void ControlsBody::OnBarMouse(wxMouseEvent& event) {
     CaptureMouse();
   } else if (event.LeftUp()) {
     if (!m_dragging_bar) {
-      event.Skip();
+      OnPanMouse(event);
       return;
     }
     m_dragging_bar = false;
@@ -467,7 +482,7 @@ void ControlsBody::OnBarMouse(wxMouseEvent& event) {
     Refresh(false);
     return;
   } else if (!m_dragging_bar || !event.Dragging()) {
-    event.Skip();
+    OnPanMouse(event);
     return;
   }
   if (!m_dragging_bar || vh <= cs.y) return;
@@ -487,7 +502,50 @@ void ControlsBody::OnBarMouse(wxMouseEvent& event) {
 // every later click on the panel.
 void ControlsBody::OnCaptureLost(wxMouseCaptureLostEvent&) {
   m_dragging_bar = false;
+  m_panning = false;
   Refresh(false);
+}
+
+// Scrolling by dragging the content itself, as on a touch screen (Windows
+// turns a finger drag into exactly these mouse events) -- a scrollbar is a
+// small target there, and the wheel is no help. Only presses that reach this
+// panel count: on its background, or on a label (HookPanToLabels). Buttons,
+// sliders and the like keep their own presses, so a drag cannot start on
+// one and change a radar setting by accident. Measured in screen
+// coordinates, since the press may have landed on a label rather than here.
+void ControlsBody::OnPanMouse(wxMouseEvent& event) {
+  event.Skip();
+  const int y = wxGetMousePosition().y;
+  int xu = 0, yu = 0;
+  GetScrollPixelsPerUnit(&xu, &yu);
+  if (yu <= 0) yu = 1;
+  if (event.LeftDown()) {
+    if (GetVirtualSize().y <= GetClientSize().y) return;  // nothing to scroll
+    m_panning = true;
+    m_pan_moved = false;
+    m_pan_y0 = y;
+    m_pan_view0 = GetViewStart().y * yu;
+    if (!HasCapture()) CaptureMouse();
+  } else if (event.LeftUp()) {
+    if (!m_panning) return;
+    m_panning = false;
+    if (HasCapture()) ReleaseMouse();
+  } else if (event.Dragging() && m_panning) {
+    const int dy = y - m_pan_y0;
+    // A few pixels of slack, so the wobble of a tap is not a scroll.
+    if (!m_pan_moved && std::abs(dy) < FromDIP(4)) return;
+    m_pan_moved = true;
+    Scroll(-1, std::max(0, m_pan_view0 - dy) / yu);
+    Refresh(false);
+  }
+}
+
+// Labels cover much of the panel, and a press on one goes to the label, not
+// here. Rebuild() creates every child afresh, so each is hooked exactly once.
+void ControlsBody::HookPanToLabels() {
+  for (wxWindow* w : GetChildren())
+    if (wxDynamicCast(w, wxStaticText))
+      w->Bind(wxEVT_LEFT_DOWN, &ControlsBody::OnPanMouse, this);
 }
 
 void ControlsBody::Set(const std::string& id, const std::string& body) {
@@ -522,6 +580,17 @@ void ControlsBody::ApplyTheme(const MayaraTheme& theme) {
 
 void ControlsBody::ThemeChildren() {
   SetBackgroundColour(m_theme.panel_bg);
+#ifdef __WXMSW__
+  // The native scrollbar kept on Windows (see the constructor) is drawn by
+  // the system in its light style, a white stripe beside a dark panel. The
+  // system's own dark style for it is the explorer one; use it whenever the
+  // panel is dark.
+  const wxColour& bg = m_theme.panel_bg;
+  const bool dark =
+      bg.Red() * 299 + bg.Green() * 587 + bg.Blue() * 114 < 128 * 1000;
+  ::SetWindowTheme(GetHWND(), dark ? L"DarkMode_Explorer" : L"Explorer",
+                   nullptr);
+#endif
   for (wxWindow* c : GetChildren()) ThemeWindow(c, m_theme);
 }
 
@@ -605,6 +674,7 @@ void ControlsBody::Rebuild() {
     FitInside();
     Layout();
     ThemeChildren();
+    HookPanToLabels();
     ApplyValues();
     return;
   }
@@ -687,6 +757,7 @@ void ControlsBody::Rebuild() {
   FitInside();
   Layout();
   ThemeChildren();  // theme the freshly created widgets
+  HookPanToLabels();
   ApplyValues();
 }
 
@@ -784,7 +855,7 @@ void ControlsBody::FillViewSection(wxSizer* content) {
   // Where the radar picture appears. Independent toggles rather than one
   // exclusive choice: overlay and PPI can both be up, and "docked" is a
   // property of the PPI window rather than a third place to put the picture.
-  if (m_set_overlay || m_set_ppi || m_set_dock) {
+  if (m_set_overlay || m_set_ppi || m_set_dock || m_set_fullscreen) {
     content->Add(new wxStaticText(this, wxID_ANY, _("Views")), 0,
                  wxLEFT | wxTOP, 4);
     auto* row = new wxBoxSizer(wxHORIZONTAL);
@@ -799,8 +870,11 @@ void ControlsBody::FillViewSection(wxSizer* content) {
                                           : nullptr;
     ThemedButton* ppi = m_set_ppi ? add(_("PPI"), m_set_ppi) : nullptr;
     ThemedButton* dock = m_set_dock ? add(_("Docked"), m_set_dock) : nullptr;
+    ThemedButton* fs =
+        m_set_fullscreen ? add(_("Full screen"), m_set_fullscreen) : nullptr;
+    if (fs) fs->SetToolTip(_("Fill this window's screen; Esc leaves"));
     content->Add(row, 0, wxEXPAND | wxLEFT | wxRIGHT, 2);
-    m_updaters.push_back([this, overlay, ppi, dock]() {
+    m_updaters.push_back([this, overlay, ppi, dock, fs]() {
       if (overlay && m_get_overlay) overlay->SetValue(m_get_overlay());
       if (ppi) {
         if (m_get_ppi) ppi->SetValue(m_get_ppi());
@@ -808,6 +882,7 @@ void ControlsBody::FillViewSection(wxSizer* content) {
         ppi->Enable(m_get_overlay && m_get_overlay());
       }
       if (dock && m_get_dock) dock->SetValue(m_get_dock());
+      if (fs && m_get_fullscreen) fs->SetValue(m_get_fullscreen());
     });
   }
   // Orientation and threshold are per radar, so they name the radar they act
@@ -979,6 +1054,13 @@ void ControlsBody::SetDockControl(std::function<bool()> get,
                                    std::function<void(bool)> set) {
   m_get_dock = std::move(get);
   m_set_dock = std::move(set);
+  if (m_built) Rebuild();
+}
+
+void ControlsBody::SetFullScreenControl(std::function<bool()> get,
+                                         std::function<void(bool)> set) {
+  m_get_fullscreen = std::move(get);
+  m_set_fullscreen = std::move(set);
   if (m_built) Rebuild();
 }
 
@@ -1830,6 +1912,11 @@ void ControlsPanel::SetThresholdControl(std::function<int()> get,
 void ControlsPanel::SetDockControl(std::function<bool()> get,
                                    std::function<void(bool)> set) {
   m_body->SetDockControl(std::move(get), std::move(set));
+}
+
+void ControlsPanel::SetFullScreenControl(std::function<bool()> get,
+                                         std::function<void(bool)> set) {
+  m_body->SetFullScreenControl(std::move(get), std::move(set));
 }
 
 void ControlsPanel::SetRangeAutoControl(std::function<bool()> get_relevant,
