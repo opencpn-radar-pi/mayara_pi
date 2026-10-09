@@ -1,0 +1,2099 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: opencpn\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-09-23 11:04+0900\n"
+"PO-Revision-Date: 2026-09-24 18:08\n"
+"Last-Translator: \n"
+"Language-Team: Greek\n"
+"Language: el_GR\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Crowdin-Project: opencpn\n"
+"X-Crowdin-Project-ID: 49843\n"
+"X-Crowdin-Language: el\n"
+"X-Crowdin-File: /plugins/mayara_pi/po/mayara_pi.pot\n"
+"X-Crowdin-File-ID: 475\n"
+
+#: po/server_strings.h:7
+msgid "ARPA Max Speed"
+msgstr ""
+
+#: po/server_strings.h:8
+msgid "Accent light"
+msgstr ""
+
+#: po/server_strings.h:9
+msgid "Antenna forward"
+msgstr ""
+
+#: po/server_strings.h:10
+msgid "Antenna height"
+msgstr ""
+
+#: po/server_strings.h:11
+msgid "Antenna starboard"
+msgstr ""
+
+#: po/server_strings.h:12
+msgid "Anti-jamming"
+msgstr ""
+
+#: po/server_strings.h:13
+msgid "Auto standby"
+msgstr ""
+
+#: po/server_strings.h:14
+msgid "Bearing alignment"
+msgstr ""
+
+#: po/server_strings.h:15
+msgid "Bird mode"
+msgstr ""
+
+#: po/server_strings.h:16
+msgid "Clear targets"
+msgstr ""
+
+#: po/server_strings.h:17
+msgid "Clear trails"
+msgstr ""
+
+#: po/server_strings.h:18
+msgid "Color gain"
+msgstr ""
+
+#: po/server_strings.h:19
+msgid "Custom name"
+msgstr ""
+
+#: po/server_strings.h:20
+msgid "Device temperature"
+msgstr ""
+
+#: po/server_strings.h:21 po/server_strings.h:105
+msgid "Display timing"
+msgstr ""
+
+#: po/server_strings.h:22
+msgid "Doppler"
+msgstr ""
+
+#: po/server_strings.h:23
+msgid "Doppler Auto Track"
+msgstr ""
+
+#: po/server_strings.h:24
+msgid "Doppler mode"
+msgstr ""
+
+#: po/server_strings.h:25
+msgid "Doppler speed threshold"
+msgstr ""
+
+#: po/server_strings.h:26
+msgid "Doppler trails only"
+msgstr ""
+
+#: po/server_strings.h:27
+msgid "Echo format"
+msgstr ""
+
+#: po/server_strings.h:28
+msgid "Exclusion rect"
+msgstr ""
+
+#: po/server_strings.h:29
+msgid "Exclusion rect (2)"
+msgstr ""
+
+#: po/server_strings.h:30
+msgid "Exclusion rect (3)"
+msgstr ""
+
+#: po/server_strings.h:31
+msgid "Exclusion rect (4)"
+msgstr ""
+
+#: po/server_strings.h:32
+msgid "Exclusion zone"
+msgstr ""
+
+#: po/server_strings.h:33
+msgid "Exclusion zone (2)"
+msgstr ""
+
+#: po/server_strings.h:34
+msgid "Exclusion zone (3)"
+msgstr ""
+
+#: po/server_strings.h:35
+msgid "Exclusion zone (4)"
+msgstr ""
+
+#: po/server_strings.h:36 po/server_strings.h:108
+msgid "FTC"
+msgstr ""
+
+#: po/server_strings.h:37
+msgid "Far STC curve"
+msgstr ""
+
+#: po/server_strings.h:38
+msgid "Fine tune"
+msgstr ""
+
+#: po/server_strings.h:39
+msgid "Firmware version"
+msgstr ""
+
+#: po/server_strings.h:40
+msgid "Gain"
+msgstr ""
+
+#: po/server_strings.h:41
+msgid "Guard zone"
+msgstr ""
+
+#: po/server_strings.h:42
+msgid "Guard zone (2)"
+msgstr ""
+
+#: po/server_strings.h:43
+msgid "Interference rejection"
+msgstr ""
+
+#: po/server_strings.h:44
+msgid "Local interference rejection"
+msgstr ""
+
+#: po/server_strings.h:45
+msgid "Magnetron current"
+msgstr ""
+
+#: po/server_strings.h:46 po/server_strings.h:138
+msgid "Main bang suppression"
+msgstr ""
+
+#: po/server_strings.h:47
+msgid "Middle STC curve"
+msgstr ""
+
+#: po/server_strings.h:48
+msgid "Mode"
+msgstr ""
+
+#: po/server_strings.h:49
+msgid "Model name"
+msgstr ""
+
+#: po/server_strings.h:50
+msgid "Near STC curve"
+msgstr ""
+
+#: po/server_strings.h:51
+msgid "No Transmit sector"
+msgstr ""
+
+#: po/server_strings.h:52
+msgid "No Transmit sector (2)"
+msgstr ""
+
+#: po/server_strings.h:53
+msgid "No Transmit sector (3)"
+msgstr ""
+
+#: po/server_strings.h:54
+msgid "No Transmit sector (4)"
+msgstr ""
+
+#: po/server_strings.h:55
+msgid "Noise rejection"
+msgstr ""
+
+#: po/server_strings.h:56
+msgid "Operating time"
+msgstr ""
+
+#: po/server_strings.h:57
+msgid "Park position"
+msgstr ""
+
+#: po/server_strings.h:58 src/RadarDisplayPanel.cpp:443
+msgid "Power"
+msgstr ""
+
+#: po/server_strings.h:59
+msgid "Pulse width"
+msgstr ""
+
+#: po/server_strings.h:60
+msgid "Rain clutter"
+msgstr ""
+
+#: po/server_strings.h:61 src/ControlsPanel.cpp:1238
+msgid "Range"
+msgstr ""
+
+#: po/server_strings.h:62
+msgid "Range Units"
+msgstr ""
+
+#: po/server_strings.h:63
+msgid "Rotation speed"
+msgstr ""
+
+#: po/server_strings.h:64
+msgid "STC range"
+msgstr ""
+
+#: po/server_strings.h:65
+msgid "Scan average"
+msgstr ""
+
+#: po/server_strings.h:66
+msgid "Scan average sensitivity"
+msgstr ""
+
+#: po/server_strings.h:67
+msgid "Scan speed"
+msgstr ""
+
+#: po/server_strings.h:68
+msgid "Sea clutter"
+msgstr ""
+
+#: po/server_strings.h:69 po/server_strings.h:152
+msgid "Sea clutter curve"
+msgstr ""
+
+#: po/server_strings.h:70
+msgid "Sea state"
+msgstr ""
+
+#: po/server_strings.h:71
+msgid "Serial Number"
+msgstr ""
+
+#: po/server_strings.h:72
+msgid "Side lobe suppression"
+msgstr ""
+
+#: po/server_strings.h:73
+msgid "Signal strength"
+msgstr ""
+
+#: po/server_strings.h:74
+msgid "Spoke Processing"
+msgstr ""
+
+#: po/server_strings.h:75
+msgid "Spoke length"
+msgstr ""
+
+#: po/server_strings.h:76
+msgid "Spokes"
+msgstr ""
+
+#: po/server_strings.h:77
+msgid "Supply voltage"
+msgstr ""
+
+#: po/server_strings.h:78
+msgid "Target boost"
+msgstr ""
+
+#: po/server_strings.h:79
+msgid "Target expansion"
+msgstr ""
+
+#: po/server_strings.h:80
+msgid "Target separation"
+msgstr ""
+
+#: po/server_strings.h:81
+msgid "Target trails"
+msgstr ""
+
+#: po/server_strings.h:82
+msgid "Target trails motion"
+msgstr ""
+
+#: po/server_strings.h:83
+msgid "Timed idle"
+msgstr ""
+
+#: po/server_strings.h:84
+msgid "Timed idle transmit"
+msgstr ""
+
+#: po/server_strings.h:85
+msgid "Transmit channel"
+msgstr ""
+
+#: po/server_strings.h:86
+msgid "Transmit time"
+msgstr ""
+
+#: po/server_strings.h:87
+msgid "Tune"
+msgstr ""
+
+#: po/server_strings.h:88
+msgid "Warmup time"
+msgstr ""
+
+#: po/server_strings.h:91
+msgid "Adjust the color curve relative to gain"
+msgstr ""
+
+#: po/server_strings.h:92
+msgid "Alignment of the antenna relative to the vessel's bow"
+msgstr ""
+
+#: po/server_strings.h:93
+msgid "Antenna offset forward of GPS position"
+msgstr ""
+
+#: po/server_strings.h:94
+msgid "Antenna offset starboard of GPS position"
+msgstr ""
+
+#: po/server_strings.h:95
+msgid "Antenna park position when entering standby"
+msgstr ""
+
+#: po/server_strings.h:96
+msgid "Anti-jamming filter reduces interference from other radars on the same frequency"
+msgstr ""
+
+#: po/server_strings.h:97
+msgid "Choice of radar mode tuning to certain conditions, or custom"
+msgstr ""
+
+#: po/server_strings.h:98
+msgid "Clear all ARPA targets"
+msgstr ""
+
+#: po/server_strings.h:99
+msgid "Clear target trails"
+msgstr ""
+
+#: po/server_strings.h:100
+msgid "Convert all Doppler targets to ARPA targets automatically"
+msgstr ""
+
+#: po/server_strings.h:101
+msgid "Convert only Doppler targets to target trails"
+msgstr ""
+
+#: po/server_strings.h:102
+msgid "Current transmit pulse width selected by the radar"
+msgstr ""
+
+#: po/server_strings.h:103
+msgid "DC supply voltage at the radar"
+msgstr ""
+
+#: po/server_strings.h:104
+msgid "Desired rotation speed of the radar antenna"
+msgstr ""
+
+#: po/server_strings.h:106
+msgid "Distance boundary between STC range bands"
+msgstr ""
+
+#: po/server_strings.h:107
+msgid "Experimental echo format request (NXT only: IMO or Tile)"
+msgstr ""
+
+#: po/server_strings.h:109
+msgid "Far-range STC suppression curve"
+msgstr ""
+
+#: po/server_strings.h:110
+msgid "Filters out noise"
+msgstr ""
+
+#: po/server_strings.h:111
+msgid "Fine adjustment of the radar receiver tuning"
+msgstr ""
+
+#: po/server_strings.h:112
+msgid "First exclusion zone (stationary only)"
+msgstr ""
+
+#: po/server_strings.h:113
+msgid "First guard zone for target detection"
+msgstr ""
+
+#: po/server_strings.h:114
+msgid "First no-transmit sector"
+msgstr ""
+
+#: po/server_strings.h:115
+msgid "First rectangular exclusion zone (stationary only)"
+msgstr ""
+
+#: po/server_strings.h:116
+msgid "For what type of targets Doppler is used"
+msgstr ""
+
+#: po/server_strings.h:117
+msgid "Fourth exclusion zone (stationary only)"
+msgstr ""
+
+#: po/server_strings.h:118
+msgid "Fourth no-transmit sector"
+msgstr ""
+
+#: po/server_strings.h:119
+msgid "Fourth rectangular exclusion zone (stationary only)"
+msgstr ""
+
+#: po/server_strings.h:120
+msgid "Height of the antenna above waterline"
+msgstr ""
+
+#: po/server_strings.h:121
+msgid "How long the radar has been operating over its lifetime"
+msgstr ""
+
+#: po/server_strings.h:122
+msgid "How long the radar has been transmitting over its lifetime"
+msgstr ""
+
+#: po/server_strings.h:123
+msgid "How long the radar still needs to warm up before transmitting"
+msgstr ""
+
+#: po/server_strings.h:124
+msgid "How long the radar transmits during timed idle"
+msgstr ""
+
+#: po/server_strings.h:125
+msgid "How long the spokes are that the radar transmitted last rotation"
+msgstr ""
+
+#: po/server_strings.h:126
+msgid "How many spokes the radar transmitted last rotation"
+msgstr ""
+
+#: po/server_strings.h:127
+msgid "How much local interference rejection is applied"
+msgstr ""
+
+#: po/server_strings.h:128
+msgid "How quickly the radar antenna rotates"
+msgstr ""
+
+#: po/server_strings.h:129
+msgid "How sensitive the radar is to returning echoes"
+msgstr ""
+
+#: po/server_strings.h:130
+msgid "How target trails behave"
+msgstr ""
+
+#: po/server_strings.h:131
+msgid "How to process spoke data for display"
+msgstr ""
+
+#: po/server_strings.h:132
+msgid "Increases target length for small targets"
+msgstr ""
+
+#: po/server_strings.h:133
+msgid "Internal temperature of the radar"
+msgstr ""
+
+#: po/server_strings.h:134
+msgid "Let the radar stand down when nobody has watched it for this long"
+msgstr ""
+
+#: po/server_strings.h:135
+msgid "Level of how much small targets are boosted"
+msgstr ""
+
+#: po/server_strings.h:136
+msgid "Level of optimization for bird targets"
+msgstr ""
+
+#: po/server_strings.h:137
+msgid "Level of side lobe suppression"
+msgstr ""
+
+#: po/server_strings.h:139
+msgid "Makes separation between targets more prominent"
+msgstr ""
+
+#: po/server_strings.h:140
+msgid "Manufacturer model name of the radar"
+msgstr ""
+
+#: po/server_strings.h:141
+msgid "Manufacturer serial number of the radar"
+msgstr ""
+
+#: po/server_strings.h:142
+msgid "Maximum distance the radar is looking at"
+msgstr ""
+
+#: po/server_strings.h:143
+msgid "Maximum target speed: Normal (25kn), Medium (40kn), Fast (50kn)"
+msgstr ""
+
+#: po/server_strings.h:144
+msgid "Method to finely tune the radar receiver"
+msgstr ""
+
+#: po/server_strings.h:145
+msgid "Middle-range STC suppression curve"
+msgstr ""
+
+#: po/server_strings.h:146
+msgid "Near-range STC suppression curve"
+msgstr ""
+
+#: po/server_strings.h:147
+msgid "Periodically switch between transmit and standby"
+msgstr ""
+
+#: po/server_strings.h:148
+msgid "Radar operational state"
+msgstr ""
+
+#: po/server_strings.h:149
+msgid "Rain clutter suppression"
+msgstr ""
+
+#: po/server_strings.h:150
+msgid "Reduces interference from other radars"
+msgstr ""
+
+#: po/server_strings.h:151
+msgid "Scan-to-scan averaging reduces noise by comparing successive sweeps"
+msgstr ""
+
+#: po/server_strings.h:153
+msgid "Sea clutter suppression"
+msgstr ""
+
+#: po/server_strings.h:154
+msgid "Sea state for sea clutter suppression"
+msgstr ""
+
+#: po/server_strings.h:155
+msgid "Second exclusion zone (stationary only)"
+msgstr ""
+
+#: po/server_strings.h:156
+msgid "Second guard zone for target detection"
+msgstr ""
+
+#: po/server_strings.h:157
+msgid "Second no-transmit sector"
+msgstr ""
+
+#: po/server_strings.h:158
+msgid "Second rectangular exclusion zone (stationary only)"
+msgstr ""
+
+#: po/server_strings.h:159
+msgid "Signal strength of the radar"
+msgstr ""
+
+#: po/server_strings.h:160
+msgid "Strength of the accent light"
+msgstr ""
+
+#: po/server_strings.h:161
+msgid "Targets coming towards or going away from own ship shown in different colors"
+msgstr ""
+
+#: po/server_strings.h:162
+msgid "The current supplied to the magnetron"
+msgstr ""
+
+#: po/server_strings.h:163
+msgid "Third exclusion zone (stationary only)"
+msgstr ""
+
+#: po/server_strings.h:164
+msgid "Third no-transmit sector"
+msgstr ""
+
+#: po/server_strings.h:165
+msgid "Third rectangular exclusion zone (stationary only)"
+msgstr ""
+
+#: po/server_strings.h:166
+msgid "Threshold for scan averaging filter"
+msgstr ""
+
+#: po/server_strings.h:167
+msgid "Threshold speed above which Doppler is applied"
+msgstr ""
+
+#: po/server_strings.h:168
+msgid "Transmit frequency channel selection (auto or manual)"
+msgstr ""
+
+#: po/server_strings.h:169
+msgid "User defined name for the radar"
+msgstr ""
+
+#: po/server_strings.h:170
+msgid "Version of the radar firmware"
+msgstr ""
+
+#: po/server_strings.h:171
+msgid "Whether target trails are shown"
+msgstr ""
+
+#: po/server_strings.h:172
+msgid "Which unit system to use for range values"
+msgstr ""
+
+#: po/server_strings.h:175
+msgctxt "accentLight"
+msgid "High"
+msgstr ""
+
+#: po/server_strings.h:176
+msgctxt "accentLight"
+msgid "Low"
+msgstr ""
+
+#: po/server_strings.h:177
+msgctxt "accentLight"
+msgid "Medium"
+msgstr ""
+
+#: po/server_strings.h:178
+msgctxt "accentLight"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:179
+msgctxt "antiJamming"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:180
+msgctxt "antiJamming"
+msgid "On"
+msgstr ""
+
+#: po/server_strings.h:181
+msgctxt "arpaDetectMaxSpeed"
+msgid "Fast"
+msgstr ""
+
+#: po/server_strings.h:182
+msgctxt "arpaDetectMaxSpeed"
+msgid "Medium"
+msgstr ""
+
+#: po/server_strings.h:183
+msgctxt "arpaDetectMaxSpeed"
+msgid "Normal"
+msgstr ""
+
+#: po/server_strings.h:184
+msgctxt "autoStandby"
+msgid "1 min"
+msgstr ""
+
+#: po/server_strings.h:185
+msgctxt "autoStandby"
+msgid "15 min"
+msgstr ""
+
+#: po/server_strings.h:186
+msgctxt "autoStandby"
+msgid "30 min"
+msgstr ""
+
+#: po/server_strings.h:187
+msgctxt "autoStandby"
+msgid "5 min"
+msgstr ""
+
+#: po/server_strings.h:188
+msgctxt "autoStandby"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:189
+msgctxt "birdMode"
+msgid "High"
+msgstr ""
+
+#: po/server_strings.h:190
+msgctxt "birdMode"
+msgid "Low"
+msgstr ""
+
+#: po/server_strings.h:191
+msgctxt "birdMode"
+msgid "Medium"
+msgstr ""
+
+#: po/server_strings.h:192
+msgctxt "birdMode"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:193
+msgctxt "doppler"
+msgid "Approaching"
+msgstr ""
+
+#: po/server_strings.h:194
+msgctxt "doppler"
+msgid "Normal"
+msgstr ""
+
+#: po/server_strings.h:195
+msgctxt "doppler"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:196
+msgctxt "doppler"
+msgid "On"
+msgstr ""
+
+#: po/server_strings.h:197
+msgctxt "doppler"
+msgid "Rain"
+msgstr ""
+
+#: po/server_strings.h:198
+msgctxt "doppler"
+msgid "Target"
+msgstr ""
+
+#: po/server_strings.h:199
+msgctxt "dopplerAutoTrack"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:200
+msgctxt "dopplerAutoTrack"
+msgid "On"
+msgstr ""
+
+#: po/server_strings.h:201
+msgctxt "dopplerTrailsOnly"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:202
+msgctxt "dopplerTrailsOnly"
+msgid "On"
+msgstr ""
+
+#: po/server_strings.h:203
+msgctxt "echoFormat"
+msgid "IMO"
+msgstr ""
+
+#: po/server_strings.h:204
+msgctxt "echoFormat"
+msgid "Tile"
+msgstr ""
+
+#: po/server_strings.h:205
+msgctxt "interferenceRejection"
+msgid "High"
+msgstr ""
+
+#: po/server_strings.h:206
+msgctxt "interferenceRejection"
+msgid "Level 1"
+msgstr ""
+
+#: po/server_strings.h:207
+msgctxt "interferenceRejection"
+msgid "Level 2"
+msgstr ""
+
+#: po/server_strings.h:208
+msgctxt "interferenceRejection"
+msgid "Level 3"
+msgstr ""
+
+#: po/server_strings.h:209
+msgctxt "interferenceRejection"
+msgid "Level 4"
+msgstr ""
+
+#: po/server_strings.h:210
+msgctxt "interferenceRejection"
+msgid "Level 5"
+msgstr ""
+
+#: po/server_strings.h:211
+msgctxt "interferenceRejection"
+msgid "Low"
+msgstr ""
+
+#: po/server_strings.h:212
+msgctxt "interferenceRejection"
+msgid "Medium"
+msgstr ""
+
+#: po/server_strings.h:213
+msgctxt "interferenceRejection"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:214
+msgctxt "interferenceRejection"
+msgid "On"
+msgstr ""
+
+#: po/server_strings.h:215
+msgctxt "localInterferenceRejection"
+msgid "High"
+msgstr ""
+
+#: po/server_strings.h:216
+msgctxt "localInterferenceRejection"
+msgid "Low"
+msgstr ""
+
+#: po/server_strings.h:217
+msgctxt "localInterferenceRejection"
+msgid "Medium"
+msgstr ""
+
+#: po/server_strings.h:218
+msgctxt "localInterferenceRejection"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:219
+msgctxt "mainBangSuppression"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:220
+msgctxt "mainBangSuppression"
+msgid "On"
+msgstr ""
+
+#: po/server_strings.h:221
+msgctxt "mode"
+msgid "Bird"
+msgstr ""
+
+#: po/server_strings.h:222
+msgctxt "mode"
+msgid "Bird+"
+msgstr ""
+
+#: po/server_strings.h:223
+msgctxt "mode"
+msgid "Buoy"
+msgstr ""
+
+#: po/server_strings.h:224
+msgctxt "mode"
+msgid "Coastal"
+msgstr ""
+
+#: po/server_strings.h:225
+msgctxt "mode"
+msgid "Custom"
+msgstr ""
+
+#: po/server_strings.h:226
+msgctxt "mode"
+msgid "Harbor"
+msgstr ""
+
+#: po/server_strings.h:227
+msgctxt "mode"
+msgid "Offshore"
+msgstr ""
+
+#: po/server_strings.h:228
+msgctxt "mode"
+msgid "Weather"
+msgstr ""
+
+#: po/server_strings.h:229
+msgctxt "noiseRejection"
+msgid "High"
+msgstr ""
+
+#: po/server_strings.h:230
+msgctxt "noiseRejection"
+msgid "Low"
+msgstr ""
+
+#: po/server_strings.h:231
+msgctxt "noiseRejection"
+msgid "Medium"
+msgstr ""
+
+#: po/server_strings.h:232
+msgctxt "noiseRejection"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:233
+msgctxt "noiseRejection"
+msgid "On"
+msgstr ""
+
+#: po/server_strings.h:234
+msgctxt "power"
+msgid "Fault"
+msgstr ""
+
+#: po/server_strings.h:235
+msgctxt "power"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:236
+msgctxt "power"
+msgid "Preparing"
+msgstr ""
+
+#: po/server_strings.h:237
+msgctxt "power"
+msgid "Standby"
+msgstr ""
+
+#: po/server_strings.h:238
+msgctxt "power"
+msgid "Transmit"
+msgstr ""
+
+#: po/server_strings.h:239
+msgctxt "pulseWidth"
+msgid "Long"
+msgstr ""
+
+#: po/server_strings.h:240
+msgctxt "pulseWidth"
+msgid "Short"
+msgstr ""
+
+#: po/server_strings.h:241
+msgctxt "rangeUnits"
+msgid "Metric"
+msgstr ""
+
+#: po/server_strings.h:242
+msgctxt "rangeUnits"
+msgid "Mixed"
+msgstr ""
+
+#: po/server_strings.h:243
+msgctxt "rangeUnits"
+msgid "Nautical"
+msgstr ""
+
+#: po/server_strings.h:244
+msgctxt "scanAverageMode"
+msgid "High"
+msgstr ""
+
+#: po/server_strings.h:245
+msgctxt "scanAverageMode"
+msgid "Low"
+msgstr ""
+
+#: po/server_strings.h:246
+msgctxt "scanAverageMode"
+msgid "Medium"
+msgstr ""
+
+#: po/server_strings.h:247
+msgctxt "scanAverageMode"
+msgid "Medium High"
+msgstr ""
+
+#: po/server_strings.h:248
+msgctxt "scanAverageMode"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:249
+msgctxt "scanAverageMode"
+msgid "Very High"
+msgstr ""
+
+#: po/server_strings.h:250
+msgctxt "scanSpeed"
+msgid "Auto"
+msgstr ""
+
+#: po/server_strings.h:251
+msgctxt "scanSpeed"
+msgid "Fast"
+msgstr ""
+
+#: po/server_strings.h:252
+msgctxt "scanSpeed"
+msgid "Medium"
+msgstr ""
+
+#: po/server_strings.h:253
+msgctxt "scanSpeed"
+msgid "Medium Plus"
+msgstr ""
+
+#: po/server_strings.h:254
+msgctxt "scanSpeed"
+msgid "Medium-High"
+msgstr ""
+
+#: po/server_strings.h:255
+msgctxt "scanSpeed"
+msgid "Normal"
+msgstr ""
+
+#: po/server_strings.h:256
+msgctxt "seaState"
+msgid "Auto"
+msgstr ""
+
+#: po/server_strings.h:257
+msgctxt "seaState"
+msgid "Calm"
+msgstr ""
+
+#: po/server_strings.h:258
+msgctxt "seaState"
+msgid "Harbor"
+msgstr ""
+
+#: po/server_strings.h:259
+msgctxt "seaState"
+msgid "Manual"
+msgstr ""
+
+#: po/server_strings.h:260
+msgctxt "seaState"
+msgid "Moderate"
+msgstr ""
+
+#: po/server_strings.h:261
+msgctxt "seaState"
+msgid "Rough"
+msgstr ""
+
+#: po/server_strings.h:262
+msgctxt "spokeProcessing"
+msgid "Clean"
+msgstr ""
+
+#: po/server_strings.h:263
+msgctxt "spokeProcessing"
+msgid "Fill"
+msgstr ""
+
+#: po/server_strings.h:264
+msgctxt "spokeProcessing"
+msgid "Reduce"
+msgstr ""
+
+#: po/server_strings.h:265
+msgctxt "spokeProcessing"
+msgid "Smooth"
+msgstr ""
+
+#: po/server_strings.h:266
+msgctxt "targetBoost"
+msgid "High"
+msgstr ""
+
+#: po/server_strings.h:267
+msgctxt "targetBoost"
+msgid "Low"
+msgstr ""
+
+#: po/server_strings.h:268
+msgctxt "targetBoost"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:269
+msgctxt "targetBoost"
+msgid "On"
+msgstr ""
+
+#: po/server_strings.h:270
+msgctxt "targetExpansion"
+msgid "High"
+msgstr ""
+
+#: po/server_strings.h:271
+msgctxt "targetExpansion"
+msgid "Low"
+msgstr ""
+
+#: po/server_strings.h:272
+msgctxt "targetExpansion"
+msgid "Medium"
+msgstr ""
+
+#: po/server_strings.h:273
+msgctxt "targetExpansion"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:274
+msgctxt "targetExpansion"
+msgid "On"
+msgstr ""
+
+#: po/server_strings.h:275
+msgctxt "targetSeparation"
+msgid "High"
+msgstr ""
+
+#: po/server_strings.h:276
+msgctxt "targetSeparation"
+msgid "Low"
+msgstr ""
+
+#: po/server_strings.h:277
+msgctxt "targetSeparation"
+msgid "Medium"
+msgstr ""
+
+#: po/server_strings.h:278
+msgctxt "targetSeparation"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:279
+msgctxt "targetTrails"
+msgid "1 min"
+msgstr ""
+
+#: po/server_strings.h:280
+msgctxt "targetTrails"
+msgid "10 min"
+msgstr ""
+
+#: po/server_strings.h:281
+msgctxt "targetTrails"
+msgid "15s"
+msgstr ""
+
+#: po/server_strings.h:282
+msgctxt "targetTrails"
+msgid "3 min"
+msgstr ""
+
+#: po/server_strings.h:283
+msgctxt "targetTrails"
+msgid "30s"
+msgstr ""
+
+#: po/server_strings.h:284
+msgctxt "targetTrails"
+msgid "5 min"
+msgstr ""
+
+#: po/server_strings.h:285
+msgctxt "targetTrails"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:286
+msgctxt "timedIdle"
+msgid "Off"
+msgstr ""
+
+#: po/server_strings.h:287
+msgctxt "timedIdle"
+msgid "On"
+msgstr ""
+
+#: po/server_strings.h:288
+msgctxt "trailsMotion"
+msgid "Relative"
+msgstr ""
+
+#: po/server_strings.h:289
+msgctxt "trailsMotion"
+msgid "True"
+msgstr ""
+
+#: src/ControlsPanel.cpp:374 src/ControlsPanel.cpp:583
+msgid "Waiting for radar..."
+msgstr ""
+
+#: src/ControlsPanel.cpp:660
+msgid "View"
+msgstr ""
+
+#: src/ControlsPanel.cpp:662
+msgid "EBL/VRM"
+msgstr ""
+
+#: src/ControlsPanel.cpp:783
+msgid "Views"
+msgstr ""
+
+#: src/ControlsPanel.cpp:793
+msgid "Overlay"
+msgstr ""
+
+#: src/ControlsPanel.cpp:795
+msgid "PPI"
+msgstr ""
+
+#: src/ControlsPanel.cpp:796
+msgid "Docked"
+msgstr ""
+
+#: src/ControlsPanel.cpp:819
+msgid "Orientation"
+msgstr ""
+
+#: src/ControlsPanel.cpp:820
+#, c-format
+msgid "Orientation (%s)"
+msgstr ""
+
+#: src/ControlsPanel.cpp:821 src/RadarDisplayPanel.cpp:523
+msgid "Course up"
+msgstr ""
+
+#: src/ControlsPanel.cpp:821 src/RadarDisplayPanel.cpp:524
+msgid "Head up"
+msgstr ""
+
+#: src/ControlsPanel.cpp:821 src/RadarDisplayPanel.cpp:522
+msgid "North up"
+msgstr ""
+
+#: src/ControlsPanel.cpp:826
+msgid "Echo threshold"
+msgstr ""
+
+#: src/ControlsPanel.cpp:827
+#, c-format
+msgid "Echo threshold (%s)"
+msgstr ""
+
+#: src/ControlsPanel.cpp:828
+msgid "All"
+msgstr ""
+
+#: src/ControlsPanel.cpp:828
+msgid "Medium"
+msgstr ""
+
+#: src/ControlsPanel.cpp:828
+msgid "Strong"
+msgstr ""
+
+#: src/ControlsPanel.cpp:834
+msgid "Refresh rate"
+msgstr ""
+
+#: src/ControlsPanel.cpp:848
+msgid "Menu auto-hide"
+msgstr ""
+
+#: src/ControlsPanel.cpp:848
+msgid "Never"
+msgstr ""
+
+#: src/ControlsPanel.cpp:858
+msgid "Overlay opacity"
+msgstr ""
+
+#: src/ControlsPanel.cpp:868
+msgid "Guard zones on chart"
+msgstr ""
+
+#: src/ControlsPanel.cpp:882
+msgid "Nest second radar at 1/4"
+msgstr ""
+
+#: src/ControlsPanel.cpp:893
+msgid "Reverse zoom wheel"
+msgstr ""
+
+#: src/ControlsPanel.cpp:904
+msgid "Auto layout windows"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1035 src/ControlsPanel.cpp:1258
+msgid "Auto"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1332
+#, c-format
+msgid "# %d"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1342
+msgid "Clear"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1357
+msgid "not set"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1371
+msgid "Server:"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1377 src/mayara_pi.cpp:2991
+msgid "not connected"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1383
+msgid "Plugin version:"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1396
+msgid "Server version:"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1403
+msgid "unknown"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1470
+msgid "Start deg"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1471
+msgid "End deg"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1474 src/ControlsPanel.cpp:1570
+msgid "Enabled"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1479 src/ControlsPanel.cpp:1574
+#: src/ControlsPanel.cpp:1598
+msgid "Edit"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1481 src/ControlsPanel.cpp:1576
+msgid "Save"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1547
+msgid "Angles:"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1548
+msgid "Range:"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1548
+msgid "m"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1598
+msgid "Cancel"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1754
+msgid "Controls"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1877
+msgid "Settings"
+msgstr ""
+
+#: src/ControlsPanel.cpp:1883
+msgid "Hide controls"
+msgstr ""
+
+#: src/MayaraServer.cpp:117
+msgid "Cannot read the downloaded archive."
+msgstr ""
+
+#: src/MayaraServer.cpp:131 src/mayara_pi.cpp:2009
+#, c-format
+msgid "Cannot write %s."
+msgstr ""
+
+#: src/MayaraServer.cpp:152
+msgid "The downloaded archive does not contain mayara-server."
+msgstr ""
+
+#: src/MayaraServer.cpp:353
+msgid "No mayara-server download is available."
+msgstr ""
+
+#: src/MayaraServer.cpp:359
+#, c-format
+msgid "Cannot create %s."
+msgstr ""
+
+#: src/MayaraServer.cpp:369
+msgid "Downloading mayara-server"
+msgstr ""
+
+#: src/MayaraServer.cpp:370
+#, c-format
+msgid "mayara-server %s (%s) from "
+msgstr ""
+
+#: src/MayaraServer.cpp:380
+msgid "The download did not complete."
+msgstr ""
+
+#: src/MayaraServer.cpp:402
+#, c-format
+msgid "Cannot install %s."
+msgstr ""
+
+#: src/MayaraServer.cpp:628 src/mayara_pi.cpp:2239
+msgid "Run mayara-server on this computer"
+msgstr ""
+
+#: src/MayaraServer.cpp:633
+msgid "If you already run Signal K on a boat server, install the Mayara plugin there: one server then serves every device on board, and it keeps running when this computer is off.\n\n"
+"Otherwise mayara-server can be downloaded and run here, next to OpenCPN."
+msgstr ""
+
+#: src/MayaraServer.cpp:645 src/MayaraServer.cpp:678
+msgid "Download mayara locally"
+msgstr ""
+
+#: src/MayaraServer.cpp:648
+msgid "Run it here"
+msgstr ""
+
+#: src/MayaraServer.cpp:673
+#, c-format
+msgid "mayara-server %s is installed here and running."
+msgstr ""
+
+#: src/MayaraServer.cpp:674
+#, c-format
+msgid "mayara-server %s is installed here but not running."
+msgstr ""
+
+#: src/MayaraServer.cpp:682 src/mayara_pi.cpp:2743
+msgid "There is no mayara-server download for this platform."
+msgstr ""
+
+#: src/MayaraServer.cpp:686
+msgid "Looking for a mayara-server download..."
+msgstr ""
+
+#: src/MayaraServer.cpp:692
+msgid "github.com cannot be reached, so there is nothing to download right now. A mayara-server already on the network is still found normally."
+msgstr ""
+
+#: src/MayaraServer.cpp:699
+#, c-format
+msgid "mayara-server %s can be downloaded (%s)."
+msgstr ""
+
+#: src/MayaraServer.cpp:703 src/mayara_pi.cpp:2759
+#, c-format
+msgid "Update to %s"
+msgstr ""
+
+#: src/MayaraServer.cpp:704
+#, c-format
+msgid "  %s is available (%s)."
+msgstr ""
+
+#: src/MayaraServer.cpp:707
+msgid "  It is up to date."
+msgstr ""
+
+#: src/MayaraServer.cpp:726 src/mayara_pi.cpp:363 src/mayara_pi.cpp:1981
+#: src/mayara_pi.cpp:1988 src/mayara_pi.cpp:1996 src/mayara_pi.cpp:2010
+#: src/mayara_pi.cpp:2018 src/mayara_pi.cpp:2063 src/mayara_pi.cpp:2069
+#: src/mayara_pi.cpp:2591 src/mayara_pi.cpp:2790 src/mayara_pi.cpp:2802
+#: src/mayara_pi.cpp:2814
+msgid "Mayara"
+msgstr ""
+
+#: src/RadarDisplayPanel.cpp:271
+msgid "Radar API version mismatch"
+msgstr ""
+
+#: src/RadarDisplayPanel.cpp:274
+#, c-format
+msgid "server %s, plugin %s - update the plugin"
+msgstr ""
+
+#: src/RadarDisplayPanel.cpp:519
+msgid "no heading"
+msgstr ""
+
+#: src/RadarDisplayPanel.cpp:520
+msgid "no course"
+msgstr ""
+
+#: src/RadarDisplayPanel.cpp:1365
+#, c-format
+msgid "VRM/EBL %d"
+msgstr ""
+
+#: src/ServerText.cpp:44
+msgid "Base"
+msgstr ""
+
+#: src/ServerText.cpp:45
+msgid "Targets"
+msgstr ""
+
+#: src/ServerText.cpp:46
+msgid "Trails"
+msgstr ""
+
+#: src/ServerText.cpp:47
+msgid "Advanced"
+msgstr ""
+
+#: src/ServerText.cpp:48
+msgid "Installation"
+msgstr ""
+
+#: src/ServerText.cpp:49
+msgid "Info"
+msgstr ""
+
+#: src/mayara_pi.cpp:271
+msgid "Mayara Changelog"
+msgstr ""
+
+#: src/mayara_pi.cpp:364
+msgid "Mayara Radar"
+msgstr ""
+
+#: src/mayara_pi.cpp:364
+msgid "Show or hide the Mayara radar PPI window"
+msgstr ""
+
+#: src/mayara_pi.cpp:373
+msgid "Mayara radar overlay"
+msgstr ""
+
+#: src/mayara_pi.cpp:377
+msgid "Mayara radar menu"
+msgstr ""
+
+#: src/mayara_pi.cpp:382 src/mayara_pi.cpp:3056
+msgid "Show Mayara PPI"
+msgstr ""
+
+#: src/mayara_pi.cpp:389
+msgid "Acquire Mayara radar target"
+msgstr ""
+
+#: src/mayara_pi.cpp:393
+msgid "Delete Mayara radar target"
+msgstr ""
+
+#: src/mayara_pi.cpp:397
+msgid "Delete all Mayara radar targets"
+msgstr ""
+
+#: src/mayara_pi.cpp:1088
+msgid "Mayara - permission needed"
+msgstr ""
+
+#: src/mayara_pi.cpp:1094
+msgid "Your Signal K server allows this plugin to read radar data, but not to control the radar, so buttons like Transmit do nothing.\n\n"
+"Ask the server for permission below, then approve the request in the Signal K web interface under Security -> Access Requests. The permission is remembered, so this is only needed once."
+msgstr ""
+
+#: src/mayara_pi.cpp:1106
+msgid "Ask for permission"
+msgstr ""
+
+#: src/mayara_pi.cpp:1107
+msgid "Not now"
+msgstr ""
+
+#: src/mayara_pi.cpp:1141
+msgid "Asking the server..."
+msgstr ""
+
+#: src/mayara_pi.cpp:1145
+msgid "Waiting - approve \"Mayara radar plugin for OpenCPN\" in Signal K under Security -> Access Requests."
+msgstr ""
+
+#: src/mayara_pi.cpp:1150
+msgid "Approved. Radar control works now."
+msgstr ""
+
+#: src/mayara_pi.cpp:1154
+msgid "The request was refused. You can ask again."
+msgstr ""
+
+#: src/mayara_pi.cpp:1157
+msgid "This server does not hand out permissions this way; it has to be granted in its own configuration."
+msgstr ""
+
+#: src/mayara_pi.cpp:1162
+msgid "No permission yet."
+msgstr ""
+
+#: src/mayara_pi.cpp:1473 src/mayara_pi.cpp:1505
+msgid "OpenCPN"
+msgstr ""
+
+#: src/mayara_pi.cpp:1488 src/mayara_pi.cpp:1520
+msgid "radar"
+msgstr ""
+
+#: src/mayara_pi.cpp:1495
+msgid "COG"
+msgstr ""
+
+#: src/mayara_pi.cpp:1618
+msgid "Radar"
+msgstr ""
+
+#: src/mayara_pi.cpp:1981
+msgid "No changelog is available in this build."
+msgstr ""
+
+#: src/mayara_pi.cpp:1988
+#, c-format
+msgid "Cannot read %s."
+msgstr ""
+
+#: src/mayara_pi.cpp:1995
+msgid "Nowhere writable was found for the changelog page."
+msgstr ""
+
+#: src/mayara_pi.cpp:2016
+#, c-format
+msgid "Cannot open the changelog. It is here:\n\n"
+"%s"
+msgstr ""
+
+#: src/mayara_pi.cpp:2060
+#, c-format
+msgid "A newer mayara-server is available.\n\n"
+"Installed: %s\n"
+"Available: %s\n\n"
+"Download and install it now?"
+msgstr ""
+
+#: src/mayara_pi.cpp:2079
+msgid "Looking for Mayara"
+msgstr ""
+
+#: src/mayara_pi.cpp:2086
+msgid "Looking for a Signal K server with mayara-server on the network...\n\n"
+"If it isn't found automatically, enter the address of your Signal K server or a Mayara server below."
+msgstr ""
+
+#: src/mayara_pi.cpp:2093
+msgid "Host / IP:"
+msgstr ""
+
+#: src/mayara_pi.cpp:2100
+msgid "Signal K server (port 3000)"
+msgstr ""
+
+#: src/mayara_pi.cpp:2101
+msgid "Mayara server (port 6502)"
+msgstr ""
+
+#: src/mayara_pi.cpp:2102
+msgid "Server type"
+msgstr ""
+
+#: src/mayara_pi.cpp:2107
+msgid "Still searching..."
+msgstr ""
+
+#: src/mayara_pi.cpp:2123
+msgid "Connect"
+msgstr ""
+
+#: src/mayara_pi.cpp:2124
+msgid "Keep searching"
+msgstr ""
+
+#: src/mayara_pi.cpp:2134
+msgid "Please enter a host name or IP address."
+msgstr ""
+
+#: src/mayara_pi.cpp:2140
+#, c-format
+msgid "Connecting to %s..."
+msgstr ""
+
+#: src/mayara_pi.cpp:2168
+msgid "No Radar Found"
+msgstr ""
+
+#: src/mayara_pi.cpp:2176
+#, c-format
+msgid "No radar found by mayara.\n\n"
+"The server at %s is not reporting a radar."
+msgstr ""
+
+#: src/mayara_pi.cpp:2179
+msgid "No radar found by mayara -- I recommend you open the following link to investigate why:"
+msgstr ""
+
+#: src/mayara_pi.cpp:2194
+msgid "Dismiss"
+msgstr ""
+
+#: src/mayara_pi.cpp:2197
+msgid "Open Link"
+msgstr ""
+
+#: src/mayara_pi.cpp:2225
+msgid "Mayara Radar Settings"
+msgstr ""
+
+#: src/mayara_pi.cpp:2243
+msgid "Use a server on the network"
+msgstr ""
+
+#: src/mayara_pi.cpp:2250
+msgid "Download mayara-server"
+msgstr ""
+
+#: src/mayara_pi.cpp:2252
+msgid "Allow WiFi interfaces"
+msgstr ""
+
+#: src/mayara_pi.cpp:2259
+msgid "Report anonymous usage stats to the mayara developers"
+msgstr ""
+
+#: src/mayara_pi.cpp:2263
+msgid "Radar:"
+msgstr ""
+
+#: src/mayara_pi.cpp:2269
+msgid "Any brand"
+msgstr ""
+
+#: src/mayara_pi.cpp:2282
+msgid "Log verbosity:"
+msgstr ""
+
+#: src/mayara_pi.cpp:2285
+msgid "Default"
+msgstr ""
+
+#: src/mayara_pi.cpp:2286
+msgid "Debug"
+msgstr ""
+
+#: src/mayara_pi.cpp:2287
+msgid "Trace"
+msgstr ""
+
+#: src/mayara_pi.cpp:2295
+msgid "Open server log"
+msgstr ""
+
+#: src/mayara_pi.cpp:2298
+msgid "Extra arguments:"
+msgstr ""
+
+#: src/mayara_pi.cpp:2309
+msgid "Show what mayara-server --help says"
+msgstr ""
+
+#: src/mayara_pi.cpp:2314
+msgid "Extra command-line arguments passed to mayara-server, e.g. for a radar or feature not yet exposed above. Run through a shell, so anyone able to change this setting can run arbitrary commands as you -- only set it yourself, on a computer you trust."
+msgstr ""
+
+#: src/mayara_pi.cpp:2325
+msgid "Address:"
+msgstr ""
+
+#: src/mayara_pi.cpp:2334
+msgid "Blank = find it automatically (mDNS, or the Signal K server OpenCPN is set up for). Otherwise a host or host:port - :3000 for Signal K, :6502 for mayara."
+msgstr ""
+
+#: src/mayara_pi.cpp:2341
+msgid "Server"
+msgstr ""
+
+#: src/mayara_pi.cpp:2349
+#, c-format
+msgid "%d radar(s) discovered."
+msgstr ""
+
+#: src/mayara_pi.cpp:2351
+msgid "No radars discovered yet."
+msgstr ""
+
+#: src/mayara_pi.cpp:2360
+msgid "Open mayara-server"
+msgstr ""
+
+#: src/mayara_pi.cpp:2367
+msgid "Number of PPI windows:"
+msgstr ""
+
+#: src/mayara_pi.cpp:2376
+msgid "Radars are spread evenly across the windows. One window shows all radars; more windows split them (e.g. 8 radars across 2 windows = 4 per window)."
+msgstr ""
+
+#: src/mayara_pi.cpp:2383
+msgid "Keep radar windows on top of the chart"
+msgstr ""
+
+#: src/mayara_pi.cpp:2388
+msgid "Floating windows only -- a docked one already sits inside OpenCPN's own window, on top of nothing else."
+msgstr ""
+
+#: src/mayara_pi.cpp:2400
+msgid "Override menu font size"
+msgstr ""
+
+#: src/mayara_pi.cpp:2404
+msgid "Size (points):"
+msgstr ""
+
+#: src/mayara_pi.cpp:2418
+msgid "Applies to the radar controls (PPI window and chart menu)."
+msgstr ""
+
+#: src/mayara_pi.cpp:2423
+msgid "Guard-zone alarm"
+msgstr ""
+
+#: src/mayara_pi.cpp:2426
+msgid "Play a sound"
+msgstr ""
+
+#: src/mayara_pi.cpp:2431
+msgid "OpenCPN's own notification icon still marks a guard-zone alarm either way; this only controls the audible chime."
+msgstr ""
+
+#: src/mayara_pi.cpp:2437
+msgid "Display"
+msgstr ""
+
+#: src/mayara_pi.cpp:2443
+msgid "Radar heading as NMEA HDT"
+msgstr ""
+
+#: src/mayara_pi.cpp:2445
+msgid "Radar targets as NMEA TTM"
+msgstr ""
+
+#: src/mayara_pi.cpp:2452
+msgid "Sent into OpenCPN's own data stream once a second, so the radar can drive the chart's heading and its targets appear in OpenCPN's target list alongside AIS. Leave both off if another source already provides them."
+msgstr ""
+
+#: src/mayara_pi.cpp:2459
+msgid "Feed OpenCPN"
+msgstr ""
+
+#: src/mayara_pi.cpp:2471
+msgid "Profile:"
+msgstr ""
+
+#: src/mayara_pi.cpp:2475
+msgid "Rename"
+msgstr ""
+
+#: src/mayara_pi.cpp:2477
+msgid "Delete"
+msgstr ""
+
+#: src/mayara_pi.cpp:2518
+msgid "\"Standard Mayara\" is the legend the server computes; the four hues show echo strength as brightness of one colour. Doppler stays magenta and green throughout, so a moving target can never be read as an echo. Changing a colour on a built-in copies it to a profile of your own first."
+msgstr ""
+
+#: src/mayara_pi.cpp:2526
+msgid "Colours"
+msgstr ""
+
+#: src/mayara_pi.cpp:2579
+msgid "Name for this colour profile:"
+msgstr ""
+
+#: src/mayara_pi.cpp:2579
+msgid "Rename profile"
+msgstr ""
+
+#: src/mayara_pi.cpp:2590
+msgid "There is already a profile with that name."
+msgstr ""
+
+#: src/mayara_pi.cpp:2647
+msgid "Heading source"
+msgstr ""
+
+#: src/mayara_pi.cpp:2650
+msgid "Automatic: OpenCPN, else the radar"
+msgstr ""
+
+#: src/mayara_pi.cpp:2651
+msgid "OpenCPN only"
+msgstr ""
+
+#: src/mayara_pi.cpp:2652
+msgid "Radar only"
+msgstr ""
+
+#: src/mayara_pi.cpp:2659
+msgid "Use COG as heading when nothing reports one"
+msgstr ""
+
+#: src/mayara_pi.cpp:2664
+msgid "Heading timeout (s, 0 = never):"
+msgstr ""
+
+#: src/mayara_pi.cpp:2675
+msgid "Log to the OpenCPN log:"
+msgstr ""
+
+#: src/mayara_pi.cpp:2678
+msgid "Off"
+msgstr ""
+
+#: src/mayara_pi.cpp:2679
+msgid "Problems"
+msgstr ""
+
+#: src/mayara_pi.cpp:2680
+msgid "Verbose"
+msgstr ""
+
+#: src/mayara_pi.cpp:2688
+msgid "Diagnostics"
+msgstr ""
+
+#: src/mayara_pi.cpp:2698
+#, c-format
+msgid "Heading: %s\n"
+"Position: %s"
+msgstr ""
+
+#: src/mayara_pi.cpp:2699
+#, c-format
+msgid "%.1f deg T from %s"
+msgstr ""
+
+#: src/mayara_pi.cpp:2700 src/mayara_pi.cpp:2702
+msgid "none - the overlay cannot be drawn"
+msgstr ""
+
+#: src/mayara_pi.cpp:2714
+msgid "Changelog"
+msgstr ""
+
+#: src/mayara_pi.cpp:2745
+msgid "mayara-server is not installed here yet."
+msgstr ""
+
+#: src/mayara_pi.cpp:2747
+#, c-format
+msgid "mayara-server %s, running."
+msgstr ""
+
+#: src/mayara_pi.cpp:2748
+#, c-format
+msgid "mayara-server %s, installed."
+msgstr ""
+
+#: src/mayara_pi.cpp:2772
+#, c-format
+msgid "Server log: %s"
+msgstr ""
+
+#: src/mayara_pi.cpp:2773
+#, c-format
+msgid "Server log: %s (not written yet)"
+msgstr ""
+
+#: src/mayara_pi.cpp:2800
+#, c-format
+msgid "Cannot open the server log. It is here:\n\n"
+"%s"
+msgstr ""
+
+#: src/mayara_pi.cpp:2814
+msgid "Cannot run mayara-server --help."
+msgstr ""
+
+#: src/mayara_pi.cpp:2818
+msgid "mayara-server --help"
+msgstr ""
+
+#: src/mayara_pi.cpp:2822
+msgid "Asking mayara-server..."
+msgstr ""
+
+#: src/mayara_pi.cpp:2838
+msgid "mayara-server did not answer --help."
+msgstr ""
+
+#: src/mayara_pi.cpp:2974
+msgid "Marine radar overlay and PPI, served by mayara-server"
+msgstr ""
+
+#: src/mayara_pi.cpp:2986
+msgid "mayara_pi displays marine radar as a chart overlay and in a PPI window. Unlike radar_pi it does not talk to radar hardware directly; it consumes the mayara-server REST and WebSocket API."
+msgstr ""
+
+#: src/mayara_pi.cpp:2989
+msgid "Plugin version"
+msgstr ""
+
+#: src/mayara_pi.cpp:2990
+msgid "mayara-server version"
+msgstr ""
+
+#: src/mayara_pi.cpp:3050
+#, c-format
+msgid "Mayara radar overlay (chart %d): %s"
+msgstr ""
+
+#: src/mayara_pi.cpp:3052
+#, c-format
+msgid "Mayara radar overlay: %s"
+msgstr ""
+
+#: src/mayara_pi.cpp:3055
+msgid "Hide Mayara PPI"
+msgstr ""
+
+#: src/mayara_pi.cpp:3077
+msgid "none"
+msgstr ""
+
+#: src/mayara_pi.cpp:3078
+msgid "all radars"
+msgstr ""
+
+#: src/mayara_pi.cpp:3083
+#, c-format
+msgid "radar %d"
+msgstr ""
+
+#: src/mayara_pi.cpp:3096
+msgid "None"
+msgstr ""
+
+#: src/mayara_pi.cpp:3100
+msgid "All radars"
+msgstr ""
+
