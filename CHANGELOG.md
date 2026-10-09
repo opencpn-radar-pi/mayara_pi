@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **changelog:** backfill 0.1.4-to-present, lost to the commit filter (#91) ([PR #91](https://github.com/opencpn-radar-pi/mayara_pi/pull/91))
 - **client:** lift the wire protocol out of MayaraClient and test it (#113) ([PR #113](https://github.com/opencpn-radar-pi/mayara_pi/pull/113))
+- **readme:** explain how to install from outside the standard catalog (#133) ([PR #133](https://github.com/opencpn-radar-pi/mayara_pi/pull/133))
 
 ### Fixed
 
