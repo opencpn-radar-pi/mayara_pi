@@ -85,6 +85,7 @@ struct PpiPrefs {
   int overlay_alpha = 100;  // chart-overlay opacity, 25/50/75/100 %
   bool overlay_zones = true;  // draw guard zones on the chart too
   bool nest_range = false;    // nest the short radar at a quarter of the long
+  bool lock_pan = false;      // dragging does not move the picture
 };
 
 // Everything the picture and the layers over it are placed by. Computed once
@@ -226,6 +227,7 @@ class RadarDisplayPanel : public wxPanel {
   void OnMouseWheel(wxMouseEvent& event);  // free PPI display zoom
   // Act on a click that was not a drag, at `p`.
   void HandleClick(const wxPoint& p);
+  bool OnUiElement(const wxPoint& p) const;  // any button drawn over the picture
   // The current picture placement; see PpiGeometry.
   PpiGeometry Geometry() const;
   // Convert a click in the picture to a true bearing (deg) and distance (m)
@@ -302,6 +304,8 @@ class RadarDisplayPanel : public wxPanel {
   wxPoint m_drag = wxPoint(0, 0);
   wxPoint m_mouse_down = wxPoint(0, 0);
   bool m_dragging = false;
+  bool m_press_on_ui = false;  // the press landed on a button, not the picture
+  bool m_lock_pan = false;     // from PpiPrefs
 
   // VRM/EBL markers. m_ebl_arm is which one a click places: 0 none, 1 or 2 for
   // the marker of that number. A placed marker stays until switched off, so

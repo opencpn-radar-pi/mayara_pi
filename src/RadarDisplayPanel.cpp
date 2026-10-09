@@ -1483,6 +1483,10 @@ void RadarDisplayPanel::OnLeftDown(wxMouseEvent& event) {
   m_mouse_down = event.GetPosition();
   m_dragging = false;
   m_drag = wxPoint(0, 0);
+  // A press on one of the buttons drawn over the picture is meant for that
+  // button. Letting it turn into a pan when the finger slides a little moved
+  // the whole picture off centre instead (#125).
+  m_press_on_ui = OnUiElement(m_mouse_down);
   // A zone handle takes precedence over panning: it is a much smaller target,
   // and the press that grabs it would otherwise start dragging the picture.
   m_zone_drag = ZoneHandleHit(m_mouse_down);
@@ -1490,8 +1494,18 @@ void RadarDisplayPanel::OnLeftDown(wxMouseEvent& event) {
 }
 
 // Slop before a press counts as a drag: below this it is a click with a shaky
-// hand, which is common on a boat.
-static const int kDragSlop = 6;
+// hand, which is common on a boat, or a finger on a touch screen. In DIP, so
+// a high-density screen does not shrink it.
+static const int kDragSlop = 10;
+
+bool RadarDisplayPanel::OnUiElement(const wxPoint& p) const {
+  for (const wxRect* r :
+       {&m_recenter_rect, &m_menu_rect, &m_orient_rect, &m_alarm_rect,
+        &m_icon_ais, &m_icon_ebl, &m_icon_gain, &m_icon_sea, &m_icon_rain,
+        &m_power_rect, &m_range_minus_rect, &m_range_plus_rect})
+    if (r->Contains(p)) return true;
+  return false;
+}
 
 void RadarDisplayPanel::OnMotion(wxMouseEvent& event) {
   const wxPoint p = event.GetPosition();
@@ -1501,8 +1515,11 @@ void RadarDisplayPanel::OnMotion(wxMouseEvent& event) {
   }
   if (event.Dragging() && event.LeftIsDown()) {
     const wxPoint d(p.x - m_mouse_down.x, p.y - m_mouse_down.y);
-    if (!m_dragging && std::abs(d.x) + std::abs(d.y) > kDragSlop)
+    if (!m_dragging && std::abs(d.x) + std::abs(d.y) > FromDIP(kDragSlop))
       m_dragging = true;
+    // Still a drag, so its release is not taken for a click, but one that
+    // leaves the picture where it is.
+    if (m_press_on_ui || m_lock_pan) return;
     if (m_dragging) {
       m_drag = d;
       Refresh(false);
@@ -1685,6 +1702,7 @@ bool RadarDisplayPanel::PointToPolar(const wxPoint& p, double& bearing_deg,
 
 void RadarDisplayPanel::SetPrefs(const PpiPrefs& p) {
   m_reverse_zoom = p.reverse_zoom;
+  m_lock_pan = p.lock_pan;
   const int hz = std::max(1, std::min(15, p.refresh_hz));
   const int ms = 1000 / hz;
   if (!m_timer.IsRunning() || m_timer.GetInterval() != ms) m_timer.Start(ms);

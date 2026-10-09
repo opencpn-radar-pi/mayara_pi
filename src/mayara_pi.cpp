@@ -689,9 +689,10 @@ void mayara_pi::LoadConfig() {
     }
   }
   long hz = 5, autohide = 0;
-  bool reverse_zoom = false;
+  bool reverse_zoom = false, lock_pan = false;
   cfg->Read("RefreshHz", &hz, 5);
   cfg->Read("ReverseZoom", &reverse_zoom, false);
+  cfg->Read("LockPicturePosition", &lock_pan, false);
   cfg->Read("MenuAutoHide", &autohide, 0);
   long alpha = 100;
   bool ozones = true;
@@ -714,6 +715,7 @@ void mayara_pi::LoadConfig() {
   m_prefs.overlay_zones = ozones;
   m_prefs.refresh_hz = static_cast<int>(hz < 1 ? 1 : (hz > 15 ? 15 : hz));
   m_prefs.reverse_zoom = reverse_zoom;
+  m_prefs.lock_pan = lock_pan;
   m_prefs.menu_autohide =
       static_cast<int>(autohide < 0 ? 0 : (autohide > 2 ? 2 : autohide));
   // Per-radar orientation: "id=mode;id=mode;..."
@@ -1022,6 +1024,7 @@ void mayara_pi::SaveConfig() {
   cfg->Write("ChartMenuRect", menu_rects);
   cfg->Write("RefreshHz", static_cast<long>(m_prefs.refresh_hz));
   cfg->Write("ReverseZoom", m_prefs.reverse_zoom);
+  cfg->Write("LockPicturePosition", m_prefs.lock_pan);
   cfg->Write("MenuAutoHide", static_cast<long>(m_prefs.menu_autohide));
   cfg->Write("OverlayAlpha", static_cast<long>(m_prefs.overlay_alpha));
   cfg->Write("OverlayZones", m_prefs.overlay_zones);
