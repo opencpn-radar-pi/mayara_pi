@@ -18,12 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **i18n:** translate the control schema text the server sends (#117) ([PR #117](https://github.com/opencpn-radar-pi/mayara_pi/pull/117))
 - **controls:** show each control's description as its tooltip (#119) ([PR #119](https://github.com/opencpn-radar-pi/mayara_pi/pull/119))
 - **ppi:** full-screen toggle for a floating PPI window (#128) ([PR #128](https://github.com/opencpn-radar-pi/mayara_pi/pull/128))
+- **controls:** dark scrollbar on Windows, drag the panel to scroll (#129) ([PR #129](https://github.com/opencpn-radar-pi/mayara_pi/pull/129))
 
 ### Changed
 
 - **changelog:** backfill 0.1.4-to-present, lost to the commit filter (#91) ([PR #91](https://github.com/opencpn-radar-pi/mayara_pi/pull/91))
 - **client:** lift the wire protocol out of MayaraClient and test it (#113) ([PR #113](https://github.com/opencpn-radar-pi/mayara_pi/pull/113))
 - **readme:** explain how to install from outside the standard catalog (#133) ([PR #133](https://github.com/opencpn-radar-pi/mayara_pi/pull/133))
+- **readme:** the mayara catalog includes the official channel (#136) ([PR #136](https://github.com/opencpn-radar-pi/mayara_pi/pull/136))
 
 ### Fixed
 
