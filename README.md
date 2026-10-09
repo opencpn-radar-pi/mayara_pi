@@ -125,10 +125,12 @@ them:
 5. Click **Update Plugin Catalog**. **Mayara** now appears in the list; select
    it and click **Install**, then enable it.
 
-While the custom URL is set, OpenCPN shows **only** the mayara catalog: other
-plugins you already have keep working, but you cannot install or update them
-from the list. To go back, open **Settings… → Ultra advanced >>>**, click
-**Clear**, **Save**, **Done**, and **Update Plugin Catalog** again.
+The mayara catalog includes the matching official one — `beta.xml` lists
+everything in OpenCPN's **Beta** catalog as well, `alpha.xml` everything in
+**Alpha** — so your other plugins stay installable and updatable, but from that
+channel rather than the default `master` one. To go back to `master`, open
+**Settings… → Ultra advanced >>>**, click **Clear**, **Save**, **Done**, and
+**Update Plugin Catalog** again.
 
 ## Building
 
