@@ -167,12 +167,56 @@ bool MayaraPpiWindow::IsWindowShown() {
   return false;
 }
 
+void MayaraPpiWindow::SetFloatingHost(wxFrame* frame) {
+  m_frame = frame;
+  m_docked = false;
+  // Full screen is a floating window's own: a docked pane is part of
+  // OpenCPN's frame and follows OpenCPN's full screen instead.
+  if (m_controls)
+    m_controls->SetFullScreenControl([this]() { return IsUserFullScreen(); },
+                                     [this](bool on) { SetUserFullScreen(on); });
+  // Esc leaves it: with the window's border gone there is nothing else to
+  // reach for while the menu is auto-hidden.
+  frame->Bind(wxEVT_CHAR_HOOK, [this](wxKeyEvent& e) {
+    if (e.GetKeyCode() == WXK_ESCAPE && IsUserFullScreen()) {
+      SetUserFullScreen(false);
+      return;
+    }
+    e.Skip();
+  });
+}
+
+void MayaraPpiWindow::SetUserFullScreen(bool on) {
+  if (on == IsUserFullScreen() || !m_frame) return;
+  if (on) {
+    // Already full screen with OpenCPN: drop that first so the geometry saved
+    // to restore to is the window's own, not the tile it was given.
+    LeaveFullScreen();
+    EnterFullScreen(wxDisplay(DisplayIndex()).GetGeometry(), /*solo=*/true);
+    m_fs_user = m_fs;
+  } else {
+    LeaveFullScreen();
+  }
+}
+
+int MayaraPpiWindow::DisplayIndex() {
+  const int d = wxDisplay::GetFromWindow(
+      m_frame ? static_cast<wxWindow*>(m_frame) : this);
+  return d == wxNOT_FOUND ? 0 : d;
+}
+
+// While full screen these speak for the geometry it will return to, so that
+// persistence and auto layout neither save nor disturb the full-screen rect.
 wxRect MayaraPpiWindow::WindowRect() {
+  if (m_fs) return m_fs_saved;
   return m_frame ? m_frame->GetScreenRect() : GetScreenRect();
 }
 
 void MayaraPpiWindow::SetWindowRect(const wxRect& r) {
-  if (m_frame) m_frame->SetSize(r);
+  if (m_fs)
+    m_fs_saved = r;
+  else if (m_frame)
+    m_frame->SetSize(r);
 }
 
 void MayaraPpiWindow::EnterFullScreen(const wxRect& target, bool solo) {
@@ -193,6 +237,7 @@ void MayaraPpiWindow::EnterFullScreen(const wxRect& target, bool solo) {
 void MayaraPpiWindow::LeaveFullScreen() {
   if (!m_fs || !m_frame) return;
   m_fs = false;
+  m_fs_user = false;
   if (m_fs_solo) {
     m_frame->ShowFullScreen(false);
   } else {
@@ -305,7 +350,7 @@ void MayaraPpiWindow::PositionControls(RadarDisplayPanel* focused,
     // (overlaying the picture). Only widen the window if that would leave too
     // little picture -- so repeatedly opening the menu doesn't keep growing it.
     x = cs.x - ctrl_w;
-    if (allow_grow && !m_docked && x < kMinPicture) {
+    if (allow_grow && !m_docked && !m_fs && x < kMinPicture) {
       if (!m_grew) {  // remember the size so we can restore it on close
         m_pre_grow = WindowRect();
         m_grew = true;

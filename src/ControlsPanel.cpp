@@ -229,6 +229,8 @@ class ControlsBody : public wxScrolledWindow {
   void SetThresholdControl(std::function<int()> get,
                            std::function<void(int)> set);
   void SetDockControl(std::function<bool()> get, std::function<void(bool)> set);
+  void SetFullScreenControl(std::function<bool()> get,
+                            std::function<void(bool)> set);
   void SetRangeAutoControl(std::function<bool()> get_relevant,
                            std::function<bool()> get,
                            std::function<void(bool)> set);
@@ -324,6 +326,8 @@ class ControlsBody : public wxScrolledWindow {
   std::function<void(int)> m_set_threshold;
   std::function<bool()> m_get_dock;
   std::function<void(bool)> m_set_dock;
+  std::function<bool()> m_get_fullscreen;
+  std::function<void(bool)> m_set_fullscreen;
   std::function<bool()> m_range_auto_relevant;
   std::function<bool()> m_get_range_auto;
   std::function<void(bool)> m_set_range_auto;
@@ -784,7 +788,7 @@ void ControlsBody::FillViewSection(wxSizer* content) {
   // Where the radar picture appears. Independent toggles rather than one
   // exclusive choice: overlay and PPI can both be up, and "docked" is a
   // property of the PPI window rather than a third place to put the picture.
-  if (m_set_overlay || m_set_ppi || m_set_dock) {
+  if (m_set_overlay || m_set_ppi || m_set_dock || m_set_fullscreen) {
     content->Add(new wxStaticText(this, wxID_ANY, _("Views")), 0,
                  wxLEFT | wxTOP, 4);
     auto* row = new wxBoxSizer(wxHORIZONTAL);
@@ -799,8 +803,11 @@ void ControlsBody::FillViewSection(wxSizer* content) {
                                           : nullptr;
     ThemedButton* ppi = m_set_ppi ? add(_("PPI"), m_set_ppi) : nullptr;
     ThemedButton* dock = m_set_dock ? add(_("Docked"), m_set_dock) : nullptr;
+    ThemedButton* fs =
+        m_set_fullscreen ? add(_("Full screen"), m_set_fullscreen) : nullptr;
+    if (fs) fs->SetToolTip(_("Fill this window's screen; Esc leaves"));
     content->Add(row, 0, wxEXPAND | wxLEFT | wxRIGHT, 2);
-    m_updaters.push_back([this, overlay, ppi, dock]() {
+    m_updaters.push_back([this, overlay, ppi, dock, fs]() {
       if (overlay && m_get_overlay) overlay->SetValue(m_get_overlay());
       if (ppi) {
         if (m_get_ppi) ppi->SetValue(m_get_ppi());
@@ -808,6 +815,7 @@ void ControlsBody::FillViewSection(wxSizer* content) {
         ppi->Enable(m_get_overlay && m_get_overlay());
       }
       if (dock && m_get_dock) dock->SetValue(m_get_dock());
+      if (fs && m_get_fullscreen) fs->SetValue(m_get_fullscreen());
     });
   }
   // Orientation and threshold are per radar, so they name the radar they act
@@ -966,6 +974,13 @@ void ControlsBody::SetDockControl(std::function<bool()> get,
                                    std::function<void(bool)> set) {
   m_get_dock = std::move(get);
   m_set_dock = std::move(set);
+  if (m_built) Rebuild();
+}
+
+void ControlsBody::SetFullScreenControl(std::function<bool()> get,
+                                         std::function<void(bool)> set) {
+  m_get_fullscreen = std::move(get);
+  m_set_fullscreen = std::move(set);
   if (m_built) Rebuild();
 }
 
@@ -1817,6 +1832,11 @@ void ControlsPanel::SetThresholdControl(std::function<int()> get,
 void ControlsPanel::SetDockControl(std::function<bool()> get,
                                    std::function<void(bool)> set) {
   m_body->SetDockControl(std::move(get), std::move(set));
+}
+
+void ControlsPanel::SetFullScreenControl(std::function<bool()> get,
+                                         std::function<void(bool)> set) {
+  m_body->SetFullScreenControl(std::move(get), std::move(set));
 }
 
 void ControlsPanel::SetRangeAutoControl(std::function<bool()> get_relevant,

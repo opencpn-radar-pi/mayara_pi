@@ -36,7 +36,7 @@ class MayaraPpiWindow : public wxPanel {
   std::vector<int> RadarIndices() const;
 
   // Host wiring: exactly one of these is called right after construction.
-  void SetFloatingHost(wxFrame* frame) { m_frame = frame; m_docked = false; }
+  void SetFloatingHost(wxFrame* frame);
   void SetDockedHost(wxAuiManager* aui) { m_aui = aui; m_docked = true; }
   bool IsDocked() const { return m_docked; }
   wxFrame* HostFrame() const { return m_frame; }  // null when docked
@@ -52,6 +52,10 @@ class MayaraPpiWindow : public wxPanel {
   void EnterFullScreen(const wxRect& target, bool solo);
   void LeaveFullScreen();
   bool IsFullScreen() const { return m_fs; }
+  // Full screen the operator asked for with the View section's toggle, as
+  // opposed to following OpenCPN's own full screen. Only the operator ends it.
+  bool IsUserFullScreen() const { return m_fs && m_fs_user; }
+  void SetUserFullScreen(bool on);
 
   void ApplyTheme(const MayaraTheme& theme);
 
@@ -170,8 +174,11 @@ class MayaraPpiWindow : public wxPanel {
   wxRect m_pre_grow;        // window geometry before it was widened
   bool m_fs = false;        // frame is in radar full-screen
   bool m_fs_solo = false;   // used ShowFullScreen (vs borderless tile)
+  bool m_fs_user = false;   // entered from the View section's toggle
   wxRect m_fs_saved;        // frame geometry before full-screen
   long m_fs_style = 0;      // frame style before borderless
+
+  int DisplayIndex();  // the display the window is on
 
   wxDECLARE_EVENT_TABLE();
 };
