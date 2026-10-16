@@ -85,7 +85,10 @@ jobs:
 
   # --------------------------------------------------------------- macOS ----
   macos-universal:
-    runs-on: macos-14
+    # macos-latest, not a pinned version that GitHub then retires: the
+    # deployment target is set by the build script, and OpenCPN matches a
+    # darwin-wx32 plugin on its architectures, not on the macOS version.
+    runs-on: macos-latest
     env:
       OCPN_TARGET: macos
       WX_VER: '32'
@@ -98,8 +101,9 @@ jobs:
         id: vers
         # PluginSetup.cmake bakes this same "sw_vers -productVersion" value
         # into the package name (see PKG_TARGET_VERSION there) -- GitHub
-        # patches the macos-14 runner's OS over time, so it drifts (14.8.7 ->
-        # 14.8.9, say) independently of this workflow. Recording the actual
+        # patches the runner's OS over time (26.4 -> 26.5, say) and moves
+        # macos-latest to the next macOS, so it drifts independently of
+        # this workflow. Recording the actual
         # value here, for publish-catalog to consume, keeps the catalog
         # generator from having to hardcode -- and silently fall out of sync
         # with -- a version nothing here controls.
@@ -470,8 +474,9 @@ jobs:
           VERSION: ${{ steps.chan.outputs.version }}
           PKG_VERSION: ${{ steps.chan.outputs.pkg_version }}
           # From the macos-universal job itself, not hardcoded here: GitHub
-          # patches the macos-14 runner's OS over time (14.8.7 -> 14.8.9, say)
-          # independently of this workflow, and a hardcoded value silently
+          # patches the runner's OS over time (26.4 -> 26.5, say) and moves
+          # macos-latest to the next macOS, independently of this workflow,
+          # and a hardcoded value silently
           # drifts out of sync with it -- see generate-catalog.sh's darwin
           # handling. Empty when that job didn't run/report (e.g. it failed).
           DARWIN_VERSION: ${{ needs.macos-universal.outputs.target-version }}
