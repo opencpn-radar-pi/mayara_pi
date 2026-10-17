@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **controls:** show each control's description as its tooltip (#119) ([PR #119](https://github.com/opencpn-radar-pi/mayara_pi/pull/119))
 - **ppi:** full-screen toggle for a floating PPI window (#128) ([PR #128](https://github.com/opencpn-radar-pi/mayara_pi/pull/128))
 - **controls:** dark scrollbar on Windows, drag the panel to scroll (#129) ([PR #129](https://github.com/opencpn-radar-pi/mayara_pi/pull/129))
+- **ppi:** stop accidental drags from moving the picture off centre (#130) ([PR #130](https://github.com/opencpn-radar-pi/mayara_pi/pull/130))
 
 ### Changed
 
