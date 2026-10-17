@@ -1155,6 +1155,9 @@ void ControlsBody::AddNumber(wxSizer* outer, const ControlDef& def) {
   // rather than the model, and the target is sent once the wheel pauses: one
   // PUT per spin, as each runs on its own thread and several could land out
   // of order. A second after the last notch the model is the base again.
+  // Toggling Auto drops a spin's unsent target, which would otherwise follow
+  // the Auto request as a manual write and turn Auto straight back off.
+  std::function<void()> cancel_wheel = [] {};
   if (slider && !m_single_id.empty()) {
     struct WheelState {
       int spun = 0;
@@ -1168,6 +1171,10 @@ void ControlsBody::AddNumber(wxSizer* outer, const ControlDef& def) {
     ws->send.Bind(wxEVT_TIMER, [this, raw, send_value](wxTimerEvent&) {
       if (controls()) send_value(raw->target);
     });
+    cancel_wheel = [ws] {
+      ws->send.Stop();
+      ws->last = {};
+    };
     auto wheel = [this, id, def, mn, mx, stepv, ws](wxMouseEvent& e) {
       if (e.GetWheelAxis() != wxMOUSE_WHEEL_VERTICAL || !controls()) {
         e.Skip();
@@ -1224,9 +1231,10 @@ void ControlsBody::AddNumber(wxSizer* outer, const ControlDef& def) {
   }
 
   if (autobtn) {
-    autobtn->Bind(wxEVT_TOGGLEBUTTON, [this, id, refresh,
-                                       autobtn](wxCommandEvent&) {
+    autobtn->Bind(wxEVT_TOGGLEBUTTON, [this, id, refresh, autobtn,
+                                       cancel_wheel](wxCommandEvent&) {
       const bool a = autobtn->GetValue();
+      cancel_wheel();
       Set(id, BodyAuto(a));
       // Reflect the new mode immediately; the stream confirms shortly after.
       ControlValue v = controls()->Value(id);
