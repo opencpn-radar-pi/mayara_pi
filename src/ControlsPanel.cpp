@@ -4,6 +4,7 @@
 #include "ControlsPanel.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <functional>
@@ -1148,19 +1149,35 @@ void ControlsBody::AddNumber(wxSizer* outer, const ControlDef& def) {
   // the list, and a scroll passing over a slider would change the setting.
   // Roughly fifty notches end to end, in whole schema steps, and a
   // trackpad's fractional rotation is gathered up into whole notches.
+  //
+  // The model only moves once the radar echoes a write back, which takes
+  // longer than a quick spin, so notches count on from the spin's own target
+  // rather than the model, and the target is sent once the wheel pauses: one
+  // PUT per spin, as each runs on its own thread and several could land out
+  // of order. A second after the last notch the model is the base again.
   if (slider && !m_single_id.empty()) {
-    auto spun = std::make_shared<int>(0);
-    auto wheel = [this, id, def, mn, mx, stepv, send_value,
-                  spun](wxMouseEvent& e) {
+    struct WheelState {
+      int spun = 0;
+      bool adj = false;
+      double target = 0;
+      std::chrono::steady_clock::time_point last;
+      wxTimer send;
+    };
+    auto ws = std::make_shared<WheelState>();
+    WheelState* raw = ws.get();  // the timer lives in ws: no cycle
+    ws->send.Bind(wxEVT_TIMER, [this, raw, send_value](wxTimerEvent&) {
+      if (controls()) send_value(raw->target);
+    });
+    auto wheel = [this, id, def, mn, mx, stepv, ws](wxMouseEvent& e) {
       if (e.GetWheelAxis() != wxMOUSE_WHEEL_VERTICAL || !controls()) {
         e.Skip();
         return;
       }
       const int delta = e.GetWheelDelta() > 0 ? e.GetWheelDelta() : 120;
-      *spun += e.GetWheelRotation();
-      const int notches = *spun / delta;
+      ws->spun += e.GetWheelRotation();
+      const int notches = ws->spun / delta;
       if (notches == 0) return;
-      *spun -= notches * delta;
+      ws->spun -= notches * delta;
       ControlValue v = controls()->Value(id);
       const bool adj = def.hasAutoAdjustable && v.auto_;
       if (v.auto_ && !adj) return;  // the slider is disabled in auto, too
@@ -1168,7 +1185,13 @@ void ControlsBody::AddNumber(wxSizer* outer, const ControlDef& def) {
       const double hi = adj ? def.autoAdjustMax : mx;
       const double per =
           stepv * std::max(1L, std::lround((hi - lo) / stepv / 50.0));
-      send_value((adj ? v.autoValue : v.value) + notches * per);
+      const auto now = std::chrono::steady_clock::now();
+      if (adj != ws->adj || now - ws->last > std::chrono::seconds(1))
+        ws->target = adj ? v.autoValue : v.value;
+      ws->target = std::clamp(ws->target + notches * per, lo, hi);
+      ws->adj = adj;
+      ws->last = now;
+      ws->send.StartOnce(100);
     };
     for (wxWindow* w :
          std::initializer_list<wxWindow*>{slider, valtext, minus, plus})
