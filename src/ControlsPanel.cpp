@@ -4,9 +4,11 @@
 #include "ControlsPanel.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <functional>
+#include <initializer_list>
 #include <map>
 #include <memory>
 #include <set>
@@ -1237,6 +1239,67 @@ void ControlsBody::AddNumber(wxSizer* outer, const ControlDef& def) {
     minus->Bind(wxEVT_BUTTON, [nudge](wxCommandEvent&) { nudge(-1); });
   if (plus) plus->Bind(wxEVT_BUTTON, [nudge](wxCommandEvent&) { nudge(+1); });
 
+  // In the popup a gauge icon opens (one control, nothing to scroll) the
+  // wheel adjusts the value. Not in the full panel: there the wheel scrolls
+  // the list, and a scroll passing over a slider would change the setting.
+  // Roughly fifty notches end to end, in whole schema steps, and a
+  // trackpad's fractional rotation is gathered up into whole notches.
+  //
+  // The model only moves once the radar echoes a write back, which takes
+  // longer than a quick spin, so notches count on from the spin's own target
+  // rather than the model, and the target is sent once the wheel pauses: one
+  // PUT per spin, as each runs on its own thread and several could land out
+  // of order. A second after the last notch the model is the base again.
+  // Toggling Auto drops a spin's unsent target, which would otherwise follow
+  // the Auto request as a manual write and turn Auto straight back off.
+  std::function<void()> cancel_wheel = [] {};
+  if (slider && !m_single_id.empty()) {
+    struct WheelState {
+      int spun = 0;
+      bool adj = false;
+      double target = 0;
+      std::chrono::steady_clock::time_point last;
+      wxTimer send;
+    };
+    auto ws = std::make_shared<WheelState>();
+    WheelState* raw = ws.get();  // the timer lives in ws: no cycle
+    ws->send.Bind(wxEVT_TIMER, [this, raw, send_value](wxTimerEvent&) {
+      if (controls()) send_value(raw->target);
+    });
+    cancel_wheel = [ws] {
+      ws->send.Stop();
+      ws->last = {};
+    };
+    auto wheel = [this, id, def, mn, mx, stepv, ws](wxMouseEvent& e) {
+      if (e.GetWheelAxis() != wxMOUSE_WHEEL_VERTICAL || !controls()) {
+        e.Skip();
+        return;
+      }
+      const int delta = e.GetWheelDelta() > 0 ? e.GetWheelDelta() : 120;
+      ws->spun += e.GetWheelRotation();
+      const int notches = ws->spun / delta;
+      if (notches == 0) return;
+      ws->spun -= notches * delta;
+      ControlValue v = controls()->Value(id);
+      const bool adj = def.hasAutoAdjustable && v.auto_;
+      if (v.auto_ && !adj) return;  // the slider is disabled in auto, too
+      const double lo = adj ? def.autoAdjustMin : mn;
+      const double hi = adj ? def.autoAdjustMax : mx;
+      const double per =
+          stepv * std::max(1L, std::lround((hi - lo) / stepv / 50.0));
+      const auto now = std::chrono::steady_clock::now();
+      if (adj != ws->adj || now - ws->last > std::chrono::seconds(1))
+        ws->target = adj ? v.autoValue : v.value;
+      ws->target = std::clamp(ws->target + notches * per, lo, hi);
+      ws->adj = adj;
+      ws->last = now;
+      ws->send.StartOnce(100);
+    };
+    for (wxWindow* w :
+         std::initializer_list<wxWindow*>{slider, valtext, minus, plus})
+      if (w) w->Bind(wxEVT_MOUSEWHEEL, wheel);
+  }
+
   if (entry) {
     // Typing holds off the updater until the value is committed or the field
     // loses focus, so a 400 ms refresh cannot eat a half-typed number.
@@ -1263,9 +1326,10 @@ void ControlsBody::AddNumber(wxSizer* outer, const ControlDef& def) {
   }
 
   if (autobtn) {
-    autobtn->Bind(wxEVT_TOGGLEBUTTON, [this, id, refresh,
-                                       autobtn](wxCommandEvent&) {
+    autobtn->Bind(wxEVT_TOGGLEBUTTON, [this, id, refresh, autobtn,
+                                       cancel_wheel](wxCommandEvent&) {
       const bool a = autobtn->GetValue();
+      cancel_wheel();
       Set(id, BodyAuto(a));
       // Reflect the new mode immediately; the stream confirms shortly after.
       ControlValue v = controls()->Value(id);
