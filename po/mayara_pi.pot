@@ -6,9 +6,9 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: mayara_pi 0.1.5.0\n"
+"Project-Id-Version: mayara_pi 0.1.6.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-23 11:04+0900\n"
+"POT-Creation-Date: 2026-11-12 22:19+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -233,7 +233,7 @@ msgstr ""
 msgid "Rain clutter"
 msgstr ""
 
-#: po/server_strings.h:61 src/ControlsPanel.cpp:1238
+#: po/server_strings.h:61 src/ControlsPanel.cpp:1402
 msgid "Range"
 msgstr ""
 
@@ -660,766 +660,893 @@ msgstr ""
 msgid "Which unit system to use for range values"
 msgstr ""
 
-#: po/server_strings.h:175
+#. TRANSLATORS: a setting of the radar control "Accent light". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:176
 msgctxt "accentLight"
 msgid "High"
 msgstr ""
 
-#: po/server_strings.h:176
+#. TRANSLATORS: a setting of the radar control "Accent light". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:178
 msgctxt "accentLight"
 msgid "Low"
 msgstr ""
 
-#: po/server_strings.h:177
+#. TRANSLATORS: a setting of the radar control "Accent light". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:180
 msgctxt "accentLight"
 msgid "Medium"
 msgstr ""
 
-#: po/server_strings.h:178
+#. TRANSLATORS: a setting of the radar control "Accent light". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:182
 msgctxt "accentLight"
 msgid "Off"
 msgstr ""
 
-#: po/server_strings.h:179
+#. TRANSLATORS: a setting of the radar control "Anti-jamming". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:184
 msgctxt "antiJamming"
 msgid "Off"
 msgstr ""
 
-#: po/server_strings.h:180
+#. TRANSLATORS: a setting of the radar control "Anti-jamming". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:186
 msgctxt "antiJamming"
 msgid "On"
 msgstr ""
 
-#: po/server_strings.h:181
+#. TRANSLATORS: a setting of the radar control "ARPA Max Speed". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:188
 msgctxt "arpaDetectMaxSpeed"
 msgid "Fast"
 msgstr ""
 
-#: po/server_strings.h:182
+#. TRANSLATORS: a setting of the radar control "ARPA Max Speed". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:190
 msgctxt "arpaDetectMaxSpeed"
 msgid "Medium"
 msgstr ""
 
-#: po/server_strings.h:183
+#. TRANSLATORS: a setting of the radar control "ARPA Max Speed". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:192
 msgctxt "arpaDetectMaxSpeed"
 msgid "Normal"
 msgstr ""
 
-#: po/server_strings.h:184
+#. TRANSLATORS: a setting of the radar control "Auto standby". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:194
 msgctxt "autoStandby"
 msgid "1 min"
 msgstr ""
 
-#: po/server_strings.h:185
+#. TRANSLATORS: a setting of the radar control "Auto standby". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:196
 msgctxt "autoStandby"
 msgid "15 min"
 msgstr ""
 
-#: po/server_strings.h:186
+#. TRANSLATORS: a setting of the radar control "Auto standby". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:198
 msgctxt "autoStandby"
 msgid "30 min"
 msgstr ""
 
-#: po/server_strings.h:187
+#. TRANSLATORS: a setting of the radar control "Auto standby". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:200
 msgctxt "autoStandby"
 msgid "5 min"
 msgstr ""
 
-#: po/server_strings.h:188
+#. TRANSLATORS: a setting of the radar control "Auto standby". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:202
 msgctxt "autoStandby"
 msgid "Off"
 msgstr ""
 
-#: po/server_strings.h:189
+#. TRANSLATORS: a setting of the radar control "Bird mode". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:204
 msgctxt "birdMode"
 msgid "High"
 msgstr ""
 
-#: po/server_strings.h:190
+#. TRANSLATORS: a setting of the radar control "Bird mode". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:206
 msgctxt "birdMode"
 msgid "Low"
 msgstr ""
 
-#: po/server_strings.h:191
+#. TRANSLATORS: a setting of the radar control "Bird mode". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:208
 msgctxt "birdMode"
 msgid "Medium"
 msgstr ""
 
-#: po/server_strings.h:192
+#. TRANSLATORS: a setting of the radar control "Bird mode". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:210
 msgctxt "birdMode"
 msgid "Off"
 msgstr ""
 
-#: po/server_strings.h:193
+#. TRANSLATORS: a setting of the radar control "Doppler". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:212
 msgctxt "doppler"
 msgid "Approaching"
 msgstr ""
 
-#: po/server_strings.h:194
+#. TRANSLATORS: a setting of the radar control "Doppler". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:214
 msgctxt "doppler"
 msgid "Normal"
 msgstr ""
 
-#: po/server_strings.h:195
+#. TRANSLATORS: a setting of the radar control "Doppler". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:216
 msgctxt "doppler"
 msgid "Off"
 msgstr ""
 
-#: po/server_strings.h:196
+#. TRANSLATORS: a setting of the radar control "Doppler". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:218
 msgctxt "doppler"
 msgid "On"
 msgstr ""
 
-#: po/server_strings.h:197
+#. TRANSLATORS: a setting of the radar control "Doppler". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:220
 msgctxt "doppler"
 msgid "Rain"
 msgstr ""
 
-#: po/server_strings.h:198
+#. TRANSLATORS: a setting of the radar control "Doppler". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:222
 msgctxt "doppler"
 msgid "Target"
 msgstr ""
 
-#: po/server_strings.h:199
+#. TRANSLATORS: a setting of the radar control "Doppler Auto Track". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:224
 msgctxt "dopplerAutoTrack"
 msgid "Off"
 msgstr ""
 
-#: po/server_strings.h:200
+#. TRANSLATORS: a setting of the radar control "Doppler Auto Track". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:226
 msgctxt "dopplerAutoTrack"
 msgid "On"
 msgstr ""
 
-#: po/server_strings.h:201
+#. TRANSLATORS: a setting of the radar control "Doppler trails only". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:228
 msgctxt "dopplerTrailsOnly"
 msgid "Off"
 msgstr ""
 
-#: po/server_strings.h:202
+#. TRANSLATORS: a setting of the radar control "Doppler trails only". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:230
 msgctxt "dopplerTrailsOnly"
 msgid "On"
 msgstr ""
 
-#: po/server_strings.h:203
+#. TRANSLATORS: a setting of the radar control "Echo format". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:232
 msgctxt "echoFormat"
 msgid "IMO"
 msgstr ""
 
-#: po/server_strings.h:204
+#. TRANSLATORS: a setting of the radar control "Echo format". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:234
 msgctxt "echoFormat"
 msgid "Tile"
 msgstr ""
 
-#: po/server_strings.h:205
+#. TRANSLATORS: a setting of the radar control "Interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:236
 msgctxt "interferenceRejection"
 msgid "High"
 msgstr ""
 
-#: po/server_strings.h:206
+#. TRANSLATORS: a setting of the radar control "Interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:238
 msgctxt "interferenceRejection"
 msgid "Level 1"
 msgstr ""
 
-#: po/server_strings.h:207
+#. TRANSLATORS: a setting of the radar control "Interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:240
 msgctxt "interferenceRejection"
 msgid "Level 2"
 msgstr ""
 
-#: po/server_strings.h:208
+#. TRANSLATORS: a setting of the radar control "Interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:242
 msgctxt "interferenceRejection"
 msgid "Level 3"
 msgstr ""
 
-#: po/server_strings.h:209
+#. TRANSLATORS: a setting of the radar control "Interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:244
 msgctxt "interferenceRejection"
 msgid "Level 4"
 msgstr ""
 
-#: po/server_strings.h:210
+#. TRANSLATORS: a setting of the radar control "Interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:246
 msgctxt "interferenceRejection"
 msgid "Level 5"
 msgstr ""
 
-#: po/server_strings.h:211
+#. TRANSLATORS: a setting of the radar control "Interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:248
 msgctxt "interferenceRejection"
 msgid "Low"
 msgstr ""
 
-#: po/server_strings.h:212
+#. TRANSLATORS: a setting of the radar control "Interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:250
 msgctxt "interferenceRejection"
 msgid "Medium"
 msgstr ""
 
-#: po/server_strings.h:213
+#. TRANSLATORS: a setting of the radar control "Interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:252
 msgctxt "interferenceRejection"
 msgid "Off"
 msgstr ""
 
-#: po/server_strings.h:214
+#. TRANSLATORS: a setting of the radar control "Interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:254
 msgctxt "interferenceRejection"
 msgid "On"
 msgstr ""
 
-#: po/server_strings.h:215
+#. TRANSLATORS: a setting of the radar control "Local interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:256
 msgctxt "localInterferenceRejection"
 msgid "High"
 msgstr ""
 
-#: po/server_strings.h:216
+#. TRANSLATORS: a setting of the radar control "Local interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:258
 msgctxt "localInterferenceRejection"
 msgid "Low"
 msgstr ""
 
-#: po/server_strings.h:217
+#. TRANSLATORS: a setting of the radar control "Local interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:260
 msgctxt "localInterferenceRejection"
 msgid "Medium"
 msgstr ""
 
-#: po/server_strings.h:218
+#. TRANSLATORS: a setting of the radar control "Local interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:262
 msgctxt "localInterferenceRejection"
 msgid "Off"
 msgstr ""
 
-#: po/server_strings.h:219
+#. TRANSLATORS: a setting of the radar control "Main bang suppression". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:264
 msgctxt "mainBangSuppression"
 msgid "Off"
 msgstr ""
 
-#: po/server_strings.h:220
+#. TRANSLATORS: a setting of the radar control "Main bang suppression". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:266
 msgctxt "mainBangSuppression"
 msgid "On"
 msgstr ""
 
-#: po/server_strings.h:221
+#. TRANSLATORS: a setting of the radar control "Mode". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:268
 msgctxt "mode"
 msgid "Bird"
 msgstr ""
 
-#: po/server_strings.h:222
+#. TRANSLATORS: a setting of the radar control "Mode". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:270
 msgctxt "mode"
 msgid "Bird+"
 msgstr ""
 
-#: po/server_strings.h:223
+#. TRANSLATORS: a setting of the radar control "Mode". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:272
 msgctxt "mode"
 msgid "Buoy"
 msgstr ""
 
-#: po/server_strings.h:224
+#. TRANSLATORS: a setting of the radar control "Mode". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:274
 msgctxt "mode"
 msgid "Coastal"
 msgstr ""
 
-#: po/server_strings.h:225
+#. TRANSLATORS: a setting of the radar control "Mode". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:276
 msgctxt "mode"
 msgid "Custom"
 msgstr ""
 
-#: po/server_strings.h:226
+#. TRANSLATORS: a setting of the radar control "Mode". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:278
 msgctxt "mode"
 msgid "Harbor"
 msgstr ""
 
-#: po/server_strings.h:227
+#. TRANSLATORS: a setting of the radar control "Mode". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:280
 msgctxt "mode"
 msgid "Offshore"
 msgstr ""
 
-#: po/server_strings.h:228
+#. TRANSLATORS: a setting of the radar control "Mode". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:282
 msgctxt "mode"
 msgid "Weather"
 msgstr ""
 
-#: po/server_strings.h:229
+#. TRANSLATORS: a setting of the radar control "Noise rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:284
 msgctxt "noiseRejection"
 msgid "High"
 msgstr ""
 
-#: po/server_strings.h:230
+#. TRANSLATORS: a setting of the radar control "Noise rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:286
 msgctxt "noiseRejection"
 msgid "Low"
 msgstr ""
 
-#: po/server_strings.h:231
+#. TRANSLATORS: a setting of the radar control "Noise rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:288
 msgctxt "noiseRejection"
 msgid "Medium"
 msgstr ""
 
-#: po/server_strings.h:232
+#. TRANSLATORS: a setting of the radar control "Noise rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:290
 msgctxt "noiseRejection"
 msgid "Off"
 msgstr ""
 
-#: po/server_strings.h:233
+#. TRANSLATORS: a setting of the radar control "Noise rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:292
 msgctxt "noiseRejection"
 msgid "On"
 msgstr ""
 
-#: po/server_strings.h:234
+#. TRANSLATORS: a setting of the radar control "Power". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:294
 msgctxt "power"
 msgid "Fault"
 msgstr ""
 
-#: po/server_strings.h:235
+#. TRANSLATORS: a setting of the radar control "Power". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:296
 msgctxt "power"
 msgid "Off"
 msgstr ""
 
-#: po/server_strings.h:236
+#. TRANSLATORS: a setting of the radar control "Power". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:298
 msgctxt "power"
 msgid "Preparing"
 msgstr ""
 
-#: po/server_strings.h:237
+#. TRANSLATORS: a setting of the radar control "Power". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:300
 msgctxt "power"
 msgid "Standby"
 msgstr ""
 
-#: po/server_strings.h:238
+#. TRANSLATORS: a setting of the radar control "Power". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:302
 msgctxt "power"
 msgid "Transmit"
 msgstr ""
 
-#: po/server_strings.h:239
+#. TRANSLATORS: a setting of the radar control "Pulse width". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:304
 msgctxt "pulseWidth"
 msgid "Long"
 msgstr ""
 
-#: po/server_strings.h:240
+#. TRANSLATORS: a setting of the radar control "Pulse width". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:306
 msgctxt "pulseWidth"
 msgid "Short"
 msgstr ""
 
-#: po/server_strings.h:241
+#. TRANSLATORS: a setting of the radar control "Range Units". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:308
 msgctxt "rangeUnits"
 msgid "Metric"
 msgstr ""
 
-#: po/server_strings.h:242
+#. TRANSLATORS: a setting of the radar control "Range Units". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:310
 msgctxt "rangeUnits"
 msgid "Mixed"
 msgstr ""
 
-#: po/server_strings.h:243
+#. TRANSLATORS: a setting of the radar control "Range Units". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:312
 msgctxt "rangeUnits"
 msgid "Nautical"
 msgstr ""
 
-#: po/server_strings.h:244
+#. TRANSLATORS: a setting of the radar control "Scan average". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:314
 msgctxt "scanAverageMode"
 msgid "High"
 msgstr ""
 
-#: po/server_strings.h:245
+#. TRANSLATORS: a setting of the radar control "Scan average". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:316
 msgctxt "scanAverageMode"
 msgid "Low"
 msgstr ""
 
-#: po/server_strings.h:246
+#. TRANSLATORS: a setting of the radar control "Scan average". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:318
 msgctxt "scanAverageMode"
 msgid "Medium"
 msgstr ""
 
-#: po/server_strings.h:247
+#. TRANSLATORS: a setting of the radar control "Scan average". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:320
 msgctxt "scanAverageMode"
 msgid "Medium High"
 msgstr ""
 
-#: po/server_strings.h:248
+#. TRANSLATORS: a setting of the radar control "Scan average". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:322
 msgctxt "scanAverageMode"
 msgid "Off"
 msgstr ""
 
-#: po/server_strings.h:249
+#. TRANSLATORS: a setting of the radar control "Scan average". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:324
 msgctxt "scanAverageMode"
 msgid "Very High"
 msgstr ""
 
-#: po/server_strings.h:250
+#. TRANSLATORS: a setting of the radar control "Scan speed". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:326
 msgctxt "scanSpeed"
 msgid "Auto"
 msgstr ""
 
-#: po/server_strings.h:251
+#. TRANSLATORS: a setting of the radar control "Scan speed". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:328
 msgctxt "scanSpeed"
 msgid "Fast"
 msgstr ""
 
-#: po/server_strings.h:252
+#. TRANSLATORS: a setting of the radar control "Scan speed". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:330
 msgctxt "scanSpeed"
 msgid "Medium"
 msgstr ""
 
-#: po/server_strings.h:253
+#. TRANSLATORS: a setting of the radar control "Scan speed". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:332
 msgctxt "scanSpeed"
 msgid "Medium Plus"
 msgstr ""
 
-#: po/server_strings.h:254
+#. TRANSLATORS: a setting of the radar control "Scan speed". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:334
 msgctxt "scanSpeed"
 msgid "Medium-High"
 msgstr ""
 
-#: po/server_strings.h:255
+#. TRANSLATORS: a setting of the radar control "Scan speed". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:336
 msgctxt "scanSpeed"
 msgid "Normal"
 msgstr ""
 
-#: po/server_strings.h:256
+#. TRANSLATORS: a setting of the radar control "Sea state". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:338
 msgctxt "seaState"
 msgid "Auto"
 msgstr ""
 
-#: po/server_strings.h:257
+#. TRANSLATORS: a setting of the radar control "Sea state". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:340
 msgctxt "seaState"
 msgid "Calm"
 msgstr ""
 
-#: po/server_strings.h:258
+#. TRANSLATORS: a setting of the radar control "Sea state". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:342
 msgctxt "seaState"
 msgid "Harbor"
 msgstr ""
 
-#: po/server_strings.h:259
+#. TRANSLATORS: a setting of the radar control "Sea state". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:344
 msgctxt "seaState"
 msgid "Manual"
 msgstr ""
 
-#: po/server_strings.h:260
+#. TRANSLATORS: a setting of the radar control "Sea state". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:346
 msgctxt "seaState"
 msgid "Moderate"
 msgstr ""
 
-#: po/server_strings.h:261
+#. TRANSLATORS: a setting of the radar control "Sea state". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:348
 msgctxt "seaState"
 msgid "Rough"
 msgstr ""
 
-#: po/server_strings.h:262
+#. TRANSLATORS: a setting of the radar control "Spoke Processing". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:350
 msgctxt "spokeProcessing"
 msgid "Clean"
 msgstr ""
 
-#: po/server_strings.h:263
+#. TRANSLATORS: a setting of the radar control "Spoke Processing". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:352
 msgctxt "spokeProcessing"
 msgid "Fill"
 msgstr ""
 
-#: po/server_strings.h:264
+#. TRANSLATORS: a setting of the radar control "Spoke Processing". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:354
 msgctxt "spokeProcessing"
 msgid "Reduce"
 msgstr ""
 
-#: po/server_strings.h:265
+#. TRANSLATORS: a setting of the radar control "Spoke Processing". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:356
 msgctxt "spokeProcessing"
 msgid "Smooth"
 msgstr ""
 
-#: po/server_strings.h:266
+#. TRANSLATORS: a setting of the radar control "Target boost". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:358
 msgctxt "targetBoost"
 msgid "High"
 msgstr ""
 
-#: po/server_strings.h:267
+#. TRANSLATORS: a setting of the radar control "Target boost". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:360
 msgctxt "targetBoost"
 msgid "Low"
 msgstr ""
 
-#: po/server_strings.h:268
+#. TRANSLATORS: a setting of the radar control "Target boost". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:362
 msgctxt "targetBoost"
 msgid "Off"
 msgstr ""
 
-#: po/server_strings.h:269
+#. TRANSLATORS: a setting of the radar control "Target boost". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:364
 msgctxt "targetBoost"
 msgid "On"
 msgstr ""
 
-#: po/server_strings.h:270
+#. TRANSLATORS: a setting of the radar control "Target expansion". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:366
 msgctxt "targetExpansion"
 msgid "High"
 msgstr ""
 
-#: po/server_strings.h:271
+#. TRANSLATORS: a setting of the radar control "Target expansion". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:368
 msgctxt "targetExpansion"
 msgid "Low"
 msgstr ""
 
-#: po/server_strings.h:272
+#. TRANSLATORS: a setting of the radar control "Target expansion". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:370
 msgctxt "targetExpansion"
 msgid "Medium"
 msgstr ""
 
-#: po/server_strings.h:273
+#. TRANSLATORS: a setting of the radar control "Target expansion". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:372
 msgctxt "targetExpansion"
 msgid "Off"
 msgstr ""
 
-#: po/server_strings.h:274
+#. TRANSLATORS: a setting of the radar control "Target expansion". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:374
 msgctxt "targetExpansion"
 msgid "On"
 msgstr ""
 
-#: po/server_strings.h:275
+#. TRANSLATORS: a setting of the radar control "Target separation". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:376
 msgctxt "targetSeparation"
 msgid "High"
 msgstr ""
 
-#: po/server_strings.h:276
+#. TRANSLATORS: a setting of the radar control "Target separation". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:378
 msgctxt "targetSeparation"
 msgid "Low"
 msgstr ""
 
-#: po/server_strings.h:277
+#. TRANSLATORS: a setting of the radar control "Target separation". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:380
 msgctxt "targetSeparation"
 msgid "Medium"
 msgstr ""
 
-#: po/server_strings.h:278
+#. TRANSLATORS: a setting of the radar control "Target separation". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:382
 msgctxt "targetSeparation"
 msgid "Off"
 msgstr ""
 
-#: po/server_strings.h:279
+#. TRANSLATORS: a setting of the radar control "Target trails". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:384
 msgctxt "targetTrails"
 msgid "1 min"
 msgstr ""
 
-#: po/server_strings.h:280
+#. TRANSLATORS: a setting of the radar control "Target trails". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:386
 msgctxt "targetTrails"
 msgid "10 min"
 msgstr ""
 
-#: po/server_strings.h:281
+#. TRANSLATORS: a setting of the radar control "Target trails". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:388
 msgctxt "targetTrails"
 msgid "15s"
 msgstr ""
 
-#: po/server_strings.h:282
+#. TRANSLATORS: a setting of the radar control "Target trails". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:390
 msgctxt "targetTrails"
 msgid "3 min"
 msgstr ""
 
-#: po/server_strings.h:283
+#. TRANSLATORS: a setting of the radar control "Target trails". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:392
 msgctxt "targetTrails"
 msgid "30s"
 msgstr ""
 
-#: po/server_strings.h:284
+#. TRANSLATORS: a setting of the radar control "Target trails". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:394
 msgctxt "targetTrails"
 msgid "5 min"
 msgstr ""
 
-#: po/server_strings.h:285
+#. TRANSLATORS: a setting of the radar control "Target trails". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:396
 msgctxt "targetTrails"
 msgid "Off"
 msgstr ""
 
-#: po/server_strings.h:286
+#. TRANSLATORS: a setting of the radar control "Timed idle". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:398
 msgctxt "timedIdle"
 msgid "Off"
 msgstr ""
 
-#: po/server_strings.h:287
+#. TRANSLATORS: a setting of the radar control "Timed idle". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:400
 msgctxt "timedIdle"
 msgid "On"
 msgstr ""
 
-#: po/server_strings.h:288
+#. TRANSLATORS: a setting of the radar control "Target trails motion". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:402
 msgctxt "trailsMotion"
 msgid "Relative"
 msgstr ""
 
-#: po/server_strings.h:289
+#. TRANSLATORS: a setting of the radar control "Target trails motion". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
+#: po/server_strings.h:404
 msgctxt "trailsMotion"
 msgid "True"
 msgstr ""
 
-#: src/ControlsPanel.cpp:374 src/ControlsPanel.cpp:583
+#: src/ControlsPanel.cpp:392 src/ControlsPanel.cpp:655
 msgid "Waiting for radar..."
 msgstr ""
 
-#: src/ControlsPanel.cpp:660
+#: src/ControlsPanel.cpp:733
 msgid "View"
 msgstr ""
 
-#: src/ControlsPanel.cpp:662
+#: src/ControlsPanel.cpp:735
 msgid "EBL/VRM"
 msgstr ""
 
-#: src/ControlsPanel.cpp:783
+#: src/ControlsPanel.cpp:861
 msgid "Views"
 msgstr ""
 
-#: src/ControlsPanel.cpp:793
+#: src/ControlsPanel.cpp:871
 msgid "Overlay"
 msgstr ""
 
-#: src/ControlsPanel.cpp:795
+#: src/ControlsPanel.cpp:873
 msgid "PPI"
 msgstr ""
 
-#: src/ControlsPanel.cpp:796
+#: src/ControlsPanel.cpp:874
 msgid "Docked"
 msgstr ""
 
-#: src/ControlsPanel.cpp:819
+#: src/ControlsPanel.cpp:876
+msgid "Full screen"
+msgstr ""
+
+#: src/ControlsPanel.cpp:877
+msgid "Fill this window's screen; Esc leaves"
+msgstr ""
+
+#: src/ControlsPanel.cpp:901
 msgid "Orientation"
 msgstr ""
 
-#: src/ControlsPanel.cpp:820
+#: src/ControlsPanel.cpp:902
 #, c-format
 msgid "Orientation (%s)"
 msgstr ""
 
-#: src/ControlsPanel.cpp:821 src/RadarDisplayPanel.cpp:523
+#: src/ControlsPanel.cpp:903 src/RadarDisplayPanel.cpp:523
 msgid "Course up"
 msgstr ""
 
-#: src/ControlsPanel.cpp:821 src/RadarDisplayPanel.cpp:524
+#: src/ControlsPanel.cpp:903 src/RadarDisplayPanel.cpp:524
 msgid "Head up"
 msgstr ""
 
-#: src/ControlsPanel.cpp:821 src/RadarDisplayPanel.cpp:522
+#: src/ControlsPanel.cpp:903 src/RadarDisplayPanel.cpp:522
 msgid "North up"
 msgstr ""
 
-#: src/ControlsPanel.cpp:826
+#: src/ControlsPanel.cpp:908
 msgid "Echo threshold"
 msgstr ""
 
-#: src/ControlsPanel.cpp:827
+#: src/ControlsPanel.cpp:909
 #, c-format
 msgid "Echo threshold (%s)"
 msgstr ""
 
-#: src/ControlsPanel.cpp:828
+#: src/ControlsPanel.cpp:910
 msgid "All"
 msgstr ""
 
-#: src/ControlsPanel.cpp:828
+#: src/ControlsPanel.cpp:910
 msgid "Medium"
 msgstr ""
 
-#: src/ControlsPanel.cpp:828
+#: src/ControlsPanel.cpp:910
 msgid "Strong"
 msgstr ""
 
-#: src/ControlsPanel.cpp:834
+#: src/ControlsPanel.cpp:916
 msgid "Refresh rate"
 msgstr ""
 
-#: src/ControlsPanel.cpp:848
+#: src/ControlsPanel.cpp:930
 msgid "Menu auto-hide"
 msgstr ""
 
-#: src/ControlsPanel.cpp:848
+#: src/ControlsPanel.cpp:930
 msgid "Never"
 msgstr ""
 
-#: src/ControlsPanel.cpp:858
+#: src/ControlsPanel.cpp:940
 msgid "Overlay opacity"
 msgstr ""
 
-#: src/ControlsPanel.cpp:868
+#: src/ControlsPanel.cpp:950
 msgid "Guard zones on chart"
 msgstr ""
 
-#: src/ControlsPanel.cpp:882
+#: src/ControlsPanel.cpp:964
 msgid "Nest second radar at 1/4"
 msgstr ""
 
-#: src/ControlsPanel.cpp:893
+#: src/ControlsPanel.cpp:975
 msgid "Reverse zoom wheel"
 msgstr ""
 
-#: src/ControlsPanel.cpp:904
+#: src/ControlsPanel.cpp:987
+msgid "Lock picture position"
+msgstr ""
+
+#: src/ControlsPanel.cpp:999
 msgid "Auto layout windows"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1035 src/ControlsPanel.cpp:1258
+#: src/ControlsPanel.cpp:1137 src/ControlsPanel.cpp:1422
 msgid "Auto"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1332
+#: src/ControlsPanel.cpp:1496
 #, c-format
 msgid "# %d"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1342
+#: src/ControlsPanel.cpp:1506
 msgid "Clear"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1357
+#: src/ControlsPanel.cpp:1521
 msgid "not set"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1371
+#: src/ControlsPanel.cpp:1535
 msgid "Server:"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1377 src/mayara_pi.cpp:2991
+#: src/ControlsPanel.cpp:1541 src/mayara_pi.cpp:3008
 msgid "not connected"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1383
+#: src/ControlsPanel.cpp:1547
 msgid "Plugin version:"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1396
+#: src/ControlsPanel.cpp:1560
 msgid "Server version:"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1403
+#: src/ControlsPanel.cpp:1567
 msgid "unknown"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1470
+#: src/ControlsPanel.cpp:1634
 msgid "Start deg"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1471
+#: src/ControlsPanel.cpp:1635
 msgid "End deg"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1474 src/ControlsPanel.cpp:1570
+#: src/ControlsPanel.cpp:1638 src/ControlsPanel.cpp:1734
 msgid "Enabled"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1479 src/ControlsPanel.cpp:1574
-#: src/ControlsPanel.cpp:1598
+#: src/ControlsPanel.cpp:1643 src/ControlsPanel.cpp:1738
+#: src/ControlsPanel.cpp:1762
 msgid "Edit"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1481 src/ControlsPanel.cpp:1576
+#: src/ControlsPanel.cpp:1645 src/ControlsPanel.cpp:1740
 msgid "Save"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1547
+#: src/ControlsPanel.cpp:1711
 msgid "Angles:"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1548
+#: src/ControlsPanel.cpp:1712
 msgid "Range:"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1548
+#: src/ControlsPanel.cpp:1712
 msgid "m"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1598
+#: src/ControlsPanel.cpp:1762
 msgid "Cancel"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1754
+#: src/ControlsPanel.cpp:1918
 msgid "Controls"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1877
+#: src/ControlsPanel.cpp:2046
 msgid "Settings"
 msgstr ""
 
-#: src/ControlsPanel.cpp:1883
+#: src/ControlsPanel.cpp:2052
 msgid "Hide controls"
 msgstr ""
 
@@ -1427,7 +1554,7 @@ msgstr ""
 msgid "Cannot read the downloaded archive."
 msgstr ""
 
-#: src/MayaraServer.cpp:131 src/mayara_pi.cpp:2009
+#: src/MayaraServer.cpp:131 src/mayara_pi.cpp:2026
 #, c-format
 msgid "Cannot write %s."
 msgstr ""
@@ -1463,7 +1590,7 @@ msgstr ""
 msgid "Cannot install %s."
 msgstr ""
 
-#: src/MayaraServer.cpp:628 src/mayara_pi.cpp:2239
+#: src/MayaraServer.cpp:628 src/mayara_pi.cpp:2256
 msgid "Run mayara-server on this computer"
 msgstr ""
 
@@ -1494,7 +1621,7 @@ msgstr ""
 msgid "mayara-server %s is installed here but not running."
 msgstr ""
 
-#: src/MayaraServer.cpp:682 src/mayara_pi.cpp:2743
+#: src/MayaraServer.cpp:682 src/mayara_pi.cpp:2760
 msgid "There is no mayara-server download for this platform."
 msgstr ""
 
@@ -1513,7 +1640,7 @@ msgstr ""
 msgid "mayara-server %s can be downloaded (%s)."
 msgstr ""
 
-#: src/MayaraServer.cpp:703 src/mayara_pi.cpp:2759
+#: src/MayaraServer.cpp:703 src/mayara_pi.cpp:2776
 #, c-format
 msgid "Update to %s"
 msgstr ""
@@ -1527,11 +1654,11 @@ msgstr ""
 msgid "  It is up to date."
 msgstr ""
 
-#: src/MayaraServer.cpp:726 src/mayara_pi.cpp:363 src/mayara_pi.cpp:1981
-#: src/mayara_pi.cpp:1988 src/mayara_pi.cpp:1996 src/mayara_pi.cpp:2010
-#: src/mayara_pi.cpp:2018 src/mayara_pi.cpp:2063 src/mayara_pi.cpp:2069
-#: src/mayara_pi.cpp:2591 src/mayara_pi.cpp:2790 src/mayara_pi.cpp:2802
-#: src/mayara_pi.cpp:2814
+#: src/MayaraServer.cpp:726 src/mayara_pi.cpp:363 src/mayara_pi.cpp:1998
+#: src/mayara_pi.cpp:2005 src/mayara_pi.cpp:2013 src/mayara_pi.cpp:2027
+#: src/mayara_pi.cpp:2035 src/mayara_pi.cpp:2080 src/mayara_pi.cpp:2086
+#: src/mayara_pi.cpp:2608 src/mayara_pi.cpp:2807 src/mayara_pi.cpp:2819
+#: src/mayara_pi.cpp:2831
 msgid "Mayara"
 msgstr ""
 
@@ -1601,7 +1728,7 @@ msgstr ""
 msgid "Mayara radar menu"
 msgstr ""
 
-#: src/mayara_pi.cpp:382 src/mayara_pi.cpp:3056
+#: src/mayara_pi.cpp:382 src/mayara_pi.cpp:3073
 msgid "Show Mayara PPI"
 msgstr ""
 
@@ -1617,11 +1744,11 @@ msgstr ""
 msgid "Delete all Mayara radar targets"
 msgstr ""
 
-#: src/mayara_pi.cpp:1088
+#: src/mayara_pi.cpp:1105
 msgid "Mayara - permission needed"
 msgstr ""
 
-#: src/mayara_pi.cpp:1094
+#: src/mayara_pi.cpp:1111
 msgid ""
 "Your Signal K server allows this plugin to read radar data, but not to "
 "control the radar, so buttons like Transmit do nothing.\n"
@@ -1631,72 +1758,72 @@ msgid ""
 "remembered, so this is only needed once."
 msgstr ""
 
-#: src/mayara_pi.cpp:1106
+#: src/mayara_pi.cpp:1123
 msgid "Ask for permission"
 msgstr ""
 
-#: src/mayara_pi.cpp:1107
+#: src/mayara_pi.cpp:1124
 msgid "Not now"
 msgstr ""
 
-#: src/mayara_pi.cpp:1141
+#: src/mayara_pi.cpp:1158
 msgid "Asking the server..."
 msgstr ""
 
-#: src/mayara_pi.cpp:1145
+#: src/mayara_pi.cpp:1162
 msgid ""
 "Waiting - approve \"Mayara radar plugin for OpenCPN\" in Signal K under "
 "Security -> Access Requests."
 msgstr ""
 
-#: src/mayara_pi.cpp:1150
+#: src/mayara_pi.cpp:1167
 msgid "Approved. Radar control works now."
 msgstr ""
 
-#: src/mayara_pi.cpp:1154
+#: src/mayara_pi.cpp:1171
 msgid "The request was refused. You can ask again."
 msgstr ""
 
-#: src/mayara_pi.cpp:1157
+#: src/mayara_pi.cpp:1174
 msgid ""
 "This server does not hand out permissions this way; it has to be granted in "
 "its own configuration."
 msgstr ""
 
-#: src/mayara_pi.cpp:1162
+#: src/mayara_pi.cpp:1179
 msgid "No permission yet."
 msgstr ""
 
-#: src/mayara_pi.cpp:1473 src/mayara_pi.cpp:1505
+#: src/mayara_pi.cpp:1490 src/mayara_pi.cpp:1522
 msgid "OpenCPN"
 msgstr ""
 
-#: src/mayara_pi.cpp:1488 src/mayara_pi.cpp:1520
+#: src/mayara_pi.cpp:1505 src/mayara_pi.cpp:1537
 msgid "radar"
 msgstr ""
 
-#: src/mayara_pi.cpp:1495
+#: src/mayara_pi.cpp:1512
 msgid "COG"
 msgstr ""
 
-#: src/mayara_pi.cpp:1618
+#: src/mayara_pi.cpp:1635
 msgid "Radar"
 msgstr ""
 
-#: src/mayara_pi.cpp:1981
+#: src/mayara_pi.cpp:1998
 msgid "No changelog is available in this build."
 msgstr ""
 
-#: src/mayara_pi.cpp:1988
+#: src/mayara_pi.cpp:2005
 #, c-format
 msgid "Cannot read %s."
 msgstr ""
 
-#: src/mayara_pi.cpp:1995
+#: src/mayara_pi.cpp:2012
 msgid "Nowhere writable was found for the changelog page."
 msgstr ""
 
-#: src/mayara_pi.cpp:2016
+#: src/mayara_pi.cpp:2033
 #, c-format
 msgid ""
 "Cannot open the changelog. It is here:\n"
@@ -1704,7 +1831,7 @@ msgid ""
 "%s"
 msgstr ""
 
-#: src/mayara_pi.cpp:2060
+#: src/mayara_pi.cpp:2077
 #, c-format
 msgid ""
 "A newer mayara-server is available.\n"
@@ -1715,11 +1842,11 @@ msgid ""
 "Download and install it now?"
 msgstr ""
 
-#: src/mayara_pi.cpp:2079
+#: src/mayara_pi.cpp:2096
 msgid "Looking for Mayara"
 msgstr ""
 
-#: src/mayara_pi.cpp:2086
+#: src/mayara_pi.cpp:2103
 msgid ""
 "Looking for a Signal K server with mayara-server on the network...\n"
 "\n"
@@ -1727,48 +1854,48 @@ msgid ""
 "a Mayara server below."
 msgstr ""
 
-#: src/mayara_pi.cpp:2093
+#: src/mayara_pi.cpp:2110
 msgid "Host / IP:"
 msgstr ""
 
-#: src/mayara_pi.cpp:2100
+#: src/mayara_pi.cpp:2117
 msgid "Signal K server (port 3000)"
 msgstr ""
 
-#: src/mayara_pi.cpp:2101
+#: src/mayara_pi.cpp:2118
 msgid "Mayara server (port 6502)"
 msgstr ""
 
-#: src/mayara_pi.cpp:2102
+#: src/mayara_pi.cpp:2119
 msgid "Server type"
 msgstr ""
 
-#: src/mayara_pi.cpp:2107
+#: src/mayara_pi.cpp:2124
 msgid "Still searching..."
 msgstr ""
 
-#: src/mayara_pi.cpp:2123
+#: src/mayara_pi.cpp:2140
 msgid "Connect"
 msgstr ""
 
-#: src/mayara_pi.cpp:2124
+#: src/mayara_pi.cpp:2141
 msgid "Keep searching"
 msgstr ""
 
-#: src/mayara_pi.cpp:2134
+#: src/mayara_pi.cpp:2151
 msgid "Please enter a host name or IP address."
 msgstr ""
 
-#: src/mayara_pi.cpp:2140
+#: src/mayara_pi.cpp:2157
 #, c-format
 msgid "Connecting to %s..."
 msgstr ""
 
-#: src/mayara_pi.cpp:2168
+#: src/mayara_pi.cpp:2185
 msgid "No Radar Found"
 msgstr ""
 
-#: src/mayara_pi.cpp:2176
+#: src/mayara_pi.cpp:2193
 #, c-format
 msgid ""
 "No radar found by mayara.\n"
@@ -1776,77 +1903,77 @@ msgid ""
 "The server at %s is not reporting a radar."
 msgstr ""
 
-#: src/mayara_pi.cpp:2179
+#: src/mayara_pi.cpp:2196
 msgid ""
 "No radar found by mayara -- I recommend you open the following link to "
 "investigate why:"
 msgstr ""
 
-#: src/mayara_pi.cpp:2194
+#: src/mayara_pi.cpp:2211
 msgid "Dismiss"
 msgstr ""
 
-#: src/mayara_pi.cpp:2197
+#: src/mayara_pi.cpp:2214
 msgid "Open Link"
 msgstr ""
 
-#: src/mayara_pi.cpp:2225
+#: src/mayara_pi.cpp:2242
 msgid "Mayara Radar Settings"
 msgstr ""
 
-#: src/mayara_pi.cpp:2243
+#: src/mayara_pi.cpp:2260
 msgid "Use a server on the network"
 msgstr ""
 
-#: src/mayara_pi.cpp:2250
+#: src/mayara_pi.cpp:2267
 msgid "Download mayara-server"
 msgstr ""
 
-#: src/mayara_pi.cpp:2252
+#: src/mayara_pi.cpp:2269
 msgid "Allow WiFi interfaces"
 msgstr ""
 
-#: src/mayara_pi.cpp:2259
+#: src/mayara_pi.cpp:2276
 msgid "Report anonymous usage stats to the mayara developers"
 msgstr ""
 
-#: src/mayara_pi.cpp:2263
+#: src/mayara_pi.cpp:2280
 msgid "Radar:"
 msgstr ""
 
-#: src/mayara_pi.cpp:2269
+#: src/mayara_pi.cpp:2286
 msgid "Any brand"
 msgstr ""
 
-#: src/mayara_pi.cpp:2282
+#: src/mayara_pi.cpp:2299
 msgid "Log verbosity:"
 msgstr ""
 
-#: src/mayara_pi.cpp:2285
+#: src/mayara_pi.cpp:2302
 msgid "Default"
 msgstr ""
 
-#: src/mayara_pi.cpp:2286
+#: src/mayara_pi.cpp:2303
 msgid "Debug"
 msgstr ""
 
-#: src/mayara_pi.cpp:2287
+#: src/mayara_pi.cpp:2304
 msgid "Trace"
 msgstr ""
 
-#: src/mayara_pi.cpp:2295
+#: src/mayara_pi.cpp:2312
 msgid "Open server log"
 msgstr ""
 
-#: src/mayara_pi.cpp:2298
+#: src/mayara_pi.cpp:2315
 msgid "Extra arguments:"
 msgstr ""
 
-#: src/mayara_pi.cpp:2309
+#: src/mayara_pi.cpp:2326
 msgid "Show what mayara-server --help says"
 msgstr ""
 
-#: src/mayara_pi.cpp:2314
+#: src/mayara_pi.cpp:2331
 msgid ""
 "Extra command-line arguments passed to mayara-server, e.g. for a radar or "
 "feature not yet exposed above. Run through a shell, so anyone able to change "
@@ -1854,115 +1981,115 @@ msgid ""
 "computer you trust."
 msgstr ""
 
-#: src/mayara_pi.cpp:2325
+#: src/mayara_pi.cpp:2342
 msgid "Address:"
 msgstr ""
 
-#: src/mayara_pi.cpp:2334
+#: src/mayara_pi.cpp:2351
 msgid ""
 "Blank = find it automatically (mDNS, or the Signal K server OpenCPN is set up "
 "for). Otherwise a host or host:port - :3000 for Signal K, :6502 for mayara."
 msgstr ""
 
-#: src/mayara_pi.cpp:2341
+#: src/mayara_pi.cpp:2358
 msgid "Server"
 msgstr ""
 
-#: src/mayara_pi.cpp:2349
+#: src/mayara_pi.cpp:2366
 #, c-format
 msgid "%d radar(s) discovered."
 msgstr ""
 
-#: src/mayara_pi.cpp:2351
+#: src/mayara_pi.cpp:2368
 msgid "No radars discovered yet."
 msgstr ""
 
-#: src/mayara_pi.cpp:2360
+#: src/mayara_pi.cpp:2377
 msgid "Open mayara-server"
 msgstr ""
 
-#: src/mayara_pi.cpp:2367
+#: src/mayara_pi.cpp:2384
 msgid "Number of PPI windows:"
 msgstr ""
 
-#: src/mayara_pi.cpp:2376
+#: src/mayara_pi.cpp:2393
 msgid ""
 "Radars are spread evenly across the windows. One window shows all radars; "
 "more windows split them (e.g. 8 radars across 2 windows = 4 per window)."
 msgstr ""
 
-#: src/mayara_pi.cpp:2383
+#: src/mayara_pi.cpp:2400
 msgid "Keep radar windows on top of the chart"
 msgstr ""
 
-#: src/mayara_pi.cpp:2388
+#: src/mayara_pi.cpp:2405
 msgid ""
 "Floating windows only -- a docked one already sits inside OpenCPN's own "
 "window, on top of nothing else."
 msgstr ""
 
-#: src/mayara_pi.cpp:2400
+#: src/mayara_pi.cpp:2417
 msgid "Override menu font size"
 msgstr ""
 
-#: src/mayara_pi.cpp:2404
+#: src/mayara_pi.cpp:2421
 msgid "Size (points):"
 msgstr ""
 
-#: src/mayara_pi.cpp:2418
+#: src/mayara_pi.cpp:2435
 msgid "Applies to the radar controls (PPI window and chart menu)."
 msgstr ""
 
-#: src/mayara_pi.cpp:2423
+#: src/mayara_pi.cpp:2440
 msgid "Guard-zone alarm"
 msgstr ""
 
-#: src/mayara_pi.cpp:2426
+#: src/mayara_pi.cpp:2443
 msgid "Play a sound"
 msgstr ""
 
-#: src/mayara_pi.cpp:2431
+#: src/mayara_pi.cpp:2448
 msgid ""
 "OpenCPN's own notification icon still marks a guard-zone alarm either way; "
 "this only controls the audible chime."
 msgstr ""
 
-#: src/mayara_pi.cpp:2437
+#: src/mayara_pi.cpp:2454
 msgid "Display"
 msgstr ""
 
-#: src/mayara_pi.cpp:2443
+#: src/mayara_pi.cpp:2460
 msgid "Radar heading as NMEA HDT"
 msgstr ""
 
-#: src/mayara_pi.cpp:2445
+#: src/mayara_pi.cpp:2462
 msgid "Radar targets as NMEA TTM"
 msgstr ""
 
-#: src/mayara_pi.cpp:2452
+#: src/mayara_pi.cpp:2469
 msgid ""
 "Sent into OpenCPN's own data stream once a second, so the radar can drive the "
 "chart's heading and its targets appear in OpenCPN's target list alongside "
 "AIS. Leave both off if another source already provides them."
 msgstr ""
 
-#: src/mayara_pi.cpp:2459
+#: src/mayara_pi.cpp:2476
 msgid "Feed OpenCPN"
 msgstr ""
 
-#: src/mayara_pi.cpp:2471
+#: src/mayara_pi.cpp:2488
 msgid "Profile:"
 msgstr ""
 
-#: src/mayara_pi.cpp:2475
+#: src/mayara_pi.cpp:2492
 msgid "Rename"
 msgstr ""
 
-#: src/mayara_pi.cpp:2477
+#: src/mayara_pi.cpp:2494
 msgid "Delete"
 msgstr ""
 
-#: src/mayara_pi.cpp:2518
+#: src/mayara_pi.cpp:2535
 msgid ""
 "\"Standard Mayara\" is the legend the server computes; the four hues show "
 "echo strength as brightness of one colour. Doppler stays magenta and green "
@@ -1970,111 +2097,111 @@ msgid ""
 "colour on a built-in copies it to a profile of your own first."
 msgstr ""
 
-#: src/mayara_pi.cpp:2526
+#: src/mayara_pi.cpp:2543
 msgid "Colours"
 msgstr ""
 
-#: src/mayara_pi.cpp:2579
+#: src/mayara_pi.cpp:2596
 msgid "Name for this colour profile:"
 msgstr ""
 
-#: src/mayara_pi.cpp:2579
+#: src/mayara_pi.cpp:2596
 msgid "Rename profile"
 msgstr ""
 
-#: src/mayara_pi.cpp:2590
+#: src/mayara_pi.cpp:2607
 msgid "There is already a profile with that name."
 msgstr ""
 
-#: src/mayara_pi.cpp:2647
+#: src/mayara_pi.cpp:2664
 msgid "Heading source"
 msgstr ""
 
-#: src/mayara_pi.cpp:2650
+#: src/mayara_pi.cpp:2667
 msgid "Automatic: OpenCPN, else the radar"
 msgstr ""
 
-#: src/mayara_pi.cpp:2651
+#: src/mayara_pi.cpp:2668
 msgid "OpenCPN only"
 msgstr ""
 
-#: src/mayara_pi.cpp:2652
+#: src/mayara_pi.cpp:2669
 msgid "Radar only"
 msgstr ""
 
-#: src/mayara_pi.cpp:2659
+#: src/mayara_pi.cpp:2676
 msgid "Use COG as heading when nothing reports one"
 msgstr ""
 
-#: src/mayara_pi.cpp:2664
+#: src/mayara_pi.cpp:2681
 msgid "Heading timeout (s, 0 = never):"
 msgstr ""
 
-#: src/mayara_pi.cpp:2675
+#: src/mayara_pi.cpp:2692
 msgid "Log to the OpenCPN log:"
 msgstr ""
 
-#: src/mayara_pi.cpp:2678
+#: src/mayara_pi.cpp:2695
 msgid "Off"
 msgstr ""
 
-#: src/mayara_pi.cpp:2679
+#: src/mayara_pi.cpp:2696
 msgid "Problems"
 msgstr ""
 
-#: src/mayara_pi.cpp:2680
+#: src/mayara_pi.cpp:2697
 msgid "Verbose"
 msgstr ""
 
-#: src/mayara_pi.cpp:2688
+#: src/mayara_pi.cpp:2705
 msgid "Diagnostics"
 msgstr ""
 
-#: src/mayara_pi.cpp:2698
+#: src/mayara_pi.cpp:2715
 #, c-format
 msgid ""
 "Heading: %s\n"
 "Position: %s"
 msgstr ""
 
-#: src/mayara_pi.cpp:2699
+#: src/mayara_pi.cpp:2716
 #, c-format
 msgid "%.1f deg T from %s"
 msgstr ""
 
-#: src/mayara_pi.cpp:2700 src/mayara_pi.cpp:2702
+#: src/mayara_pi.cpp:2717 src/mayara_pi.cpp:2719
 msgid "none - the overlay cannot be drawn"
 msgstr ""
 
-#: src/mayara_pi.cpp:2714
+#: src/mayara_pi.cpp:2731
 msgid "Changelog"
 msgstr ""
 
-#: src/mayara_pi.cpp:2745
+#: src/mayara_pi.cpp:2762
 msgid "mayara-server is not installed here yet."
 msgstr ""
 
-#: src/mayara_pi.cpp:2747
+#: src/mayara_pi.cpp:2764
 #, c-format
 msgid "mayara-server %s, running."
 msgstr ""
 
-#: src/mayara_pi.cpp:2748
+#: src/mayara_pi.cpp:2765
 #, c-format
 msgid "mayara-server %s, installed."
 msgstr ""
 
-#: src/mayara_pi.cpp:2772
+#: src/mayara_pi.cpp:2789
 #, c-format
 msgid "Server log: %s"
 msgstr ""
 
-#: src/mayara_pi.cpp:2773
+#: src/mayara_pi.cpp:2790
 #, c-format
 msgid "Server log: %s (not written yet)"
 msgstr ""
 
-#: src/mayara_pi.cpp:2800
+#: src/mayara_pi.cpp:2817
 #, c-format
 msgid ""
 "Cannot open the server log. It is here:\n"
@@ -2082,72 +2209,72 @@ msgid ""
 "%s"
 msgstr ""
 
-#: src/mayara_pi.cpp:2814
+#: src/mayara_pi.cpp:2831
 msgid "Cannot run mayara-server --help."
 msgstr ""
 
-#: src/mayara_pi.cpp:2818
+#: src/mayara_pi.cpp:2835
 msgid "mayara-server --help"
 msgstr ""
 
-#: src/mayara_pi.cpp:2822
+#: src/mayara_pi.cpp:2839
 msgid "Asking mayara-server..."
 msgstr ""
 
-#: src/mayara_pi.cpp:2838
+#: src/mayara_pi.cpp:2855
 msgid "mayara-server did not answer --help."
 msgstr ""
 
-#: src/mayara_pi.cpp:2974
+#: src/mayara_pi.cpp:2991
 msgid "Marine radar overlay and PPI, served by mayara-server"
 msgstr ""
 
-#: src/mayara_pi.cpp:2986
+#: src/mayara_pi.cpp:3003
 msgid ""
 "mayara_pi displays marine radar as a chart overlay and in a PPI window. "
 "Unlike radar_pi it does not talk to radar hardware directly; it consumes the "
 "mayara-server REST and WebSocket API."
 msgstr ""
 
-#: src/mayara_pi.cpp:2989
+#: src/mayara_pi.cpp:3006
 msgid "Plugin version"
 msgstr ""
 
-#: src/mayara_pi.cpp:2990
+#: src/mayara_pi.cpp:3007
 msgid "mayara-server version"
 msgstr ""
 
-#: src/mayara_pi.cpp:3050
+#: src/mayara_pi.cpp:3067
 #, c-format
 msgid "Mayara radar overlay (chart %d): %s"
 msgstr ""
 
-#: src/mayara_pi.cpp:3052
+#: src/mayara_pi.cpp:3069
 #, c-format
 msgid "Mayara radar overlay: %s"
 msgstr ""
 
-#: src/mayara_pi.cpp:3055
+#: src/mayara_pi.cpp:3072
 msgid "Hide Mayara PPI"
 msgstr ""
 
-#: src/mayara_pi.cpp:3077
+#: src/mayara_pi.cpp:3094
 msgid "none"
 msgstr ""
 
-#: src/mayara_pi.cpp:3078
+#: src/mayara_pi.cpp:3095
 msgid "all radars"
 msgstr ""
 
-#: src/mayara_pi.cpp:3083
+#: src/mayara_pi.cpp:3100
 #, c-format
 msgid "radar %d"
 msgstr ""
 
-#: src/mayara_pi.cpp:3096
+#: src/mayara_pi.cpp:3113
 msgid "None"
 msgstr ""
 
-#: src/mayara_pi.cpp:3100
+#: src/mayara_pi.cpp:3117
 msgid "All radars"
 msgstr ""

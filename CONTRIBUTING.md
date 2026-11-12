@@ -65,7 +65,10 @@ descriptions (as tooltips) and enum labels ("Gain", "Harbor", "Off"). These are 
 which publishes them as `docs/ui-strings.json`. `tools/gen-server-strings.py`
 turns that file into `po/server_strings.h` (never compiled, read only by
 xgettext), so these strings land in the same `.pot`. Enum labels carry the
-control id as msgctxt, so a language can word "Auto" differently per control;
+control id as msgctxt, so a language can word "Auto" differently per control,
+for instance to match the gender of the control's name. A `TRANSLATORS:`
+comment on each one tells translators so in Crowdin. A `// TRANSLATORS:`
+comment right before any marker reaches the `.pot` the same way.
 `include/ServerText.h` looks the text up at run time and shows the English when
 there is no translation.
 

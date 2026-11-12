@@ -48,8 +48,16 @@ def render(data, ref):
                         if c["description"]}):
         lines.append(f"wxTRANSLATE({c_string(desc)})")
     lines += ["", "// Enum labels, in the context of the control they belong to."]
+    names = {c["id"]: c["name"] for c in data["controls"]}
     for e in sorted(data["enums"], key=lambda e: e["control"]):
         for label in sorted(set(e["labels"])):
+            # xgettext copies a TRANSLATORS comment on the line right before
+            # the marker into the .pot, where Crowdin shows it.
+            lines.append(f"// TRANSLATORS: a setting of the radar control "
+                         f"\"{names[e['control']]}\". The same word appears "
+                         f"once for each control that offers it, so it can "
+                         f"agree with the gender and number of that "
+                         f"control's name.")
             lines.append(f"wxTRANSLATE_IN_CONTEXT({c_string(e['control'])}, "
                          f"{c_string(label)})")
     return "\n".join(lines) + "\n"
