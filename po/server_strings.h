@@ -172,118 +172,233 @@ wxTRANSLATE("Whether target trails are shown")
 wxTRANSLATE("Which unit system to use for range values")
 
 // Enum labels, in the context of the control they belong to.
+// TRANSLATORS: a setting of the radar control "Accent light". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("accentLight", "High")
+// TRANSLATORS: a setting of the radar control "Accent light". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("accentLight", "Low")
+// TRANSLATORS: a setting of the radar control "Accent light". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("accentLight", "Medium")
+// TRANSLATORS: a setting of the radar control "Accent light". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("accentLight", "Off")
+// TRANSLATORS: a setting of the radar control "Anti-jamming". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("antiJamming", "Off")
+// TRANSLATORS: a setting of the radar control "Anti-jamming". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("antiJamming", "On")
+// TRANSLATORS: a setting of the radar control "ARPA Max Speed". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("arpaDetectMaxSpeed", "Fast")
+// TRANSLATORS: a setting of the radar control "ARPA Max Speed". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("arpaDetectMaxSpeed", "Medium")
+// TRANSLATORS: a setting of the radar control "ARPA Max Speed". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("arpaDetectMaxSpeed", "Normal")
+// TRANSLATORS: a setting of the radar control "Auto standby". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("autoStandby", "1 min")
+// TRANSLATORS: a setting of the radar control "Auto standby". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("autoStandby", "15 min")
+// TRANSLATORS: a setting of the radar control "Auto standby". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("autoStandby", "30 min")
+// TRANSLATORS: a setting of the radar control "Auto standby". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("autoStandby", "5 min")
+// TRANSLATORS: a setting of the radar control "Auto standby". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("autoStandby", "Off")
+// TRANSLATORS: a setting of the radar control "Bird mode". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("birdMode", "High")
+// TRANSLATORS: a setting of the radar control "Bird mode". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("birdMode", "Low")
+// TRANSLATORS: a setting of the radar control "Bird mode". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("birdMode", "Medium")
+// TRANSLATORS: a setting of the radar control "Bird mode". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("birdMode", "Off")
+// TRANSLATORS: a setting of the radar control "Doppler". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("doppler", "Approaching")
+// TRANSLATORS: a setting of the radar control "Doppler". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("doppler", "Normal")
+// TRANSLATORS: a setting of the radar control "Doppler". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("doppler", "Off")
+// TRANSLATORS: a setting of the radar control "Doppler". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("doppler", "On")
+// TRANSLATORS: a setting of the radar control "Doppler". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("doppler", "Rain")
+// TRANSLATORS: a setting of the radar control "Doppler". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("doppler", "Target")
+// TRANSLATORS: a setting of the radar control "Doppler Auto Track". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("dopplerAutoTrack", "Off")
+// TRANSLATORS: a setting of the radar control "Doppler Auto Track". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("dopplerAutoTrack", "On")
+// TRANSLATORS: a setting of the radar control "Doppler trails only". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("dopplerTrailsOnly", "Off")
+// TRANSLATORS: a setting of the radar control "Doppler trails only". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("dopplerTrailsOnly", "On")
+// TRANSLATORS: a setting of the radar control "Echo format". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("echoFormat", "IMO")
+// TRANSLATORS: a setting of the radar control "Echo format". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("echoFormat", "Tile")
+// TRANSLATORS: a setting of the radar control "Interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("interferenceRejection", "High")
+// TRANSLATORS: a setting of the radar control "Interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("interferenceRejection", "Level 1")
+// TRANSLATORS: a setting of the radar control "Interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("interferenceRejection", "Level 2")
+// TRANSLATORS: a setting of the radar control "Interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("interferenceRejection", "Level 3")
+// TRANSLATORS: a setting of the radar control "Interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("interferenceRejection", "Level 4")
+// TRANSLATORS: a setting of the radar control "Interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("interferenceRejection", "Level 5")
+// TRANSLATORS: a setting of the radar control "Interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("interferenceRejection", "Low")
+// TRANSLATORS: a setting of the radar control "Interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("interferenceRejection", "Medium")
+// TRANSLATORS: a setting of the radar control "Interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("interferenceRejection", "Off")
+// TRANSLATORS: a setting of the radar control "Interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("interferenceRejection", "On")
+// TRANSLATORS: a setting of the radar control "Local interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("localInterferenceRejection", "High")
+// TRANSLATORS: a setting of the radar control "Local interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("localInterferenceRejection", "Low")
+// TRANSLATORS: a setting of the radar control "Local interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("localInterferenceRejection", "Medium")
+// TRANSLATORS: a setting of the radar control "Local interference rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("localInterferenceRejection", "Off")
+// TRANSLATORS: a setting of the radar control "Main bang suppression". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("mainBangSuppression", "Off")
+// TRANSLATORS: a setting of the radar control "Main bang suppression". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("mainBangSuppression", "On")
+// TRANSLATORS: a setting of the radar control "Mode". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("mode", "Bird")
+// TRANSLATORS: a setting of the radar control "Mode". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("mode", "Bird+")
+// TRANSLATORS: a setting of the radar control "Mode". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("mode", "Buoy")
+// TRANSLATORS: a setting of the radar control "Mode". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("mode", "Coastal")
+// TRANSLATORS: a setting of the radar control "Mode". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("mode", "Custom")
+// TRANSLATORS: a setting of the radar control "Mode". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("mode", "Harbor")
+// TRANSLATORS: a setting of the radar control "Mode". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("mode", "Offshore")
+// TRANSLATORS: a setting of the radar control "Mode". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("mode", "Weather")
+// TRANSLATORS: a setting of the radar control "Noise rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("noiseRejection", "High")
+// TRANSLATORS: a setting of the radar control "Noise rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("noiseRejection", "Low")
+// TRANSLATORS: a setting of the radar control "Noise rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("noiseRejection", "Medium")
+// TRANSLATORS: a setting of the radar control "Noise rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("noiseRejection", "Off")
+// TRANSLATORS: a setting of the radar control "Noise rejection". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("noiseRejection", "On")
+// TRANSLATORS: a setting of the radar control "Power". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("power", "Fault")
+// TRANSLATORS: a setting of the radar control "Power". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("power", "Off")
+// TRANSLATORS: a setting of the radar control "Power". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("power", "Preparing")
+// TRANSLATORS: a setting of the radar control "Power". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("power", "Standby")
+// TRANSLATORS: a setting of the radar control "Power". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("power", "Transmit")
+// TRANSLATORS: a setting of the radar control "Pulse width". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("pulseWidth", "Long")
+// TRANSLATORS: a setting of the radar control "Pulse width". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("pulseWidth", "Short")
+// TRANSLATORS: a setting of the radar control "Range Units". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("rangeUnits", "Metric")
+// TRANSLATORS: a setting of the radar control "Range Units". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("rangeUnits", "Mixed")
+// TRANSLATORS: a setting of the radar control "Range Units". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("rangeUnits", "Nautical")
+// TRANSLATORS: a setting of the radar control "Scan average". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("scanAverageMode", "High")
+// TRANSLATORS: a setting of the radar control "Scan average". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("scanAverageMode", "Low")
+// TRANSLATORS: a setting of the radar control "Scan average". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("scanAverageMode", "Medium")
+// TRANSLATORS: a setting of the radar control "Scan average". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("scanAverageMode", "Medium High")
+// TRANSLATORS: a setting of the radar control "Scan average". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("scanAverageMode", "Off")
+// TRANSLATORS: a setting of the radar control "Scan average". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("scanAverageMode", "Very High")
+// TRANSLATORS: a setting of the radar control "Scan speed". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("scanSpeed", "Auto")
+// TRANSLATORS: a setting of the radar control "Scan speed". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("scanSpeed", "Fast")
+// TRANSLATORS: a setting of the radar control "Scan speed". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("scanSpeed", "Medium")
+// TRANSLATORS: a setting of the radar control "Scan speed". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("scanSpeed", "Medium Plus")
+// TRANSLATORS: a setting of the radar control "Scan speed". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("scanSpeed", "Medium-High")
+// TRANSLATORS: a setting of the radar control "Scan speed". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("scanSpeed", "Normal")
+// TRANSLATORS: a setting of the radar control "Sea state". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("seaState", "Auto")
+// TRANSLATORS: a setting of the radar control "Sea state". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("seaState", "Calm")
+// TRANSLATORS: a setting of the radar control "Sea state". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("seaState", "Harbor")
+// TRANSLATORS: a setting of the radar control "Sea state". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("seaState", "Manual")
+// TRANSLATORS: a setting of the radar control "Sea state". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("seaState", "Moderate")
+// TRANSLATORS: a setting of the radar control "Sea state". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("seaState", "Rough")
+// TRANSLATORS: a setting of the radar control "Spoke Processing". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("spokeProcessing", "Clean")
+// TRANSLATORS: a setting of the radar control "Spoke Processing". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("spokeProcessing", "Fill")
+// TRANSLATORS: a setting of the radar control "Spoke Processing". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("spokeProcessing", "Reduce")
+// TRANSLATORS: a setting of the radar control "Spoke Processing". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("spokeProcessing", "Smooth")
+// TRANSLATORS: a setting of the radar control "Target boost". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("targetBoost", "High")
+// TRANSLATORS: a setting of the radar control "Target boost". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("targetBoost", "Low")
+// TRANSLATORS: a setting of the radar control "Target boost". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("targetBoost", "Off")
+// TRANSLATORS: a setting of the radar control "Target boost". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("targetBoost", "On")
+// TRANSLATORS: a setting of the radar control "Target expansion". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("targetExpansion", "High")
+// TRANSLATORS: a setting of the radar control "Target expansion". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("targetExpansion", "Low")
+// TRANSLATORS: a setting of the radar control "Target expansion". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("targetExpansion", "Medium")
+// TRANSLATORS: a setting of the radar control "Target expansion". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("targetExpansion", "Off")
+// TRANSLATORS: a setting of the radar control "Target expansion". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("targetExpansion", "On")
+// TRANSLATORS: a setting of the radar control "Target separation". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("targetSeparation", "High")
+// TRANSLATORS: a setting of the radar control "Target separation". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("targetSeparation", "Low")
+// TRANSLATORS: a setting of the radar control "Target separation". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("targetSeparation", "Medium")
+// TRANSLATORS: a setting of the radar control "Target separation". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("targetSeparation", "Off")
+// TRANSLATORS: a setting of the radar control "Target trails". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("targetTrails", "1 min")
+// TRANSLATORS: a setting of the radar control "Target trails". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("targetTrails", "10 min")
+// TRANSLATORS: a setting of the radar control "Target trails". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("targetTrails", "15s")
+// TRANSLATORS: a setting of the radar control "Target trails". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("targetTrails", "3 min")
+// TRANSLATORS: a setting of the radar control "Target trails". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("targetTrails", "30s")
+// TRANSLATORS: a setting of the radar control "Target trails". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("targetTrails", "5 min")
+// TRANSLATORS: a setting of the radar control "Target trails". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("targetTrails", "Off")
+// TRANSLATORS: a setting of the radar control "Timed idle". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("timedIdle", "Off")
+// TRANSLATORS: a setting of the radar control "Timed idle". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("timedIdle", "On")
+// TRANSLATORS: a setting of the radar control "Target trails motion". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("trailsMotion", "Relative")
+// TRANSLATORS: a setting of the radar control "Target trails motion". The same word appears once for each control that offers it, so it can agree with the gender and number of that control's name.
 wxTRANSLATE_IN_CONTEXT("trailsMotion", "True")
